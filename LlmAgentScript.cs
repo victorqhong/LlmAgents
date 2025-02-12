@@ -1,13 +1,13 @@
 using System.Diagnostics;
 
-public class Agent
+public class LlmAgentScript
 {
     public string MessagesFile { get; private set; }
     public bool SaveMessages { get; set; }
     public string ModelName { get; set; } = "gpt-4o";
     public string CredentialsFile { get; set; }
 
-    public Agent(bool saveMessages, string messagesFile, string credentialsFile, string modelName)
+    public LlmAgentScript(bool saveMessages, string messagesFile, string credentialsFile, string modelName)
     {
         SaveMessages = saveMessages;
         MessagesFile = messagesFile;
@@ -15,12 +15,7 @@ public class Agent
         ModelName = modelName;
     }
 
-    public string Input(string input)
-    {
-        return GenerateCompletion(input);
-    }
-
-    private string GenerateCompletion(string userMessage)
+    public string GenerateCompletion(string userMessage)
     {
         var process = new Process();
         process.StartInfo.RedirectStandardOutput = true;
