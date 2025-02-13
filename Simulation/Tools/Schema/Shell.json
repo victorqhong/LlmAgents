@@ -1,0 +1,17 @@
+{
+    "type": "function",
+    "function": {
+        "name": "shell",
+        "description": "Runs a shell command",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "Shell command and arguments to run"
+                }
+            },
+            "required": ["command"]
+        }
+    }
+}
