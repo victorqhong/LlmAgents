@@ -3,6 +3,15 @@ using Simulation;
 
 var apiEndpoint = "";
 var apiKey = "";
+var model = "gpt-4o";
+
+var credentialsFile = System.Environment.GetEnvironmentVariable("LLM_CREDENTIALS_FILE");
+if (System.IO.File.Exists(credentialsFile))
+{
+    var json = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(credentialsFile));
+    apiEndpoint = $"{json.Value<string>("AZURE_OPENAI_ENDPOINT")}/openai/deployments/{model}/chat/completions?api-version=2024-08-01-preview";
+    apiKey = json.Value<string>("AZURE_OPENAI_API_KEY");
+}
 
 var systemPrompt = "You are a Software Engineer with over 10 years of professional experience. You are proficient at programming and communication.";
 
