@@ -13,6 +13,12 @@ if (System.IO.File.Exists(credentialsFile))
     apiKey = json.Value<string>("AZURE_OPENAI_API_KEY");
 }
 
+if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey))
+{
+    Console.WriteLine("apiEndpoint or apiKey is null or empty.");
+    return;
+}
+
 var systemPrompt = "You are a Software Engineer with over 10 years of professional experience. You are proficient at programming and communication.";
 
 LlmAgentApi agent1 = new LlmAgentApi(apiEndpoint, apiKey, "gpt-4o", systemPrompt);
