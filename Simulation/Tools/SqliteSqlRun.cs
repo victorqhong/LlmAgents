@@ -3,37 +3,37 @@ namespace Simulation.Tools;
 using Newtonsoft.Json.Linq;
 using System;
 
-public class Shell
+public class SqliteSqlRun
 {
     private JObject schema = JObject.FromObject(new
     {
         type = "function",
         function = new
         {
-            name = "shell",
-            description = "Runs a shell command",
+            name = "sqlite_sql_run",
+            description = "Read/process sql statement against a sqlite database",
             parameters = new
             {
                 type = "object",
                 properties = new
                 {
-                    command = new
+                    sql = new
                     {
                         type = "string",
-                        description = "Shell command and arguments to run"
+                        description = "SQL statement to run"
                     },
-                    wait_for_exit = new
+                    db = new
                     {
                         type = "string",
-                        description = "'true' or 'false' whether to wait for the command to exit default is 'true' (optional)"
+                        description = "Path to a sqlite database file"
                     }
                 },
-                required = new[] { "command" }
+                required = new[] { "sql", "db" }
             }
         }
     });
 
-    public Shell()
+    public SqliteSqlRun()
     {
         Tool = new Tool
         {
@@ -48,28 +48,30 @@ public class Shell
     {
         var result = new JObject();
 
-        var command = parameters["command"]?.ToString();
-        if (string.IsNullOrEmpty(command))
+        var sql = parameters["sql"]?.ToString();
+        if (string.IsNullOrEmpty(sql))
         {
+            result.Add("error", "sql parameter is null or empty");
+            return result;
+        }
+
+        var db = parameters["db"]?.ToString();
+        if (string.IsNullOrEmpty(db))
+        {
+            result.Add("error", "db parameter is null or empty");
             return result;
         }
 
         try
         {
-            var waitForExit = bool.Parse(parameters["wait_for_exit"]?.ToString() ?? "true");
-            var commandParts = command.Split(' ');
-            var fileName = commandParts[0];
-            var arguments = commandParts.AsSpan(1).ToArray();
-
             var process = new System.Diagnostics.Process();
-            process.StartInfo.FileName = fileName;
-            process.StartInfo.Arguments = string.Join(" ", arguments);
+            process.StartInfo.FileName = "sqlite";
+            process.StartInfo.Arguments = $"{db} {sql}";
             process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardInput = true;
             process.Start();
-            if (waitForExit)
-            {
-                process.WaitForExit();
-            }
+            process.StandardInput.WriteLine(".quit");
+            process.WaitForExit();
             var output = process.StandardOutput.ReadToEnd();
 
             result.Add("stdout", output);

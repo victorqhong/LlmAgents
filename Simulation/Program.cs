@@ -1,5 +1,6 @@
 ﻿using System;
 using Simulation;
+using Simulation.Tools;
 
 var apiEndpoint = "";
 var apiKey = "";
@@ -19,10 +20,21 @@ if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey))
     return;
 }
 
+var shellTool = new Shell();
+var fileReadTool = new FileRead();
+var fileWriteTool = new FileWrite();
+var sqliteFileRun = new SqliteFileRun();
+var sqliteSqlRun = new SqliteSqlRun();
+
 var systemPrompt = "You are a Software Engineer with over 10 years of professional experience. You are proficient at programming and communication.";
 
 LlmAgentApi agent1 = new LlmAgentApi(apiEndpoint, apiKey, "gpt-4o", systemPrompt);
-var response = agent1.GenerateCompletion("Run a shell command to get the current user on a linux machine");
+agent1.AddTool(shellTool.Tool);
+agent1.AddTool(fileReadTool.Tool);
+agent1.AddTool(fileWriteTool.Tool);
+agent1.AddTool(sqliteSqlRun.Tool);
+agent1.AddTool(sqliteFileRun.Tool);
+var response = agent1.GenerateCompletion("Summarize the tools you can call and their parameters.");
 
 Console.WriteLine(response);
 Console.ReadLine();

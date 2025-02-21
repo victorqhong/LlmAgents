@@ -4,48 +4,13 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
-using System.Reflection;
 using System.Threading.Tasks;
 
 public class LlmAgentApi
 {
-    public static List<Type> Tools = new List<Type>()
-    {
-        typeof(Simulation.Tools.Shell)
-    };
-
-    public static List<JObject> ToolDefinitions = new List<JObject>();
-    public static Dictionary<string, Func<JObject, JObject>> ToolMap = new Dictionary<string, Func<JObject, JObject>>();
-
-    static LlmAgentApi()
-    {
-        foreach (var tool in Tools)
-        {
-            var definitionField = tool.GetField("Definition", BindingFlags.Public | BindingFlags.Static);
-            var definition = definitionField?.GetValue(null) as JObject;
-            if (definition == null)
-            {
-                continue;
-            }
-
-            ToolDefinitions.Add(definition);
-
-            var name = definition["function"]?["name"]?.Value<string>();
-            if (string.IsNullOrEmpty(name))
-            {
-                continue;
-            }
-
-            var functionField = tool.GetField("Function", BindingFlags.Public | BindingFlags.Static);
-            var function = functionField?.GetValue(null) as Func<JObject, JObject>;
-            if (function == null)
-            {
-                continue;
-            }
-
-            ToolMap.Add(name, function);
-        }
-    }
+    private List<Tool> Tools = new List<Tool>();
+    private List<JObject> ToolDefinitions = new List<JObject>();
+    private Dictionary<string, Tool> ToolMap = new Dictionary<string, Tool>();
 
     public LlmAgentApi(string apiEndpoint, string apiKey, string model, string? systemPrompt = null)
     {
@@ -67,27 +32,55 @@ public class LlmAgentApi
 
     public string Model { get; set; }
 
-    public int MaxTokens { get; set; } = 100;
+    public int MaxTokens { get; set; } = 1024;
 
     public double Temperature { get; set; } = 0.7;
 
+    public void AddTool(Tool tool)
+    {
+        if (tool == null)
+        {
+            throw new ArgumentNullException("tool");
+        }
+
+        Tools.Add(tool);
+        ToolDefinitions.Add(tool.Schema);
+        ToolMap.Add(tool.Name, tool);
+    }
+
     public string GenerateCompletion(string userMessage)
     {
+        if (string.IsNullOrEmpty(userMessage))
+        {
+            throw new ArgumentNullException("userMessage");
+        }
+
         Messages.Add(JObject.FromObject(new { role = "user", content = userMessage }));
         return GenerateCompletion(Messages);
     }
 
     public string GenerateCompletion(List<JObject> messages)
     {
+        if (messages == null || messages.Count < 1)
+        {
+            throw new ArgumentNullException("messages");
+        }
+
         var payload = GetPayload(Model, messages, MaxTokens, Temperature, ToolDefinitions, "auto");
 
         var completion = Post(ApiEndpoint, ApiKey, payload).ConfigureAwait(false).GetAwaiter().GetResult();
         if (completion == null)
         {
-            return string.Empty;
+            throw new ApplicationException("Could not retrieve completion");
         }
 
-        return ProcessCompletion(completion) ?? string.Empty;
+        var result = ProcessCompletion(completion);
+        if (string.IsNullOrEmpty(result))
+        {
+            throw new ApplicationException("Could not process completion");
+        }
+
+        return result;
     }
 
     public string? ProcessCompletion(JObject completion)
@@ -111,7 +104,7 @@ public class LlmAgentApi
         }
 
         var content = message["content"]?.ToString();
-        if (string.Equals(finishReason, "stop"))
+        if (string.Equals(finishReason, "stop") || string.Equals(finishReason, "length"))
         {
             if (!string.IsNullOrEmpty(content))
             {
@@ -149,7 +142,7 @@ public class LlmAgentApi
                     return null;
                 }
 
-                var tool = ToolMap[name];
+                var tool = ToolMap[name].Function;
 
                 var arguments = function["arguments"]?.Value<string>();
                 if (arguments == null)
