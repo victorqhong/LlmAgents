@@ -5,7 +5,7 @@ using System;
 
 public class FileWrite
 {
-    private JObject schema = Newtonsoft.Json.Linq.JObject.FromObject(new
+    private JObject schema = JObject.FromObject(new
     {
         type = "function",
         function = new

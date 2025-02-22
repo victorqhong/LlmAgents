@@ -6,7 +6,7 @@ var apiEndpoint = "";
 var apiKey = "";
 var model = "gpt-4o";
 
-var credentialsFile = System.Environment.GetEnvironmentVariable("LLM_CREDENTIALS_FILE");
+var credentialsFile = Environment.GetEnvironmentVariable("LLM_CREDENTIALS_FILE", EnvironmentVariableTarget.User);
 if (System.IO.File.Exists(credentialsFile))
 {
     var json = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(credentialsFile));

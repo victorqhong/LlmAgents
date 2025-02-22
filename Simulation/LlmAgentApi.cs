@@ -8,23 +8,27 @@ using System.Threading.Tasks;
 
 public class LlmAgentApi
 {
-    private List<Tool> Tools = new List<Tool>();
-    private List<JObject> ToolDefinitions = new List<JObject>();
-    private Dictionary<string, Tool> ToolMap = new Dictionary<string, Tool>();
+    private readonly List<Tool> Tools = [];
+    private readonly List<JObject> ToolDefinitions = [];
+    private readonly Dictionary<string, Tool> ToolMap = [];
 
     public LlmAgentApi(string apiEndpoint, string apiKey, string model, string? systemPrompt = null)
     {
+        ArgumentException.ThrowIfNullOrEmpty(apiEndpoint);
+        ArgumentException.ThrowIfNullOrEmpty(apiKey);
+        ArgumentException.ThrowIfNullOrEmpty(model);
+
         ApiEndpoint = apiEndpoint;
         ApiKey = apiKey;
         Model = model;
 
-        if (systemPrompt != null)
+        if (!string.IsNullOrEmpty(systemPrompt))
         {
             Messages.Add(JObject.FromObject(new { role = "system", content = systemPrompt }));
         }
     }
 
-    public List<JObject> Messages { get; private set; } = new List<JObject>();
+    public List<JObject> Messages { get; private set; } = [];
 
     public string ApiEndpoint { get; private set; }
 
@@ -38,10 +42,7 @@ public class LlmAgentApi
 
     public void AddTool(Tool tool)
     {
-        if (tool == null)
-        {
-            throw new ArgumentNullException("tool");
-        }
+        ArgumentNullException.ThrowIfNull(tool);
 
         Tools.Add(tool);
         ToolDefinitions.Add(tool.Schema);
@@ -50,10 +51,7 @@ public class LlmAgentApi
 
     public string GenerateCompletion(string userMessage)
     {
-        if (string.IsNullOrEmpty(userMessage))
-        {
-            throw new ArgumentNullException("userMessage");
-        }
+        ArgumentException.ThrowIfNullOrEmpty(userMessage);
 
         Messages.Add(JObject.FromObject(new { role = "user", content = userMessage }));
         return GenerateCompletion(Messages);
@@ -63,7 +61,7 @@ public class LlmAgentApi
     {
         if (messages == null || messages.Count < 1)
         {
-            throw new ArgumentNullException("messages");
+            throw new ArgumentException($"{nameof(messages)} is null or doesn't contain messages", nameof(messages));
         }
 
         var payload = GetPayload(Model, messages, MaxTokens, Temperature, ToolDefinitions, "auto");
@@ -163,8 +161,10 @@ public class LlmAgentApi
 
             return GenerateCompletion(Messages);
         }
-
-        return null;
+        else
+        {
+            throw new NotImplementedException(finishReason);
+        }
     }
 
     private static async Task<JObject?> Post(string apiEndpoint, string apiKey, string content)

@@ -51,6 +51,7 @@ public class Shell
         var command = parameters["command"]?.ToString();
         if (string.IsNullOrEmpty(command))
         {
+            result.Add("error", "command is null or empty");
             return result;
         }
 
@@ -72,6 +73,7 @@ public class Shell
             }
             var output = process.StandardOutput.ReadToEnd();
 
+            result.Add("pid", process.Id);
             result.Add("stdout", output);
             result.Add("exitcode", process.ExitCode);
         }
