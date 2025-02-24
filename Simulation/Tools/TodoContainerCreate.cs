@@ -4,15 +4,15 @@ using Newtonsoft.Json.Linq;
 using Simulation.Todo;
 using System;
 
-public class TodoCreate
+public class TodoContainerCreate
 {
     private JObject schema = JObject.FromObject(new
     {
         type = "function",
         function = new
         {
-            name = "todo_create",
-            description = "Create a todo list item",
+            name = "todo_container_create",
+            description = "Create a todo container",
             parameters = new
             {
                 type = "object",
@@ -21,27 +21,22 @@ public class TodoCreate
                     name = new
                     {
                         type = "string",
-                        description = "Name of the todo item"
-                    },
-                    container = new
-                    {
-                        type = "string",
-                        description = "Name of the list that contains this todo item"
+                        description = "Name of the todo container"
                     },
                     description = new
                     {
                         type = "string",
-                        description = "Description of the todo item (optional)"
+                        description = "Description of the todo container (optional)"
                     }
                 },
-                required = new[] { "name", "container" }
+                required = new[] { "name" }
             }
         }
     });
 
     private readonly TodoDatabase todoDatabase;
 
-    public TodoCreate(TodoDatabase todoDatabase)
+    public TodoContainerCreate(TodoDatabase todoDatabase)
     {
         this.todoDatabase = todoDatabase;
 
@@ -65,18 +60,11 @@ public class TodoCreate
             return result;
         }
 
-        var container = parameters["container"]?.ToString();
-        if (string.IsNullOrEmpty(container))
-        {
-            result.Add("error", "container is null or empty");
-            return result;
-        }
-
         var description = parameters["description"]?.ToString();
 
         try
         {
-            todoDatabase.CreateTodo(name, container, description);
+            todoDatabase.CreateContainer(name, description);
         }
         catch (Exception e)
         {
