@@ -1,11 +1,14 @@
 namespace Simulation.Todo;
 
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 
 public class TodoDatabase
 {
+    private readonly ILogger log = Program.loggerFactory.CreateLogger(nameof(LlmAgentApi));
+
     public readonly string Database;
 
     private readonly SqliteConnection readConnection;
@@ -30,30 +33,33 @@ public class TodoDatabase
         }
     }
 
-    public bool CreateTodo(string name, string group, string? description)
+    public bool CreateTodo(string name, string group, string? description = null, int priority = 10)
     {
         try
         {
             var todoGroup = GetGroup(group);
             if (todoGroup == null)
             {
+                log.LogInformation("Could not find group: {group}", group);
                 return false;
             }
 
             using (var command = writeConnection.CreateCommand())
             {
-                command.CommandText = "INSERT INTO todo_items (title, description, group_id, due_date) VALUES ($title, $description, $group_id, $due_date);";
+                command.CommandText = "INSERT INTO todo_items (title, description, group_id, due_date, priority) VALUES ($title, $description, $group_id, $due_date, $priority);";
                 command.Parameters.AddWithValue("$title", name);
                 command.Parameters.AddWithValue("$description", description ?? string.Empty);
                 command.Parameters.AddWithValue("$group_id", todoGroup.id);
                 command.Parameters.AddWithValue("$due_date", string.Empty);
+                command.Parameters.AddWithValue("$priority", priority);
                 command.ExecuteNonQuery();
             }
 
             return true;
         }
-        catch
+        catch (Exception e)
         {
+            log.LogError(e, "Exception while creating todo");
             return false;
         }
     }
@@ -65,6 +71,7 @@ public class TodoDatabase
             var todoGroup = GetGroup(group);
             if (todoGroup == null)
             {
+                log.LogInformation("Could not find group: {group}", group);
                 return null;
             }
 
@@ -79,7 +86,7 @@ public class TodoDatabase
                 {
                     if (!reader.Read())
                     {
-                        // result not found
+                        log.LogInformation("Could not find todo: title={title}, group={group}", title, group);
                         return null;
                     }
 
@@ -95,7 +102,7 @@ public class TodoDatabase
 
                     if (reader.Read())
                     {
-                        // more than one result
+                        log.LogInformation("Found more than one todo: title={title}, group={group}", title, group);
                         return null;
                     }
                 }
@@ -103,8 +110,9 @@ public class TodoDatabase
 
             return todo;
         }
-        catch
+        catch (Exception e)
         {
+            log.LogError(e, "Exception while getting todo");
             return null;
         }
     }
@@ -125,6 +133,7 @@ public class TodoDatabase
             var todoGroup = GetGroup(group);
             if (todoGroup == null)
             {
+                log.LogInformation("Could not find group: {group}", group);
                 return false;
             }
 
@@ -144,14 +153,14 @@ public class TodoDatabase
 
             if (newTodoGroup == null)
             {
-                // could not find new group
+                log.LogInformation("Could not find new group: {newGroup}", newGroup);
                 return false;
             }
 
             var todo = GetTodo(title, group);
             if (todo == null)
             {
-                // could not find original todo
+                log.LogInformation("Could not find todo: title={title}, group={group}", title, group);
                 return false;
             }
 
@@ -168,8 +177,9 @@ public class TodoDatabase
 
             return true;
         }
-        catch
+        catch (Exception e)
         {
+            log.LogError(e, "Exception while updating todo");
             return false;
         }
     }
@@ -181,7 +191,7 @@ public class TodoDatabase
             var todoGroup = GetGroup(group);
             if (todoGroup == null)
             {
-                // could not find group
+                log.LogInformation("Could not find group: {group}", group);
                 return false;
             }
 
@@ -195,8 +205,9 @@ public class TodoDatabase
 
             return true;
         }
-        catch
+        catch (Exception e)
         {
+            log.LogError(e, "Exception while deleting todo");
             return false;
         }
     }
@@ -215,44 +226,53 @@ public class TodoDatabase
 
             return true;
         }
-        catch
+        catch (Exception e)
         {
+            log.LogError(e, "Exception while creating todo group");
             return false;
         }
     }
 
     public TodoGroup? GetGroup(string name)
     {
-        TodoGroup? group = null;
-        using (var command = readConnection.CreateCommand())
+        try
         {
-            command.CommandText = "SELECT * FROM todo_groups WHERE name = $name;";
-            command.Parameters.AddWithValue("$name", name);
-
-            using (var reader = command.ExecuteReader())
+            TodoGroup? group = null;
+            using (var command = readConnection.CreateCommand())
             {
-                if (!reader.Read())
-                {
-                    // result not found
-                    return null;
-                }
+                command.CommandText = "SELECT * FROM todo_groups WHERE name = $name;";
+                command.Parameters.AddWithValue("$name", name);
 
-                group = new TodoGroup
+                using (var reader = command.ExecuteReader())
                 {
-                    id = reader.GetInt32(0),
-                    name = reader.GetString(1),
-                    description = reader.GetString(2)
-                };
+                    if (!reader.Read())
+                    {
+                        log.LogInformation("Could not find group: {group}", group);
+                        return null;
+                    }
 
-                if (reader.Read())
-                {
-                    // more than one result was found
-                    return null;
+                    group = new TodoGroup
+                    {
+                        id = reader.GetInt32(0),
+                        name = reader.GetString(1),
+                        description = reader.GetString(2)
+                    };
+
+                    if (reader.Read())
+                    {
+                        log.LogInformation("More than one group found: {group}", group);
+                        return null;
+                    }
                 }
             }
-        }
 
-        return group;
+            return group;
+        }
+        catch (Exception e)
+        {
+            log.LogError(e, "Exception while getting todo group");
+            return null;
+        }
     }
 
     public bool UpdateGroup(string name, string? newName, string? newDescription)
@@ -270,8 +290,9 @@ public class TodoDatabase
 
             return true;
         }
-        catch
+        catch (Exception e)
         {
+            log.LogError(e, "Exception while updating todo group");
             return false;
         }
     }
@@ -289,8 +310,9 @@ public class TodoDatabase
 
             return true;
         }
-        catch
+        catch (Exception e)
         {
+            log.LogError(e, "Exception while deleting todo group");
             return false;
         }
     }
@@ -317,8 +339,9 @@ public class TodoDatabase
 
             return groups.ToArray();
         }
-        catch
+        catch (Exception e)
         {
+            log.LogError(e, "Exception while listing todo groups");
             return null;
         }
     }

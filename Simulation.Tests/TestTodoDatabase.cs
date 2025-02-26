@@ -7,7 +7,7 @@ namespace Simulation.Tests;
 public sealed class TestTodoDatabase
 {
     [TestMethod]
-    public void TestTodoDatabase_Initialize()
+    public void Test_Initialize()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         Assert.IsNotNull(db);
@@ -15,7 +15,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void TestTodoDatabase_CreateGroup()
+    public void Test_CreateGroup()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         var result = db.CreateGroup("test");
@@ -24,7 +24,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void TestTodoDatabase_GetGroup()
+    public void Test_GetGroup()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");
@@ -38,7 +38,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void TestTodoDatabase_UpdateGroup()
+    public void Test_UpdateGroup()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");
@@ -55,7 +55,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void TestTodoDatabase_DeleteGroup()
+    public void Test_DeleteGroup()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");
@@ -71,7 +71,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void TestTodoDatabase_CreateTodo()
+    public void Test_CreateTodo()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");
@@ -79,11 +79,14 @@ public sealed class TestTodoDatabase
         var result = db.CreateTodo("testtodo", "test", "this is a test");
         Assert.IsTrue(result);
 
+        result = db.CreateTodo("anothertodo", "doesn't exist");
+        Assert.IsFalse(result);
+
         db.Close();
     }
 
     [TestMethod]
-    public void TestTodoDatabase_GetTodo()
+    public void Test_GetTodo()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");
@@ -99,7 +102,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void TestTodoDatabase_UpdateTodo()
+    public void Test_UpdateTodo()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");
@@ -118,7 +121,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void TestTodoDatabase_DeleteTodo()
+    public void Test_DeleteTodo()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");
