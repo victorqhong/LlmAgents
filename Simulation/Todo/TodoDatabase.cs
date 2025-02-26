@@ -2,7 +2,7 @@ namespace Simulation.Todo;
 
 using Microsoft.Data.Sqlite;
 using System;
-using System.IO;
+using System.Collections.Generic;
 
 public class TodoDatabase
 {
@@ -12,7 +12,7 @@ public class TodoDatabase
 
     private readonly SqliteConnection writeConnection;
 
-    public TodoDatabase(string database, bool initializeSchema = false)
+    public TodoDatabase(string database, bool initializeSchema = true)
     {
         Database = database;
 
@@ -30,22 +30,22 @@ public class TodoDatabase
         }
     }
 
-    public bool CreateTodo(string name, string container, string? description)
+    public bool CreateTodo(string name, string group, string? description)
     {
         try
         {
-            var todoContainer = GetContainer(container);
-            if (todoContainer == null)
+            var todoGroup = GetGroup(group);
+            if (todoGroup == null)
             {
                 return false;
             }
 
             using (var command = writeConnection.CreateCommand())
             {
-                command.CommandText = "INSERT INTO todo_items (title, description, container_id, due_date) VALUES ($title, $description, $container_id, $due_date);";
+                command.CommandText = "INSERT INTO todo_items (title, description, group_id, due_date) VALUES ($title, $description, $group_id, $due_date);";
                 command.Parameters.AddWithValue("$title", name);
                 command.Parameters.AddWithValue("$description", description ?? string.Empty);
-                command.Parameters.AddWithValue("$container_id", todoContainer.id);
+                command.Parameters.AddWithValue("$group_id", todoGroup.id);
                 command.Parameters.AddWithValue("$due_date", string.Empty);
                 command.ExecuteNonQuery();
             }
@@ -58,12 +58,12 @@ public class TodoDatabase
         }
     }
 
-    public Todo? GetTodo(string title, string container)
+    public Todo? GetTodo(string title, string group)
     {
         try
         {
-            var todoContainer = GetContainer(container);
-            if (todoContainer == null)
+            var todoGroup = GetGroup(group);
+            if (todoGroup == null)
             {
                 return null;
             }
@@ -71,9 +71,9 @@ public class TodoDatabase
             Todo? todo = null;
             using (var command = writeConnection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM todo_items WHERE title = $title AND container_id = $container_id;";
+                command.CommandText = "SELECT * FROM todo_items WHERE title = $title AND group_id = $group_id;";
                 command.Parameters.AddWithValue("$title", title);
-                command.Parameters.AddWithValue("$container_id", todoContainer.id);
+                command.Parameters.AddWithValue("$group_id", todoGroup.id);
 
                 using (var reader = command.ExecuteReader())
                 {
@@ -86,7 +86,7 @@ public class TodoDatabase
                     todo = new Todo
                     {
                         id = reader.GetInt32(0),
-                        containerId = reader.GetInt32(1),
+                        groupId = reader.GetInt32(1),
                         title = reader.GetString(2),
                         description = reader.GetString(3),
                         dueDate = reader.GetString(4),
@@ -109,12 +109,12 @@ public class TodoDatabase
         }
     }
 
-    public bool UpdateTodo(string title, string container, string? newTitle = null, string? newContainer = null, string? newDescription = null, string? newDueDate = null, bool? newCompleted = null)
+    public bool UpdateTodo(string title, string group, string? newTitle = null, string? newGroup = null, string? newDescription = null, string? newDueDate = null, bool? newCompleted = null)
     {
-        ArgumentNullException.ThrowIfNullOrEmpty(title);
-        ArgumentNullException.ThrowIfNullOrEmpty(container);
+        ArgumentException.ThrowIfNullOrEmpty(title);
+        ArgumentException.ThrowIfNullOrEmpty(group);
 
-        if (newTitle == null && newContainer == null && newDescription == null && newDueDate == null && newCompleted == null)
+        if (newTitle == null && newGroup == null && newDescription == null && newDueDate == null && newCompleted == null)
         {
             // nothing to update
             return true;
@@ -122,33 +122,33 @@ public class TodoDatabase
 
         try
         {
-            var todoContainer = GetContainer(container);
-            if (todoContainer == null)
+            var todoGroup = GetGroup(group);
+            if (todoGroup == null)
             {
                 return false;
             }
 
-            TodoContainer? newTodoContainer = null;
-            if (newContainer == null)
+            TodoGroup? newTodoGroup = null;
+            if (newGroup == null)
             {
-                newTodoContainer = todoContainer;
+                newTodoGroup = todoGroup;
             }
-            else if (string.Equals(newContainer, container))
+            else if (string.Equals(newGroup, group))
             {
-                newTodoContainer = todoContainer;
+                newTodoGroup = todoGroup;
             }
             else
             {
-                newTodoContainer = GetContainer(newContainer);
+                newTodoGroup = GetGroup(newGroup);
             }
 
-            if (newTodoContainer == null)
+            if (newTodoGroup == null)
             {
-                // could not find new container
+                // could not find new group
                 return false;
             }
 
-            var todo = GetTodo(title, container);
+            var todo = GetTodo(title, group);
             if (todo == null)
             {
                 // could not find original todo
@@ -174,22 +174,22 @@ public class TodoDatabase
         }
     }
 
-    public bool DeleteTodo(string title, string container)
+    public bool DeleteTodo(string title, string group)
     {
         try
         {
-            var todoContainer = GetContainer(container);
-            if (todoContainer == null)
+            var todoGroup = GetGroup(group);
+            if (todoGroup == null)
             {
-                // could not find container
+                // could not find group
                 return false;
             }
 
             using (var command = readConnection.CreateCommand())
             {
-                command.CommandText = "DELETE FROM todo_items WHERE title = $title AND container_id = $container_id;";
+                command.CommandText = "DELETE FROM todo_items WHERE title = $title AND group_id = $group_id;";
                 command.Parameters.AddWithValue("$title", title);
-                command.Parameters.AddWithValue("$container_id", todoContainer.id);
+                command.Parameters.AddWithValue("$group_id", todoGroup.id);
                 command.ExecuteNonQuery();
             }
 
@@ -201,13 +201,13 @@ public class TodoDatabase
         }
     }
 
-    public bool CreateContainer(string name, string? description = null)
+    public bool CreateGroup(string name, string? description = null)
     {
         try
         {
             using (var command = writeConnection.CreateCommand())
             {
-                command.CommandText = "INSERT INTO todo_containers (name, description) VALUES ($name, $description);";
+                command.CommandText = "INSERT INTO todo_groups (name, description) VALUES ($name, $description);";
                 command.Parameters.AddWithValue("$name", name);
                 command.Parameters.AddWithValue("$description", description ?? string.Empty);
                 command.ExecuteNonQuery();
@@ -221,12 +221,12 @@ public class TodoDatabase
         }
     }
 
-    public TodoContainer? GetContainer(string name)
+    public TodoGroup? GetGroup(string name)
     {
-        TodoContainer? container = null;
+        TodoGroup? group = null;
         using (var command = readConnection.CreateCommand())
         {
-            command.CommandText = "SELECT * FROM todo_containers WHERE name = $name;";
+            command.CommandText = "SELECT * FROM todo_groups WHERE name = $name;";
             command.Parameters.AddWithValue("$name", name);
 
             using (var reader = command.ExecuteReader())
@@ -237,7 +237,7 @@ public class TodoDatabase
                     return null;
                 }
 
-                container = new TodoContainer
+                group = new TodoGroup
                 {
                     id = reader.GetInt32(0),
                     name = reader.GetString(1),
@@ -252,16 +252,16 @@ public class TodoDatabase
             }
         }
 
-        return container;
+        return group;
     }
 
-    public bool UpdateContainer(string name, string? newName, string? newDescription)
+    public bool UpdateGroup(string name, string? newName, string? newDescription)
     {
         try
         {
             using (var command = readConnection.CreateCommand())
             {
-                command.CommandText = "UPDATE todo_containers SET name = $newName, description = $newDescription WHERE name = $name;";
+                command.CommandText = "UPDATE todo_groups SET name = $newName, description = $newDescription WHERE name = $name;";
                 command.Parameters.AddWithValue("$name", name);
                 command.Parameters.AddWithValue("$newName", newName);
                 command.Parameters.AddWithValue("$newDescription", newDescription ?? string.Empty);
@@ -276,13 +276,13 @@ public class TodoDatabase
         }
     }
 
-    public bool DeleteContainer(string name)
+    public bool DeleteGroup(string name)
     {
         try
         {
             using (var command = readConnection.CreateCommand())
             {
-                command.CommandText = "DELETE FROM todo_containers WHERE name = $name;";
+                command.CommandText = "DELETE FROM todo_groups WHERE name = $name;";
                 command.Parameters.AddWithValue("$name", name);
                 command.ExecuteNonQuery();
             }
@@ -292,6 +292,34 @@ public class TodoDatabase
         catch
         {
             return false;
+        }
+    }
+
+    public TodoGroup[]? ListGroups()
+    {
+        try
+        {
+            List<TodoGroup> groups = [];
+            using (var command = readConnection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM todo_groups;";
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    groups.Add(new TodoGroup
+                    {
+                        id = reader.GetInt32(0),
+                        name = reader.GetString(1),
+                        description = reader.GetString(2)
+                    });
+                }
+            }
+
+            return groups.ToArray();
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -305,7 +333,7 @@ public class TodoDatabase
     private void Initialize()
     {
         var schema =
-@"CREATE TABLE todo_containers (
+@"CREATE TABLE todo_groups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     description TEXT
@@ -313,13 +341,14 @@ public class TodoDatabase
 
 CREATE TABLE todo_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    container_id INTEGER NOT NULL,
+    group_id INTEGER NOT NULL,
     title TEXT NOT NULL,
     description TEXT,
     due_date DATETIME,
     completed BOOLEAN DEFAULT 0,
-    FOREIGN KEY (container_id) REFERENCES todo_containers (id) ON DELETE CASCADE
-    UNIQUE (container_id, title)
+    priority INTEGER,
+    FOREIGN KEY (group_id) REFERENCES todo_groups (id) ON DELETE CASCADE
+    UNIQUE (group_id, title)
 );
 ";
         var command = writeConnection.CreateCommand();

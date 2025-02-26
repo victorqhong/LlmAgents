@@ -3,6 +3,8 @@ using Newtonsoft.Json.Linq;
 using Simulation;
 using System.Collections.Generic;
 
+namespace Simulation.Tests;
+
 [TestClass]
 public sealed class TestLlmAgentApi
 {

@@ -1,7 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json.Linq;
 using Simulation.Todo;
-using System.Collections.Generic;
 
 namespace Simulation.Tests;
 
@@ -17,57 +15,57 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void TestTodoDatabase_CreateContainer()
+    public void TestTodoDatabase_CreateGroup()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
-        var result = db.CreateContainer("test");
+        var result = db.CreateGroup("test");
         Assert.IsTrue(result);
         db.Close();
     }
 
     [TestMethod]
-    public void TestTodoDatabase_GetContainer()
+    public void TestTodoDatabase_GetGroup()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
-        db.CreateContainer("test");
+        db.CreateGroup("test");
 
-        var container = db.GetContainer("test");
+        var group = db.GetGroup("test");
 
-        Assert.IsNotNull(container);
-        Assert.AreEqual("test", container.name);
+        Assert.IsNotNull(group);
+        Assert.AreEqual("test", group.name);
 
         db.Close();
     }
 
     [TestMethod]
-    public void TestTodoDatabase_UpdateContainer()
+    public void TestTodoDatabase_UpdateGroup()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
-        db.CreateContainer("test");
+        db.CreateGroup("test");
 
-        var result = db.UpdateContainer("test", "newTest", "newDescription");
+        var result = db.UpdateGroup("test", "newTest", "newDescription");
         Assert.IsTrue(result);
 
-        var container = db.GetContainer("newTest");
+        var group = db.GetGroup("newTest");
 
-        Assert.IsNotNull(container);
-        Assert.AreEqual("newTest", container.name);
+        Assert.IsNotNull(group);
+        Assert.AreEqual("newTest", group.name);
 
         db.Close();
     }
 
     [TestMethod]
-    public void TestTodoDatabase_DeleteContainer()
+    public void TestTodoDatabase_DeleteGroup()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
-        db.CreateContainer("test");
+        db.CreateGroup("test");
 
-        var result = db.DeleteContainer("test");
+        var result = db.DeleteGroup("test");
         Assert.IsTrue(result);
 
-        var container = db.GetContainer("test");
+        var group = db.GetGroup("test");
 
-        Assert.IsNull(container);
+        Assert.IsNull(group);
 
         db.Close();
     }
@@ -76,7 +74,7 @@ public sealed class TestTodoDatabase
     public void TestTodoDatabase_CreateTodo()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
-        db.CreateContainer("test");
+        db.CreateGroup("test");
 
         var result = db.CreateTodo("testtodo", "test", "this is a test");
         Assert.IsTrue(result);
@@ -88,7 +86,7 @@ public sealed class TestTodoDatabase
     public void TestTodoDatabase_GetTodo()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
-        db.CreateContainer("test");
+        db.CreateGroup("test");
 
         var result = db.CreateTodo("testtodo", "test", "this is a test");
         Assert.IsTrue(result);
@@ -104,7 +102,7 @@ public sealed class TestTodoDatabase
     public void TestTodoDatabase_UpdateTodo()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
-        db.CreateContainer("test");
+        db.CreateGroup("test");
 
         var result = db.CreateTodo("testtodo", "test", "this is a test");
         Assert.IsTrue(result);
@@ -123,7 +121,7 @@ public sealed class TestTodoDatabase
     public void TestTodoDatabase_DeleteTodo()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
-        db.CreateContainer("test");
+        db.CreateGroup("test");
 
         db.Close();
     }

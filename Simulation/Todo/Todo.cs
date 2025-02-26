@@ -4,7 +4,7 @@ public class Todo
 {
     public required int id;
 
-    public required int containerId;
+    public required int groupId;
 
     public required string title;
 

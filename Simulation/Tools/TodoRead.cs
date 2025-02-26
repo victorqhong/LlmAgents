@@ -12,7 +12,7 @@ public class TodoRead
         function = new
         {
             name = "todo_read",
-            description = "Get a todo list item",
+            description = "Get a todo",
             parameters = new
             {
                 type = "object",
@@ -21,15 +21,15 @@ public class TodoRead
                     title = new
                     {
                         type = "string",
-                        description = "Title of the todo item"
+                        description = "Title of the todo"
                     },
-                    container = new
+                    group = new
                     {
                         type = "string",
-                        description = "Name of the list that contains this todo item"
+                        description = "Name of the group that contains this todo"
                     }
                 },
-                required = new[] { "title", "container" }
+                required = new[] { "title", "group" }
             }
         }
     });
@@ -60,19 +60,19 @@ public class TodoRead
             return result;
         }
 
-        var container = parameters["container"]?.ToString();
-        if (string.IsNullOrEmpty(container))
+        var group = parameters["group"]?.ToString();
+        if (string.IsNullOrEmpty(group))
         {
-            result.Add("error", $"{nameof(container)} is null or empty");
+            result.Add("error", $"{nameof(group)} is null or empty");
             return result;
         }
 
         try
         {
-            var todo = todoDatabase.GetTodo(title, container);
+            var todo = todoDatabase.GetTodo(title, group);
             if (todo == null)
             {
-                result.Add("error", $"could not find todo with tile '{title}' in container '{container}'");
+                result.Add("error", $"could not find todo with tile '{title}' in group '{group}'");
             }
             else
             {

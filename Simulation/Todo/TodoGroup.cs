@@ -1,6 +1,6 @@
 namespace Simulation.Todo;
 
-public class TodoContainer
+public class TodoGroup
 {
     public required int id;
 

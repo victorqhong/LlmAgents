@@ -4,15 +4,15 @@ using Newtonsoft.Json.Linq;
 using Simulation.Todo;
 using System;
 
-public class TodoContainerCreate
+public class TodoGroupCreate
 {
     private JObject schema = JObject.FromObject(new
     {
         type = "function",
         function = new
         {
-            name = "todo_container_create",
-            description = "Create a todo container",
+            name = "todo_group_create",
+            description = "Create a group for todos",
             parameters = new
             {
                 type = "object",
@@ -21,12 +21,12 @@ public class TodoContainerCreate
                     name = new
                     {
                         type = "string",
-                        description = "Name of the todo container"
+                        description = "Name of the group"
                     },
                     description = new
                     {
                         type = "string",
-                        description = "Description of the todo container (optional)"
+                        description = "Description of the group (optional)"
                     }
                 },
                 required = new[] { "name" }
@@ -36,7 +36,7 @@ public class TodoContainerCreate
 
     private readonly TodoDatabase todoDatabase;
 
-    public TodoContainerCreate(TodoDatabase todoDatabase)
+    public TodoGroupCreate(TodoDatabase todoDatabase)
     {
         this.todoDatabase = todoDatabase;
 
@@ -64,7 +64,8 @@ public class TodoContainerCreate
 
         try
         {
-            todoDatabase.CreateContainer(name, description);
+            var todoResult = todoDatabase.CreateGroup(name, description);
+            result.Add("result", todoResult);
         }
         catch (Exception e)
         {

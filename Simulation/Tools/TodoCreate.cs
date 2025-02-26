@@ -12,7 +12,7 @@ public class TodoCreate
         function = new
         {
             name = "todo_create",
-            description = "Create a todo list item",
+            description = "Create a todo",
             parameters = new
             {
                 type = "object",
@@ -21,20 +21,20 @@ public class TodoCreate
                     name = new
                     {
                         type = "string",
-                        description = "Name of the todo item"
+                        description = "Name of the todo"
                     },
-                    container = new
+                    group = new
                     {
                         type = "string",
-                        description = "Name of the list that contains this todo item"
+                        description = "Name of the that contains this todo"
                     },
                     description = new
                     {
                         type = "string",
-                        description = "Description of the todo item (optional)"
+                        description = "Description of the todo (optional)"
                     }
                 },
-                required = new[] { "name", "container" }
+                required = new[] { "name", "group" }
             }
         }
     });
@@ -65,10 +65,10 @@ public class TodoCreate
             return result;
         }
 
-        var container = parameters["container"]?.ToString();
-        if (string.IsNullOrEmpty(container))
+        var group = parameters["group"]?.ToString();
+        if (string.IsNullOrEmpty(group))
         {
-            result.Add("error", "container is null or empty");
+            result.Add("error", "group is null or empty");
             return result;
         }
 
@@ -76,7 +76,8 @@ public class TodoCreate
 
         try
         {
-            todoDatabase.CreateTodo(name, container, description);
+            var todoResult = todoDatabase.CreateTodo(name, group, description);
+            result.Add("result", todoResult);
         }
         catch (Exception e)
         {

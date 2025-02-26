@@ -1,5 +1,6 @@
 namespace Simulation;
 
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
@@ -8,6 +9,8 @@ using System.Threading.Tasks;
 
 public class LlmAgentApi
 {
+    private readonly ILogger log = Program.loggerFactory.CreateLogger(nameof(LlmAgentApi));
+
     private readonly List<Tool> Tools = [];
     private readonly List<JObject> ToolDefinitions = [];
     private readonly Dictionary<string, Tool> ToolMap = [];
@@ -147,6 +150,8 @@ public class LlmAgentApi
                 {
                     return null;
                 }
+
+                log.LogInformation($"Calling tool: {name}");
 
                 var id = toolCall["id"]?.Value<string>();
                 var toolResult = tool(JObject.Parse(arguments));
