@@ -24,11 +24,12 @@ if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey))
     return;
 }
 
-var todoDatabase = new TodoDatabase("todo.db", false);
+var todoDatabase = new TodoDatabase("todo.db");
+var basePath = Environment.CurrentDirectory;
 
 var shellTool = new Shell();
-var fileReadTool = new FileRead();
-var fileWriteTool = new FileWrite();
+var fileReadTool = new FileRead(basePath);
+var fileWriteTool = new FileWrite(basePath);
 var sqliteFileRun = new SqliteFileRun();
 var sqliteSqlRun = new SqliteSqlRun();
 var todoContainerCreate = new TodoGroupCreate(todoDatabase);
@@ -53,9 +54,9 @@ agent1.AddTool(todoContainerList.Tool);
 var toolsPrompt = "Summarize the tools available and their parameters";
 var questionairePrompt = "Write a questionaire to gather requirements for a new software project minimum viable product. Save the file to MVP.md";
 var planPrompt = "Read the file 'MVP.md' and generate an implementation plan, and save the file to PLAN.md";
-var todoPrompt = "Read the file 'PLAN.md' and create todo items. Each phase should have one or more todos.";
+var todoPrompt = "Read the file 'PLAN.md' and create todos in appropriate groups. Each phase should have one or more todos.";
 
-var response = agent1.GenerateCompletion(toolsPrompt);
+var response = agent1.GenerateCompletion(todoPrompt);
 
 Console.WriteLine(response);
 Console.ReadLine();

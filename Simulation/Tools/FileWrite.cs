@@ -2,9 +2,12 @@ namespace Simulation.Tools;
 
 using Newtonsoft.Json.Linq;
 using System;
+using System.IO;
 
 public class FileWrite
 {
+    private readonly string basePath;
+
     private JObject schema = JObject.FromObject(new
     {
         type = "function",
@@ -33,8 +36,10 @@ public class FileWrite
         }
     });
 
-    public FileWrite()
+    public FileWrite(string? basePath = null)
     {
+        this.basePath = basePath ?? Environment.CurrentDirectory;
+
         Tool = new Tool
         {
             Schema = schema,
@@ -64,7 +69,7 @@ public class FileWrite
 
         try
         {
-            System.IO.File.WriteAllText(path, contents);
+            File.WriteAllText(Path.Join(basePath, path), contents);
             result.Add("result", "success");
         }
         catch (Exception e)

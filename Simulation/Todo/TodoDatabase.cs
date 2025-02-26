@@ -15,7 +15,7 @@ public class TodoDatabase
 
     private readonly SqliteConnection writeConnection;
 
-    public TodoDatabase(string database, bool initializeSchema = true)
+    public TodoDatabase(string database)
     {
         Database = database;
 
@@ -27,10 +27,7 @@ public class TodoDatabase
             throw new ApplicationException("Could not initialize database connections");
         }
 
-        if (initializeSchema)
-        {
-            Initialize();
-        }
+        Initialize();
     }
 
     public bool CreateTodo(string name, string group, string? description = null, int priority = 10)
@@ -346,6 +343,26 @@ public class TodoDatabase
         }
     }
 
+    private bool TableExists(string table)
+    {
+        try
+        {
+            using (var command = readConnection.CreateCommand())
+            {
+                command.CommandText = "SELECT 1 FROM sqlite_master where type = 'table' AND name = $table;";
+                command.Parameters.AddWithValue("$table", "todo_groups");
+                var result = command.ExecuteScalar();
+                return result != null;
+            }
+        }
+        catch (Exception e)
+        {
+            log.LogError(e, "Could not determine if table exists: {table}", table);
+        }
+
+        return false;
+    }
+
     public void Close()
     {
         readConnection.Close();
@@ -355,7 +372,15 @@ public class TodoDatabase
 
     private void Initialize()
     {
-        var schema =
+        var tablesCreated = TableExists("todo_groups") || TableExists("todo_items");
+        if (tablesCreated)
+        {
+            return;
+        }
+
+        using (var command = writeConnection.CreateCommand())
+        {
+            var schema =
 @"CREATE TABLE todo_groups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
@@ -374,9 +399,10 @@ CREATE TABLE todo_items (
     UNIQUE (group_id, title)
 );
 ";
-        var command = writeConnection.CreateCommand();
-        command.CommandText = schema;
-        command.ExecuteNonQuery();
+
+            command.CommandText = schema;
+            command.ExecuteNonQuery();
+        }
     }
 
     private SqliteConnection CreateConnection()

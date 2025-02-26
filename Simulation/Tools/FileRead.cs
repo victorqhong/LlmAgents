@@ -2,9 +2,12 @@ namespace Simulation.Tools;
 
 using Newtonsoft.Json.Linq;
 using System;
+using System.IO;
 
 public class FileRead
 {
+    private readonly string basePath;
+
     private JObject schema = JObject.FromObject(new
     {
         type = "function",
@@ -28,8 +31,10 @@ public class FileRead
         }
     });
 
-    public FileRead()
+    public FileRead(string? basePath = null)
     {
+        this.basePath = basePath ?? Environment.CurrentDirectory;
+
         Tool = new Tool
         {
             Schema = schema,
@@ -52,7 +57,7 @@ public class FileRead
 
         try
         {
-            var text = System.IO.File.ReadAllText(path);
+            var text = File.ReadAllText(Path.Join(basePath, path));
             result.Add("contents", text);
         }
         catch (Exception e)
