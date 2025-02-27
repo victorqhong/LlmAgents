@@ -7,7 +7,7 @@ namespace Simulation.Tests;
 public sealed class TestTodoDatabase
 {
     [TestMethod]
-    public void Test_Initialize()
+    public void TestInitialize()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         Assert.IsNotNull(db);
@@ -15,7 +15,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void Test_CreateGroup()
+    public void TestCreateGroup()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         var result = db.CreateGroup("test");
@@ -24,7 +24,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void Test_GetGroup()
+    public void TestGetGroup()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");
@@ -38,7 +38,22 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void Test_UpdateGroup()
+    public void TestGetGroup_WithTodos()
+    {
+        TodoDatabase db = new TodoDatabase(":memory:");
+        db.CreateGroup("test");
+        db.CreateTodo("testtodo", "test");
+
+        var group = db.GetGroup("test", true);
+        Assert.IsNotNull(group);
+        Assert.IsTrue(group.todos.Length > 0);
+        Assert.AreEqual("testtodo", group.todos[0].title);
+
+        db.Close();
+    }
+
+    [TestMethod]
+    public void TestUpdateGroup()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");
@@ -55,7 +70,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void Test_DeleteGroup()
+    public void TestDeleteGroup()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");
@@ -71,7 +86,32 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void Test_CreateTodo()
+    public void TestListGroups_WithTodos()
+    {
+        TodoDatabase db = new TodoDatabase(":memory:");
+        try
+        {
+            db.CreateGroup("test");
+            db.CreateTodo("testtodo", "test");
+            var groups = db.ListGroups(true);
+            Assert.IsNotNull(groups);
+            Assert.IsTrue(groups.Length == 1);
+            Assert.AreEqual("test", groups[0].name);
+            Assert.IsTrue(groups[0].todos.Length == 1);
+            Assert.AreEqual("testtodo", groups[0].todos[0].title);
+        }
+        catch
+        {
+            Assert.Fail();
+        }
+        finally
+        {
+            db.Close();
+        }
+    }
+
+    [TestMethod]
+    public void TestCreateTodo()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");
@@ -86,7 +126,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void Test_GetTodo()
+    public void TestGetTodo()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");
@@ -102,7 +142,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void Test_UpdateTodo()
+    public void TestUpdateTodo()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");
@@ -121,7 +161,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
-    public void Test_DeleteTodo()
+    public void TestDeleteTodo()
     {
         TodoDatabase db = new TodoDatabase(":memory:");
         db.CreateGroup("test");

@@ -7,4 +7,6 @@ public class TodoGroup
     public required string name;
 
     public required string? description;
+
+    public required Todo[] todos;
 }

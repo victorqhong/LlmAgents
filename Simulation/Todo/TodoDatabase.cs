@@ -37,7 +37,6 @@ public class TodoDatabase
             var todoGroup = GetGroup(group);
             if (todoGroup == null)
             {
-                log.LogInformation("Could not find group: {group}", group);
                 return false;
             }
 
@@ -68,7 +67,6 @@ public class TodoDatabase
             var todoGroup = GetGroup(group);
             if (todoGroup == null)
             {
-                log.LogInformation("Could not find group: {group}", group);
                 return null;
             }
 
@@ -130,7 +128,6 @@ public class TodoDatabase
             var todoGroup = GetGroup(group);
             if (todoGroup == null)
             {
-                log.LogInformation("Could not find group: {group}", group);
                 return false;
             }
 
@@ -150,7 +147,6 @@ public class TodoDatabase
 
             if (newTodoGroup == null)
             {
-                log.LogInformation("Could not find new group: {newGroup}", newGroup);
                 return false;
             }
 
@@ -188,7 +184,6 @@ public class TodoDatabase
             var todoGroup = GetGroup(group);
             if (todoGroup == null)
             {
-                log.LogInformation("Could not find group: {group}", group);
                 return false;
             }
 
@@ -230,11 +225,13 @@ public class TodoDatabase
         }
     }
 
-    public TodoGroup? GetGroup(string name)
+    public TodoGroup? GetGroup(string name, bool getTodos = false)
     {
         try
         {
-            TodoGroup? group = null;
+            int groupId = -1;
+            string? groupName = null;
+            string? groupDescription = null;
             using (var command = readConnection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM todo_groups WHERE name = $name;";
@@ -244,26 +241,52 @@ public class TodoDatabase
                 {
                     if (!reader.Read())
                     {
-                        log.LogInformation("Could not find group: {group}", group);
+                        log.LogInformation("Could not find group: {name}", name);
                         return null;
                     }
 
-                    group = new TodoGroup
-                    {
-                        id = reader.GetInt32(0),
-                        name = reader.GetString(1),
-                        description = reader.GetString(2)
-                    };
+                    groupId = reader.GetInt32(0);
+                    groupName = reader.GetString(1);
+                    groupDescription = reader.GetString(2);
 
                     if (reader.Read())
                     {
-                        log.LogInformation("More than one group found: {group}", group);
+                        log.LogInformation("More than one group found: {name}", name);
                         return null;
                     }
                 }
             }
 
-            return group;
+            List<Todo> groupTodos = [];
+            using (var command = readConnection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM todo_items WHERE group_id = $group_id";
+                command.Parameters.AddWithValue("$group_id", groupId);
+
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        groupTodos.Add(new Todo
+                        {
+                            id = reader.GetInt32(0),
+                            groupId = reader.GetInt32(1),
+                            title = reader.GetString(2),
+                            description = reader.GetString(3),
+                            dueDate = reader.GetString(4),
+                            completed = reader.GetBoolean(5),
+                        });
+                    }
+                }
+            }
+
+            return new TodoGroup
+            {
+                id = groupId,
+                name = groupName,
+                description = groupDescription,
+                todos = groupTodos.ToArray()
+            };
         }
         catch (Exception e)
         {
@@ -314,27 +337,101 @@ public class TodoDatabase
         }
     }
 
-    public TodoGroup[]? ListGroups()
+    public TodoGroup[]? ListGroups(bool getTodos = false)
     {
         try
         {
-            List<TodoGroup> groups = [];
-            using (var command = readConnection.CreateCommand())
+            if (getTodos)
             {
-                command.CommandText = "SELECT * FROM todo_groups;";
-                using var reader = command.ExecuteReader();
-                while (reader.Read())
+                Dictionary<int, List<Todo>> groupTodos = [];
+                using (var command = readConnection.CreateCommand())
                 {
-                    groups.Add(new TodoGroup
+                    command.CommandText = "SELECT * FROM todo_items;";
+                    using var reader = command.ExecuteReader();
+                    while (reader.Read())
                     {
-                        id = reader.GetInt32(0),
-                        name = reader.GetString(1),
-                        description = reader.GetString(2)
-                    });
-                }
-            }
+                        var todoId = reader.GetInt32(0);
+                        var todoGroup = reader.GetInt32(1);
+                        var todoTitle = reader.GetString(2);
+                        var todoDescription = reader.GetString(3);
+                        var todoDueDate = reader.GetString(4);
+                        var todoCompleted = reader.GetBoolean(5);
+                        var todoPriority = reader.GetInt32(6);
 
-            return groups.ToArray();
+                        if (!groupTodos.ContainsKey(todoGroup))
+                        {
+                            groupTodos.Add(todoGroup, []);
+                        }
+
+                        groupTodos[todoGroup].Add(new Todo
+                        {
+                            id = todoId,
+                            groupId = todoGroup,
+                            title = todoTitle,
+                            description = todoDescription,
+                            dueDate = todoDueDate,
+                            completed = todoCompleted,
+                        });
+                    }
+                }
+
+                List<TodoGroup> groups = [];
+                foreach (var kvp in groupTodos)
+                {
+                    using (var command = readConnection.CreateCommand())
+                    {
+                        command.CommandText = "SELECT * FROM todo_groups WHERE id = $id;";
+                        command.Parameters.AddWithValue("$id", kvp.Key);
+
+                        using var reader = command.ExecuteReader();
+
+                        if (!reader.Read())
+                        {
+                            log.LogInformation("Could not find group with id: {id}", kvp.Key);
+                            continue;
+                        }
+
+                        var group = new TodoGroup
+                        {
+                            id = reader.GetInt32(0),
+                            name = reader.GetString(1),
+                            description = reader.GetString(2),
+                            todos = kvp.Value.ToArray()
+                        };
+
+                        if (reader.Read())
+                        {
+                            log.LogInformation("More than one result found for id: {id}", kvp.Key);
+                            continue;
+                        }
+
+                        groups.Add(group);
+                    }
+                }
+
+                return groups.ToArray();
+            }
+            else
+            {
+                List<TodoGroup> groups = [];
+                using (var command = readConnection.CreateCommand())
+                {
+                    command.CommandText = "SELECT * FROM todo_groups;";
+                    using var reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        groups.Add(new TodoGroup
+                        {
+                            id = reader.GetInt32(0),
+                            name = reader.GetString(1),
+                            description = reader.GetString(2),
+                            todos = new Todo[0]
+                        });
+                    }
+                }
+
+                return groups.ToArray();
+            }
         }
         catch (Exception e)
         {

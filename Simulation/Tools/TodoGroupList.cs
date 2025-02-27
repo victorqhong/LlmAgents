@@ -13,7 +13,7 @@ public class TodoGroupList
         function = new
         {
             name = "todo_group_list",
-            description = "List all todo groups",
+            description = "List all todo groups and associated todos",
         }
     });
 
@@ -38,7 +38,7 @@ public class TodoGroupList
 
         try
         {
-            var todoContainers = todoDatabase.ListGroups();
+            var todoContainers = todoDatabase.ListGroups(true);
             if (todoContainers == null)
             {
                 result.Add("error", "could not list groups");
