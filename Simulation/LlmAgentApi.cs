@@ -16,6 +16,15 @@ public class LlmAgentApi
     private readonly Dictionary<string, Tool> ToolMap = [];
 
     public LlmAgentApi(string apiEndpoint, string apiKey, string model, string? systemPrompt = null)
+        : this(apiEndpoint, apiKey, model, (List<JObject>?)null)
+    {
+        if (!string.IsNullOrEmpty(systemPrompt))
+        {
+            Messages.Add(JObject.FromObject(new { role = "system", content = systemPrompt }));
+        }
+    }
+
+    public LlmAgentApi(string apiEndpoint, string apiKey, string model, List<JObject>? messages = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(apiEndpoint);
         ArgumentException.ThrowIfNullOrEmpty(apiKey);
@@ -25,9 +34,9 @@ public class LlmAgentApi
         ApiKey = apiKey;
         Model = model;
 
-        if (!string.IsNullOrEmpty(systemPrompt))
+        if (messages != null)
         {
-            Messages.Add(JObject.FromObject(new { role = "system", content = systemPrompt }));
+            Messages = messages;
         }
     }
 

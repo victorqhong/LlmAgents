@@ -1,6 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Simulation;
 using Simulation.Todo;
 using Simulation.Tools;
@@ -38,9 +42,20 @@ var todoContainerList = new TodoGroupList(todoDatabase);
 var todoCreate = new TodoCreate(todoDatabase);
 var todoRead = new TodoRead(todoDatabase);
 
-var systemPrompt = "You are a Software Engineer with over 10 years of professional experience. You are proficient at programming and communication.";
+LlmAgentApi agent1;
 
-LlmAgentApi agent1 = new LlmAgentApi(apiEndpoint, apiKey, "gpt-4o", systemPrompt);
+var messagesFile = "messages.json";
+if (File.Exists(messagesFile))
+{
+    var messages = JsonConvert.DeserializeObject<List<JObject>>(File.ReadAllText(messagesFile));
+    agent1 = new LlmAgentApi(apiEndpoint, apiKey, model, messages);
+}
+else
+{
+    var systemPrompt = "You are a Software Engineer with over 10 years of professional experience. You are proficient at programming and communication.";
+    agent1 = new LlmAgentApi(apiEndpoint, apiKey, model, systemPrompt);
+}
+
 agent1.AddTool(shellTool.Tool);
 agent1.AddTool(fileReadTool.Tool);
 agent1.AddTool(fileWriteTool.Tool);
@@ -56,10 +71,22 @@ var questionairePrompt = "Write a questionaire to gather requirements for a new 
 var planPrompt = "Read the file 'MVP.md' and generate an implementation plan, and save the file to PLAN.md";
 var todoPrompt = "Read the file 'PLAN.md' and create todos in appropriate groups. Each phase should have one or more todos.";
 
-var response = agent1.GenerateCompletion(todoPrompt);
+var line = string.Empty;
+do
+{
+    line = Console.ReadLine();
+    if (string.IsNullOrEmpty(line))
+    {
+        break;
+    }
 
-Console.WriteLine(response);
-Console.ReadLine();
+    var response = agent1.GenerateCompletion(line);
+
+    Console.WriteLine(response);
+}
+while (!string.IsNullOrEmpty(line));
+
+File.WriteAllText(messagesFile, JsonConvert.SerializeObject(agent1.Messages));
 
 public partial class Program
 {
