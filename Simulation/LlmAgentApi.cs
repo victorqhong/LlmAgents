@@ -15,21 +15,14 @@ public class LlmAgentApi
     private readonly List<JObject> ToolDefinitions = [];
     private readonly Dictionary<string, Tool> ToolMap = [];
 
-    public LlmAgentApi(string apiEndpoint, string apiKey, string model, string? systemPrompt = null)
-        : this(apiEndpoint, apiKey, model, (List<JObject>?)null)
+    public LlmAgentApi(string id, string apiEndpoint, string apiKey, string model, List<JObject>? messages = null)
     {
-        if (!string.IsNullOrEmpty(systemPrompt))
-        {
-            Messages.Add(JObject.FromObject(new { role = "system", content = systemPrompt }));
-        }
-    }
-
-    public LlmAgentApi(string apiEndpoint, string apiKey, string model, List<JObject>? messages = null)
-    {
+        ArgumentException.ThrowIfNullOrEmpty(id);
         ArgumentException.ThrowIfNullOrEmpty(apiEndpoint);
         ArgumentException.ThrowIfNullOrEmpty(apiKey);
         ArgumentException.ThrowIfNullOrEmpty(model);
 
+        Id = id;
         ApiEndpoint = apiEndpoint;
         ApiKey = apiKey;
         Model = model;
@@ -39,6 +32,8 @@ public class LlmAgentApi
             Messages = messages;
         }
     }
+
+    public readonly string Id;
 
     public List<JObject> Messages { get; private set; } = [];
 
@@ -135,6 +130,12 @@ public class LlmAgentApi
 
             foreach (var toolCall in toolCalls)
             {
+                var id = toolCall["id"]?.Value<string>();
+                if (string.IsNullOrEmpty(id))
+                {
+                    return null;
+                }    
+
                 var function = toolCall["function"];
                 if (function == null)
                 {
@@ -147,12 +148,12 @@ public class LlmAgentApi
                     return null;
                 }
 
-                if (!ToolMap.ContainsKey(name))
+                if (!ToolMap.TryGetValue(name, out Tool? value))
                 {
                     return null;
                 }
 
-                var tool = ToolMap[name].Function;
+                var tool = value.Function;
 
                 var arguments = function["arguments"]?.Value<string>();
                 if (arguments == null)
@@ -160,9 +161,8 @@ public class LlmAgentApi
                     return null;
                 }
 
-                log.LogInformation($"Calling tool: {name}");
+                log.LogInformation("Calling tool: {name}", name);
 
-                var id = toolCall["id"]?.Value<string>();
                 var toolResult = tool(JObject.Parse(arguments));
                 Messages.Add(JObject.FromObject(new
                 {
@@ -183,7 +183,7 @@ public class LlmAgentApi
 
     private static async Task<JObject?> Post(string apiEndpoint, string apiKey, string content)
     {
-        using (HttpClient client = new HttpClient())
+        using (HttpClient client = new())
         {
             client.DefaultRequestHeaders.Add("api-key", apiKey);
 

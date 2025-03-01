@@ -15,9 +15,9 @@ var model = "gpt-4o";
 
 var environmentVariableTarget = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? EnvironmentVariableTarget.User : EnvironmentVariableTarget.Process;
 var credentialsFile = Environment.GetEnvironmentVariable("LLM_CREDENTIALS_FILE", environmentVariableTarget);
-if (System.IO.File.Exists(credentialsFile))
+if (File.Exists(credentialsFile))
 {
-    var json = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(credentialsFile));
+    var json = JObject.Parse(File.ReadAllText(credentialsFile));
     apiEndpoint = $"{json.Value<string>("AZURE_OPENAI_ENDPOINT")}/openai/deployments/{model}/chat/completions?api-version=2024-08-01-preview";
     apiKey = json.Value<string>("AZURE_OPENAI_API_KEY");
 }
@@ -28,48 +28,67 @@ if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey))
     return;
 }
 
-var todoDatabase = new TodoDatabase("todo.db");
-var basePath = Environment.CurrentDirectory;
-
-var shellTool = new Shell();
-var fileReadTool = new FileRead(basePath);
-var fileWriteTool = new FileWrite(basePath);
-var sqliteFileRun = new SqliteFileRun();
-var sqliteSqlRun = new SqliteSqlRun();
-var todoContainerCreate = new TodoGroupCreate(todoDatabase);
-var todoContainerRead = new TodoGroupRead(todoDatabase);
-var todoContainerList = new TodoGroupList(todoDatabase);
-var todoCreate = new TodoCreate(todoDatabase);
-var todoRead = new TodoRead(todoDatabase);
-
-LlmAgentApi agent1;
-
-var messagesFile = "messages.json";
-if (File.Exists(messagesFile))
-{
-    var messages = JsonConvert.DeserializeObject<List<JObject>>(File.ReadAllText(messagesFile));
-    agent1 = new LlmAgentApi(apiEndpoint, apiKey, model, messages);
-}
-else
-{
-    var systemPrompt = "You are a Software Engineer with over 10 years of professional experience. You are proficient at programming and communication.";
-    agent1 = new LlmAgentApi(apiEndpoint, apiKey, model, systemPrompt);
-}
-
-agent1.AddTool(shellTool.Tool);
-agent1.AddTool(fileReadTool.Tool);
-agent1.AddTool(fileWriteTool.Tool);
-agent1.AddTool(sqliteSqlRun.Tool);
-agent1.AddTool(sqliteFileRun.Tool);
-agent1.AddTool(todoContainerCreate.Tool);
-agent1.AddTool(todoCreate.Tool);
-agent1.AddTool(todoRead.Tool);
-agent1.AddTool(todoContainerList.Tool);
-
+var systemPrompt = "You are a Software Engineer with over 10 years of professional experience. You are proficient at programming and communication.";
 var toolsPrompt = "Summarize the tools available and their parameters";
 var questionairePrompt = "Write a questionaire to gather requirements for a new software project minimum viable product. Save the file to MVP.md";
 var planPrompt = "Read the file 'MVP.md' and generate an implementation plan, and save the file to PLAN.md";
 var todoPrompt = "Read the file 'PLAN.md' and create todos in appropriate groups. Each phase should have one or more todos.";
+
+string GetMessagesFile(string id)
+{
+    return $"messages-{id}.json";
+}
+
+LlmAgentApi CreateAgent(string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false)
+{
+    var todoDatabase = new TodoDatabase("todo.db");
+    var basePath = Environment.CurrentDirectory;
+
+    var shellTool = new Shell();
+    var fileReadTool = new FileRead(basePath);
+    var fileWriteTool = new FileWrite(basePath);
+    var sqliteFileRun = new SqliteFileRun();
+    var sqliteSqlRun = new SqliteSqlRun();
+    var todoContainerCreate = new TodoGroupCreate(todoDatabase);
+    var todoContainerRead = new TodoGroupRead(todoDatabase);
+    var todoContainerList = new TodoGroupList(todoDatabase);
+    var todoCreate = new TodoCreate(todoDatabase);
+    var todoRead = new TodoRead(todoDatabase);
+
+    var messagesFile = GetMessagesFile(id);
+
+    List<JObject>? messages = null;
+    if (loadMessages)
+    {
+        if (File.Exists(messagesFile))
+        {
+            messages = JsonConvert.DeserializeObject<List<JObject>>(File.ReadAllText(messagesFile));
+        }
+    }
+
+    if (messages == null)
+    {
+        messages =
+        [
+            JObject.FromObject(new { role = "system", content = systemPrompt })
+        ];
+    }
+
+    var agent = new LlmAgentApi(id, apiEndpoint, apiKey, model, messages);
+    agent.AddTool(shellTool.Tool);
+    agent.AddTool(fileReadTool.Tool);
+    agent.AddTool(fileWriteTool.Tool);
+    agent.AddTool(sqliteSqlRun.Tool);
+    agent.AddTool(sqliteFileRun.Tool);
+    agent.AddTool(todoContainerCreate.Tool);
+    agent.AddTool(todoCreate.Tool);
+    agent.AddTool(todoRead.Tool);
+    agent.AddTool(todoContainerList.Tool);
+
+    return agent;
+}
+
+var agent1 = CreateAgent("agent1", apiEndpoint, apiKey, model);
 
 var line = string.Empty;
 do
@@ -86,7 +105,7 @@ do
 }
 while (!string.IsNullOrEmpty(line));
 
-File.WriteAllText(messagesFile, JsonConvert.SerializeObject(agent1.Messages));
+File.WriteAllText(GetMessagesFile(agent1.Id), JsonConvert.SerializeObject(agent1.Messages));
 
 public partial class Program
 {
