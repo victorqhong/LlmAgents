@@ -54,6 +54,7 @@ LlmAgentApi CreateAgent(string id, string apiEndpoint, string apiKey, string mod
     var todoContainerList = new TodoGroupList(todoDatabase);
     var todoCreate = new TodoCreate(todoDatabase);
     var todoRead = new TodoRead(todoDatabase);
+    var todoUpdate = new TodoUpdate(todoDatabase);
 
     var messagesFile = GetMessagesFile(id);
 
@@ -81,9 +82,10 @@ LlmAgentApi CreateAgent(string id, string apiEndpoint, string apiKey, string mod
     agent.AddTool(sqliteSqlRun.Tool);
     agent.AddTool(sqliteFileRun.Tool);
     agent.AddTool(todoContainerCreate.Tool);
+    agent.AddTool(todoContainerList.Tool);
     agent.AddTool(todoCreate.Tool);
     agent.AddTool(todoRead.Tool);
-    agent.AddTool(todoContainerList.Tool);
+    agent.AddTool(todoUpdate.Tool);
 
     return agent;
 }
