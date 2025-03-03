@@ -88,11 +88,12 @@ LlmAgentApi CreateAgent(string id, string apiEndpoint, string apiKey, string mod
     return agent;
 }
 
-var agent1 = CreateAgent("agent1", apiEndpoint, apiKey, model);
+var agent1 = CreateAgent("agent1", apiEndpoint, apiKey, model, true);
 
 var line = string.Empty;
 do
 {
+    Console.Write(">");
     line = Console.ReadLine();
     if (string.IsNullOrEmpty(line))
     {
@@ -102,10 +103,10 @@ do
     var response = agent1.GenerateCompletion(line);
 
     Console.WriteLine(response);
+
+    File.WriteAllText(GetMessagesFile(agent1.Id), JsonConvert.SerializeObject(agent1.Messages));
 }
 while (!string.IsNullOrEmpty(line));
-
-File.WriteAllText(GetMessagesFile(agent1.Id), JsonConvert.SerializeObject(agent1.Messages));
 
 public partial class Program
 {

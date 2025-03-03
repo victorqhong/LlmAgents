@@ -69,7 +69,7 @@ public class FileWrite
 
         try
         {
-            File.WriteAllText(Path.Join(basePath, path), contents);
+            File.WriteAllText(Path.Join(basePath, path), contents.Replace("\n", Environment.NewLine));
             result.Add("result", "success");
         }
         catch (Exception e)

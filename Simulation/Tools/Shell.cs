@@ -22,10 +22,10 @@ public class Shell
                         type = "string",
                         description = "Shell command and arguments to run"
                     },
-                    wait_for_exit = new
+                    waitTimeMs = new
                     {
                         type = "string",
-                        description = "'true' or 'false' whether to wait for the command to exit default is 'true' (optional)"
+                        description = "Time in milliseconds to wait for the command to complete after which the command is killed (default is 10 seconds, 0 is immediately return, -1 is infinite wait)"
                     }
                 },
                 required = new[] { "command" }
@@ -57,23 +57,28 @@ public class Shell
 
         try
         {
-            var waitForExit = bool.Parse(parameters["wait_for_exit"]?.ToString() ?? "true");
-            var commandParts = command.Split(' ');
-            var fileName = commandParts[0];
-            var arguments = commandParts.AsSpan(1).ToArray();
+            var waitTimeMs = int.Parse(parameters["waitTimeMs"]?.ToString() ?? "10000");
 
             var process = new System.Diagnostics.Process();
-            process.StartInfo.FileName = fileName;
-            process.StartInfo.Arguments = string.Join(" ", arguments);
+
+            process.StartInfo.FileName = "pwsh";
+            process.StartInfo.Arguments = "-Command -";
+
+            process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardInput = true;
+
             process.Start();
-            if (waitForExit)
-            {
-                process.WaitForExit();
-            }
+
+            process.StandardInput.WriteLine(command);
+            process.StandardInput.Flush();
+            process.StandardInput.Close();
+
+            process.WaitForExit(waitTimeMs);
+            process.Kill(true);
+
             var output = process.StandardOutput.ReadToEnd();
 
-            result.Add("pid", process.Id);
             result.Add("stdout", output);
             result.Add("exitcode", process.ExitCode);
         }

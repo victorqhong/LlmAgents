@@ -72,7 +72,7 @@ public sealed class TestLlmAgentApi
         var json = System.IO.File.ReadAllText("Responses/response_toolcall.json");
         var completion = JObject.Parse(json);
 
-        var agent = new LlmAgentApi("http://localhost", "sk-none", "gpt-4o");
+        var agent = new LlmAgentApi("unittest", "http://localhost", "sk-none", "gpt-4o");
         agent.ProcessCompletion(completion);
     }
 }

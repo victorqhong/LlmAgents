@@ -134,7 +134,7 @@ public class LlmAgentApi
                 if (string.IsNullOrEmpty(id))
                 {
                     return null;
-                }    
+                }
 
                 var function = toolCall["function"];
                 if (function == null)
@@ -161,7 +161,7 @@ public class LlmAgentApi
                     return null;
                 }
 
-                log.LogInformation("Calling tool: {name}", name);
+                log.LogInformation("Calling tool '{name}' with arguments '{arguments}'", name, arguments);
 
                 var toolResult = tool(JObject.Parse(arguments));
                 Messages.Add(JObject.FromObject(new
