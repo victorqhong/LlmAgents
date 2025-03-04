@@ -50,7 +50,7 @@ public class TodoUpdate
                     },
                     newCompleted = new
                     {
-                        type = "bool",
+                        type = "boolean",
                         description = "New completed state of the todo"
                     }
                 },
