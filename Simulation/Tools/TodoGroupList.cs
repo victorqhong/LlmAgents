@@ -32,7 +32,7 @@ public class TodoGroupList
 
     public Tool Tool { get; private set; }
 
-    private JObject Function(JObject parameters)
+    private JToken Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -45,7 +45,7 @@ public class TodoGroupList
             }
             else
             {
-                result.Add("groups", JArray.FromObject(todoContainers));
+                return JArray.FromObject(todoContainers);
             }
         }
         catch (Exception e)

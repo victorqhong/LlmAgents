@@ -6,7 +6,7 @@ using System;
 public class Tool
 {
     public required JObject Schema;
-    public required Func<JObject, JObject> Function;
+    public required Func<JObject, JToken> Function;
 
     public string Name
     {
