@@ -65,7 +65,7 @@ public class SqliteFileRun
         try
         {
             var process = new System.Diagnostics.Process();
-            process.StartInfo.FileName = "sqlite";
+            process.StartInfo.FileName = "sqlite3";
             process.StartInfo.Arguments = $"-init {file} {db}";
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardInput = true;

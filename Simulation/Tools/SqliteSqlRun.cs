@@ -65,8 +65,8 @@ public class SqliteSqlRun
         try
         {
             var process = new System.Diagnostics.Process();
-            process.StartInfo.FileName = "sqlite";
-            process.StartInfo.Arguments = $"{db} {sql}";
+            process.StartInfo.FileName = "sqlite3";
+            process.StartInfo.Arguments = $"{db} {sql.Replace("\n", Environment.NewLine)}";
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardInput = true;
             process.Start();
