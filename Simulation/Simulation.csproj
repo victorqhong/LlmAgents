@@ -5,6 +5,9 @@
     <TargetFramework>net9.0</TargetFramework>
     <RootNamespace>Simulation</RootNamespace>
     <Nullable>enable</Nullable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>llm</ToolCommandName>
+    <PackageId>llm</PackageId>
   </PropertyGroup>
 
   <ItemGroup>
