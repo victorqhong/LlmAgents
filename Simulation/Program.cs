@@ -34,6 +34,36 @@ var questionairePrompt = "Write a questionaire to gather requirements for a new 
 var planPrompt = "Read the file 'MVP.md' and generate an implementation plan, and save the file to PLAN.md";
 var todoPrompt = "Read the file 'PLAN.md' and create todos in appropriate groups. Each phase should have one or more todos.";
 
+var todoDatabase = new TodoDatabase("todo.db");
+var basePath = Environment.CurrentDirectory;
+
+var shellTool = new Shell();
+var fileReadTool = new FileRead(basePath);
+var fileWriteTool = new FileWrite(basePath);
+var sqliteFileRun = new SqliteFileRun();
+var sqliteSqlRun = new SqliteSqlRun();
+var todoContainerCreate = new TodoGroupCreate(todoDatabase);
+var todoContainerRead = new TodoGroupRead(todoDatabase);
+var todoContainerList = new TodoGroupList(todoDatabase);
+var todoCreate = new TodoCreate(todoDatabase);
+var todoRead = new TodoRead(todoDatabase);
+var todoUpdate = new TodoUpdate(todoDatabase);
+
+var tools = new Tool[]
+{
+    shellTool.Tool,
+    fileReadTool.Tool,
+    fileWriteTool.Tool,
+    sqliteFileRun.Tool,
+    sqliteSqlRun.Tool,
+    todoContainerCreate.Tool,
+    todoContainerRead.Tool,
+    todoContainerList.Tool,
+    todoCreate.Tool,
+    todoRead.Tool,
+    todoUpdate.Tool
+};
+
 string GetMessagesFile(string id)
 {
     return $"messages-{id}.json";
@@ -41,21 +71,6 @@ string GetMessagesFile(string id)
 
 LlmAgentApi CreateAgent(string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false)
 {
-    var todoDatabase = new TodoDatabase("todo.db");
-    var basePath = Environment.CurrentDirectory;
-
-    var shellTool = new Shell();
-    var fileReadTool = new FileRead(basePath);
-    var fileWriteTool = new FileWrite(basePath);
-    var sqliteFileRun = new SqliteFileRun();
-    var sqliteSqlRun = new SqliteSqlRun();
-    var todoContainerCreate = new TodoGroupCreate(todoDatabase);
-    var todoContainerRead = new TodoGroupRead(todoDatabase);
-    var todoContainerList = new TodoGroupList(todoDatabase);
-    var todoCreate = new TodoCreate(todoDatabase);
-    var todoRead = new TodoRead(todoDatabase);
-    var todoUpdate = new TodoUpdate(todoDatabase);
-
     var messagesFile = GetMessagesFile(id);
 
     List<JObject>? messages = null;
@@ -76,39 +91,87 @@ LlmAgentApi CreateAgent(string id, string apiEndpoint, string apiKey, string mod
     }
 
     var agent = new LlmAgentApi(id, apiEndpoint, apiKey, model, messages);
-    agent.AddTool(shellTool.Tool);
-    agent.AddTool(fileReadTool.Tool);
-    agent.AddTool(fileWriteTool.Tool);
-    agent.AddTool(sqliteSqlRun.Tool);
-    agent.AddTool(sqliteFileRun.Tool);
-    agent.AddTool(todoContainerCreate.Tool);
-    agent.AddTool(todoContainerList.Tool);
-    agent.AddTool(todoCreate.Tool);
-    agent.AddTool(todoRead.Tool);
-    agent.AddTool(todoUpdate.Tool);
+    agent.AddTool(tools);
 
     return agent;
 }
 
 var agent1 = CreateAgent("agent1", apiEndpoint, apiKey, model, true);
 
-var line = string.Empty;
-do
+var exit = false;
+while (!exit)
 {
-    Console.Write(">");
-    line = Console.ReadLine();
-    if (string.IsNullOrEmpty(line))
+    var option1 = "Run tool";
+    var option2 = "Conversation mode";
+    var option3 = "Exit";
+    var options = new string[] { option1, option2, option3 };
+
+    for (int i = 0; i < options.Length; i++)
     {
-        break;
+        Console.WriteLine($"{i + 1}) {options[i]}");
     }
 
-    var response = agent1.GenerateCompletion(line);
+    Console.Write("Choice> ");
+    var input = Console.ReadLine();
+    if (string.IsNullOrEmpty(input))
+    {
+        return;
+    }
 
-    Console.WriteLine(response);
+    Console.WriteLine();
 
-    File.WriteAllText(GetMessagesFile(agent1.Id), JsonConvert.SerializeObject(agent1.Messages));
+    var choice = int.Parse(input) - 1;
+    if (choice == 0)
+    {
+        for (int i = 0; i < tools.Length; i++)
+        {
+            Console.WriteLine($"{i + 1}) {tools[i].Name}");
+        }
+
+        Console.Write("Tool choice> ");
+        var toolInput = Console.ReadLine();
+        if (!string.IsNullOrEmpty(toolInput))
+        {
+            var toolChoice = int.Parse(toolInput) - 1;
+
+            Console.WriteLine(tools[toolChoice].Schema);
+            Console.WriteLine();
+
+            Console.Write("Tool parameters (JSON)> ");
+            var toolParametersInput = Console.ReadLine();
+            if (!string.IsNullOrEmpty(toolParametersInput))
+            {
+                var toolParameters = JObject.Parse(toolParametersInput);
+                var toolOutput = tools[toolChoice].Function(toolParameters);
+                Console.WriteLine(toolOutput);
+            }
+        }
+    }
+    else if (choice == 1)
+    {
+        var line = string.Empty;
+        do
+        {
+            Console.Write("> ");
+            line = Console.ReadLine();
+            if (string.IsNullOrEmpty(line))
+            {
+                break;
+            }
+
+            var response = agent1.GenerateCompletion(line);
+
+            Console.WriteLine(response);
+
+            File.WriteAllText(GetMessagesFile(agent1.Id), JsonConvert.SerializeObject(agent1.Messages));
+        }
+        while (!string.IsNullOrEmpty(line));
+    }
+    else if (choice == 2)
+    {
+        exit = true;
+    }
 }
-while (!string.IsNullOrEmpty(line));
 
 public partial class Program
 {

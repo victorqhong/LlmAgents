@@ -47,6 +47,14 @@ public class LlmAgentApi
 
     public double Temperature { get; set; } = 0.7;
 
+    public void AddTool(params Tool[] tools)
+    {
+        foreach (var tool in tools)
+        {
+            AddTool(tool);
+        }
+    }
+
     public void AddTool(Tool tool)
     {
         ArgumentNullException.ThrowIfNull(tool);

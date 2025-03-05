@@ -62,7 +62,7 @@ public class Shell
             var process = new System.Diagnostics.Process();
 
             process.StartInfo.FileName = "pwsh";
-            process.StartInfo.Arguments = "-Command -";
+            process.StartInfo.Arguments = "-NoLogo -NoProfile -NonInteractive -Command -";
 
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
@@ -70,6 +70,7 @@ public class Shell
 
             process.Start();
 
+            process.StandardInput.WriteLine("$PSStyle.OutputRendering = \"PlainText\"");
             process.StandardInput.WriteLine(command);
             process.StandardInput.Flush();
             process.StandardInput.Close();

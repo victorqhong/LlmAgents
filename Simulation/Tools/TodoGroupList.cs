@@ -45,7 +45,7 @@ public class TodoGroupList
             }
             else
             {
-                result.Add("result", JsonConvert.SerializeObject(todoContainers));
+                result.Add("groups", JArray.FromObject(todoContainers));
             }
         }
         catch (Exception e)
