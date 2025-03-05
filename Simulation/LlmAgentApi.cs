@@ -181,7 +181,7 @@ public class LlmAgentApi
         }
     }
 
-    private static async Task<JObject?> Post(string apiEndpoint, string apiKey, string content)
+    private async Task<JObject?> Post(string apiEndpoint, string apiKey, string content, int retryAttempt = 0)
     {
         using (HttpClient client = new())
         {
@@ -192,13 +192,35 @@ public class LlmAgentApi
             {
                 var response = await client.PostAsync(apiEndpoint, body);
                 var responseContent = await response.Content.ReadAsStringAsync();
+                var responseMessage = JObject.Parse(responseContent);
+
                 if (response.IsSuccessStatusCode)
                 {
-                    return Newtonsoft.Json.JsonConvert.DeserializeObject<JObject>(responseContent);
+                    return responseMessage;
                 }
                 else
                 {
-                    Console.WriteLine($"Error: {responseContent}");
+                    var error = responseMessage.Value<JObject>("error");
+                    if (error != null)
+                    {
+                        var message = error.Value<string>("message");
+                        var code = error.Value<string>("code");
+                        if (string.Equals("429", code) && retryAttempt < 3)
+                        {
+                            var seconds = 30 * (retryAttempt + 1);
+                            log.LogInformation("Request throttled... waiting {seconds} seconds and retrying. Message: {message}", seconds, message);
+                            System.Threading.Thread.Sleep(seconds * 1000);
+                            return await Post(apiEndpoint, apiKey, content, retryAttempt + 1);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Error: {message}");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Error: {responseContent}");
+                    }
                 }
             }
             catch (Exception e)
