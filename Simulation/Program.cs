@@ -100,14 +100,14 @@ LlmAgentApi CreateAgent(string id, string apiEndpoint, string apiKey, string mod
 
 var agent1 = CreateAgent("agent1", apiEndpoint, apiKey, model, true);
 
-var exit = false;
-while (!exit)
+while (true)
 {
     var optionRunTool = "Run tool";
     var optionChatMode = "Chat mode";
     var optionMeasureContext = "Measure context";
     var optionClearContext = "Clear context";
     var optionPrintContext = "Print context";
+    var optionPruneContext = "Prune context";
     var optionExit = "Exit";
 
     var options = new string[]
@@ -117,13 +117,15 @@ while (!exit)
         optionPrintContext,
         optionMeasureContext,
         optionClearContext,
-        optionExit
+        optionPruneContext,
     };
 
     for (int i = 0; i < options.Length; i++)
     {
         Console.WriteLine($"{i + 1}) {options[i]}");
     }
+
+    Console.WriteLine($"0) {optionExit}");
 
     Console.Write("Choice> ");
     var input = Console.ReadLine();
@@ -133,6 +135,11 @@ while (!exit)
     }
 
     Console.WriteLine();
+
+    if (string.Equals(input, "0"))
+    {
+        break;
+    }
 
     var choice = int.Parse(input) - 1;
     var option = options[choice];
@@ -191,6 +198,7 @@ while (!exit)
         }
 
         Console.WriteLine($"Context size: {total}");
+        Console.WriteLine($"Message count: {agent1.Messages.Count}");
     }
     else if (string.Equals(option, optionClearContext))
     {
@@ -203,9 +211,22 @@ while (!exit)
             Console.WriteLine(message);
         }
     }
-    else if (string.Equals(option, optionExit))
+    else if (string.Equals(option, optionPruneContext))
     {
-        exit = true;
+        Console.Write("Number of messages to prune> ");
+        var pruneResponse = Console.ReadLine();
+        if (string.IsNullOrEmpty(pruneResponse))
+        {
+            continue;
+        }
+
+        var pruneCount = int.Parse(pruneResponse);
+        agent1.Messages.RemoveRange(0, pruneCount);
+
+        while (!string.Equals(agent1.Messages[0].Value<string>("role"), "user"))
+        {
+            agent1.Messages.RemoveAt(0);
+        }
     }
 }
 

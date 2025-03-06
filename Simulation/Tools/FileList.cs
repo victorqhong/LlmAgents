@@ -57,7 +57,8 @@ public class FileList
 
         try
         {
-            return JArray.FromObject(Directory.GetFiles(Path.Join(basePath, path)));
+            var files = Directory.GetFiles(Path.Join(basePath, path));
+            return JArray.FromObject(files);
         }
         catch (Exception e)
         {

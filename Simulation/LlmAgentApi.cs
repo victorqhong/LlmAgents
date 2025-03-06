@@ -44,7 +44,7 @@ public class LlmAgentApi
 
     public string Model { get; set; }
 
-    public int MaxTokens { get; set; } = 1024;
+    public int MaxTokens { get; set; } = 8192;
 
     public double Temperature { get; set; } = 0.7;
 
@@ -126,6 +126,10 @@ public class LlmAgentApi
             if (!string.IsNullOrEmpty(content))
             {
                 Messages.Add(JObject.FromObject(new { role = "assistant", content }));
+            }
+            else
+            {
+                log.LogError($"Content is null or empty. Finish reason: {finishReason}");
             }
 
             return content;
