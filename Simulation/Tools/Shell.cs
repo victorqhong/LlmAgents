@@ -67,6 +67,7 @@ public class Shell
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardInput = true;
+            process.StartInfo.RedirectStandardError = true;
 
             process.Start();
 
@@ -78,9 +79,11 @@ public class Shell
             process.WaitForExit(waitTimeMs);
             process.Kill(true);
 
-            var output = process.StandardOutput.ReadToEnd();
+            var stdout = process.StandardOutput.ReadToEnd();
+            var stderr = process.StandardError.ReadToEnd();
 
-            result.Add("stdout", output);
+            result.Add("stdout", stdout);
+            result.Add("stderr", stderr);
             result.Add("exitcode", process.ExitCode);
         }
         catch (Exception e)
