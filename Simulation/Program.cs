@@ -101,10 +101,22 @@ var agent1 = CreateAgent("agent1", apiEndpoint, apiKey, model, true);
 var exit = false;
 while (!exit)
 {
-    var option1 = "Run tool";
-    var option2 = "Conversation mode";
-    var option3 = "Exit";
-    var options = new string[] { option1, option2, option3 };
+    var optionRunTool = "Run tool";
+    var optionChatMode = "Chat mode";
+    var optionMeasureContext = "Measure context";
+    var optionClearContext = "Clear context";
+    var optionPrintContext = "Print context";
+    var optionExit = "Exit";
+
+    var options = new string[]
+    {
+        optionRunTool,
+        optionChatMode,
+        optionPrintContext,
+        optionMeasureContext,
+        optionClearContext,
+        optionExit
+    };
 
     for (int i = 0; i < options.Length; i++)
     {
@@ -121,7 +133,8 @@ while (!exit)
     Console.WriteLine();
 
     var choice = int.Parse(input) - 1;
-    if (choice == 0)
+    var option = options[choice];
+    if (string.Equals(option, optionRunTool))
     {
         for (int i = 0; i < tools.Length; i++)
         {
@@ -147,7 +160,7 @@ while (!exit)
             }
         }
     }
-    else if (choice == 1)
+    else if (string.Equals(option, optionChatMode))
     {
         var line = string.Empty;
         do
@@ -167,7 +180,28 @@ while (!exit)
         }
         while (!string.IsNullOrEmpty(line));
     }
-    else if (choice == 2)
+    else if (string.Equals(option, optionMeasureContext))
+    {
+        var total = 0;
+        foreach (var message in agent1.Messages)
+        {
+            total += message.ToString().Length;
+        }
+
+        Console.WriteLine($"Context size: {total}");
+    }
+    else if (string.Equals(option, optionClearContext))
+    {
+        agent1.Messages.Clear();
+    }
+    else if (string.Equals(option, optionPrintContext))
+    {
+        foreach (var message in agent1.Messages)
+        {
+            Console.WriteLine(message);
+        }
+    }
+    else if (string.Equals(option, optionExit))
     {
         exit = true;
     }
