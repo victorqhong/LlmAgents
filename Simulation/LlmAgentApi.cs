@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 
 public class LlmAgentApi
 {
@@ -225,7 +226,16 @@ public class LlmAgentApi
                         if (string.Equals("429", code) && retryAttempt < 3)
                         {
                             var seconds = 30 * (retryAttempt + 1);
-                            log.LogInformation("Request throttled... waiting {seconds} seconds and retrying. Message: {message}", seconds, message);
+
+                            string pattern = @"retry\s+after\s+(\d+)\s+seconds";
+                            Regex regex = new Regex(pattern, RegexOptions.IgnoreCase);
+                            Match match = regex.Match(message ?? string.Empty);
+                            if (match.Success)
+                            {
+                                seconds = int.Parse(match.Groups[1].Value) + 5;
+                            }
+
+                            log.LogInformation("Request throttled... waiting {seconds} seconds and retrying.", seconds);
                             System.Threading.Thread.Sleep(seconds * 1000);
                             return await Post(apiEndpoint, apiKey, content, retryAttempt + 1);
                         }
