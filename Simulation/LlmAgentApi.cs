@@ -101,18 +101,21 @@ public class LlmAgentApi
         var choice = completion["choices"]?[0];
         if (choice == null)
         {
+            log.LogError("Could not get choice[0]");
             return null;
         }
 
         var message = choice["message"];
         if (message == null)
         {
+            log.LogError("Could not get choice[0].message");
             return null;
         }
 
         var finishReason = choice["finish_reason"]?.ToString();
         if (finishReason == null)
         {
+            log.LogError("Could not get choice[0].finish_reason");
             return null;
         }
 
@@ -131,6 +134,7 @@ public class LlmAgentApi
             var toolCalls = message["tool_calls"];
             if (toolCalls == null)
             {
+                log.LogError("Could not get choice[0].message.tool_calls");
                 return null;
             }
 
@@ -141,23 +145,27 @@ public class LlmAgentApi
                 var id = toolCall["id"]?.Value<string>();
                 if (string.IsNullOrEmpty(id))
                 {
+                    log.LogError("Could not get choice[0].message.tool_calls.id");
                     return null;
                 }
 
                 var function = toolCall["function"];
                 if (function == null)
                 {
+                    log.LogError("Could not get choice[0].message.tool_calls.function");
                     return null;
                 }
 
                 var name = function["name"]?.Value<string>();
                 if (string.IsNullOrEmpty(name))
                 {
+                    log.LogError("Could not get choice[0].message.tool_calls.name");
                     return null;
                 }
 
                 if (!ToolMap.TryGetValue(name, out Tool? value))
                 {
+                    log.LogError("Could not get tool");
                     return null;
                 }
 
@@ -166,6 +174,7 @@ public class LlmAgentApi
                 var arguments = function["arguments"]?.Value<string>();
                 if (arguments == null)
                 {
+                    log.LogError("Could not get choice[0].message.tool_calls.arguments");
                     return null;
                 }
 
