@@ -223,7 +223,7 @@ while (true)
         var pruneCount = int.Parse(pruneResponse);
         agent1.Messages.RemoveRange(0, pruneCount);
 
-        while (!string.Equals(agent1.Messages[0].Value<string>("role"), "user"))
+        while (agent1.Messages.Count > 0 && !string.Equals(agent1.Messages[0].Value<string>("role"), "user"))
         {
             agent1.Messages.RemoveAt(0);
         }
