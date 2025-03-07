@@ -14,6 +14,11 @@ public class TodoGroupList
         {
             name = "todo_group_list",
             description = "List all todo groups and associated todos",
+            parameters = new
+            {
+                type = "object",
+                properties = new {},
+            }
         }
     });
 
