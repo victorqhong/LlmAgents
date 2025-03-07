@@ -38,9 +38,9 @@ var todoDatabase = new TodoDatabase("todo.db");
 var basePath = Environment.CurrentDirectory;
 
 var shellTool = new Shell();
-var fileReadTool = new FileRead(basePath);
-var fileWriteTool = new FileWrite(basePath);
-var fileListTool = new FileList(basePath);
+var fileReadTool = new FileRead(basePath, false);
+var fileWriteTool = new FileWrite(basePath, false);
+var fileListTool = new FileList(basePath, false);
 var sqliteFileRun = new SqliteFileRun();
 var sqliteSqlRun = new SqliteSqlRun();
 var todoContainerCreate = new TodoGroupCreate(todoDatabase);

@@ -7,6 +7,7 @@ using System.IO;
 public class FileList
 {
     private readonly string basePath;
+    private readonly bool restrictToBasePath;
 
     private JObject schema = JObject.FromObject(new
     {
@@ -31,9 +32,10 @@ public class FileList
         }
     });
 
-    public FileList(string? basePath = null)
+    public FileList(string? basePath = null, bool restrictToBasePath = true)
     {
-        this.basePath = basePath ?? Environment.CurrentDirectory;
+        this.basePath = Path.GetFullPath(basePath ?? Environment.CurrentDirectory);
+        this.restrictToBasePath = restrictToBasePath;
 
         Tool = new Tool
         {
@@ -57,7 +59,15 @@ public class FileList
 
         try
         {
-            var files = Directory.GetFiles(Path.Join(basePath, path));
+            path = Path.GetFullPath(path);
+
+            if (restrictToBasePath && !path.StartsWith(basePath))
+            {
+                result.Add("error", $"cannot list files outside {basePath}");
+                return result;
+            }
+
+            var files = Directory.GetFiles(path);
             return JArray.FromObject(files);
         }
         catch (Exception e)

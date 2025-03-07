@@ -7,6 +7,7 @@ using System.IO;
 public class FileRead
 {
     private readonly string basePath;
+    private readonly bool restrictToBasePath;
 
     private JObject schema = JObject.FromObject(new
     {
@@ -31,9 +32,10 @@ public class FileRead
         }
     });
 
-    public FileRead(string? basePath = null)
+    public FileRead(string? basePath = null, bool restrictToBasePath = true)
     {
-        this.basePath = basePath ?? Environment.CurrentDirectory;
+        this.basePath = Path.GetFullPath(basePath ?? Environment.CurrentDirectory);
+        this.restrictToBasePath = restrictToBasePath;
 
         Tool = new Tool
         {
@@ -57,7 +59,15 @@ public class FileRead
 
         try
         {
-            var text = File.ReadAllText(Path.Join(basePath, path));
+            path = Path.GetFullPath(path);
+
+            if (restrictToBasePath && !path.StartsWith(basePath))
+            {
+                result.Add("error", $"files outside {basePath} can not be read");
+                return result;
+            }
+
+            var text = File.ReadAllText(path);
             result.Add("contents", text);
         }
         catch (Exception e)

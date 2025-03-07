@@ -7,6 +7,7 @@ using System.IO;
 public class FileWrite
 {
     private readonly string basePath;
+    private readonly bool restrictToBasePath;
 
     private JObject schema = JObject.FromObject(new
     {
@@ -36,9 +37,10 @@ public class FileWrite
         }
     });
 
-    public FileWrite(string? basePath = null)
+    public FileWrite(string? basePath = null, bool restrictToBasePath = true)
     {
-        this.basePath = basePath ?? Environment.CurrentDirectory;
+        this.basePath = Path.GetFullPath(basePath ?? Environment.CurrentDirectory);
+        this.restrictToBasePath = restrictToBasePath;
 
         Tool = new Tool
         {
@@ -69,7 +71,15 @@ public class FileWrite
 
         try
         {
-            File.WriteAllText(Path.Join(basePath, path), contents.Replace("\n", Environment.NewLine));
+            path = Path.GetFullPath(path);
+
+            if (restrictToBasePath && !path.StartsWith(basePath))
+            {
+                result.Add("error", $"cannot write to files outside {basePath}");
+                return result;
+            }
+
+            File.WriteAllText(path, contents.Replace("\n", Environment.NewLine));
             result.Add("result", "success");
         }
         catch (Exception e)
