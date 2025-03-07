@@ -150,8 +150,7 @@ public class LlmAgentApi
                 var id = toolCall["id"]?.Value<string>();
                 if (string.IsNullOrEmpty(id))
                 {
-                    log.LogError("Could not get choice[0].message.tool_calls.id");
-                    return null;
+                    id = Guid.NewGuid().ToString();
                 }
 
                 var function = toolCall["function"];
