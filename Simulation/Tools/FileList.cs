@@ -3,6 +3,7 @@ namespace Simulation.Tools;
 using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
+using System.Linq;
 
 public class FileList
 {
@@ -15,7 +16,7 @@ public class FileList
         function = new
         {
             name = "file_list",
-            description = "List the files at the specified path",
+            description = "List the files and directories at the specified path",
             parameters = new
             {
                 type = "object",
@@ -68,7 +69,8 @@ public class FileList
             }
 
             var files = Directory.GetFiles(path);
-            return JArray.FromObject(files);
+            var directories = Directory.GetDirectories(path);
+            return JArray.FromObject(directories.Concat(files));
         }
         catch (Exception e)
         {
