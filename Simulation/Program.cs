@@ -28,7 +28,7 @@ if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey))
     return;
 }
 
-var systemPrompt = "You are a Software Engineer with over 10 years of professional experience. You are proficient at programming and communication.";
+var defaultSystemPrompt = "You are a Software Engineer with over 10 years of professional experience. You are proficient at programming and communication.";
 var toolsPrompt = "Summarize the tools available and their parameters";
 var questionairePrompt = "Write a questionaire to gather requirements for a new software project minimum viable product. Save the file to MVP.md";
 var planPrompt = "Read the file 'MVP.md' and generate an implementation plan, and save the file to PLAN.md";
@@ -71,7 +71,7 @@ string GetMessagesFile(string id)
     return $"messages-{id}.json";
 }
 
-LlmAgentApi CreateAgent(string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false)
+LlmAgentApi LoadAgent(string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false, string? systemPrompt = null)
 {
     var messagesFile = GetMessagesFile(id);
 
@@ -86,20 +86,26 @@ LlmAgentApi CreateAgent(string id, string apiEndpoint, string apiKey, string mod
 
     if (messages == null)
     {
+        if (systemPrompt == null)
+        {
+            systemPrompt = defaultSystemPrompt;
+        }
+
         messages =
         [
             JObject.FromObject(new { role = "system", content = systemPrompt })
         ];
     }
 
-    var agent = new LlmAgentApi(id, apiEndpoint, apiKey, model, messages);
-    agent.AddTool(tools);
-
-    return agent;
+    return new LlmAgentApi(id, apiEndpoint, apiKey, model, messages, tools);
 }
 
-var agent1 = CreateAgent("agent1", apiEndpoint, apiKey, model, true);
+JObject CreateMessage(string role, string content)
+{
+    return JObject.FromObject(new { role, content });
+}
 
+var agent1 = LoadAgent("agent1", apiEndpoint, apiKey, model, true);
 while (true)
 {
     var optionRunTool = "Run tool";
@@ -108,6 +114,7 @@ while (true)
     var optionClearContext = "Clear context";
     var optionPrintContext = "Print context";
     var optionPruneContext = "Prune context";
+    var optionRunConversation = "Run conversation";
     var optionExit = "Exit";
 
     var options = new string[]
@@ -118,6 +125,7 @@ while (true)
         optionMeasureContext,
         optionClearContext,
         optionPruneContext,
+        optionRunConversation
     };
 
     for (int i = 0; i < options.Length; i++)
@@ -227,6 +235,57 @@ while (true)
         {
             agent1.Messages.RemoveAt(0);
         }
+    }
+    else if (string.Equals(option, optionRunConversation))
+    {
+        int turns = 10;
+        var name1 = "Jack";
+        var name2 = "John";
+        var systemPrompt1 = "Have a conversation as two people just meeting each other would.";
+        var systemPrompt2 = "Have a conversation as two people just meeting each other would.";
+        var initialMessage = "Hi, what's your name?";
+
+        void Conversation(string name1, string name2, string systemPrompt1, string systemPrompt2, string initialMessage, int turns)
+        {
+            var messages1 = new List<JObject>()
+            {
+                CreateMessage("system", $"You name is {name1}. {systemPrompt1}"),
+            };
+
+            var messages2 = new List<JObject>()
+            {
+                CreateMessage("system", $"Your name is {name2}. {systemPrompt2}")
+            };
+
+            var agent1 = new LlmAgentApi(name1, apiEndpoint, apiKey, model, messages1);
+            var agent2 = new LlmAgentApi(name2, apiEndpoint, apiKey, model, messages2);
+
+            messages1.Add(CreateMessage("user", initialMessage));
+            messages2.Add(CreateMessage("assistant", initialMessage));
+
+            Console.WriteLine($"{agent2.Id}> {initialMessage}");
+            Console.WriteLine($"====================================");
+
+            var response = string.Empty;
+            for (int i = 0; i < turns; i++)
+            {
+                if (i > 0)
+                {
+                    messages1.Add(CreateMessage("user", response));
+                }
+
+                response = agent1.GenerateCompletion(messages1);
+                Console.WriteLine($"{agent1.Id}> {response}");
+                Console.WriteLine($"====================================");
+
+                messages2.Add(CreateMessage("user", response));
+                response = agent2.GenerateCompletion(messages2);
+                Console.WriteLine($"{agent2.Id}> {response}");
+                Console.WriteLine($"====================================");
+            }
+        }
+
+        Conversation(name1, name2, systemPrompt1, systemPrompt2, initialMessage, turns);
     }
 }
 

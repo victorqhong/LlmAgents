@@ -16,7 +16,7 @@ public class LlmAgentApi
     private readonly List<JObject> ToolDefinitions = [];
     private readonly Dictionary<string, Tool> ToolMap = [];
 
-    public LlmAgentApi(string id, string apiEndpoint, string apiKey, string model, List<JObject>? messages = null)
+    public LlmAgentApi(string id, string apiEndpoint, string apiKey, string model, List<JObject>? messages = null, Tool[]? tools = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(id);
         ArgumentException.ThrowIfNullOrEmpty(apiEndpoint);
@@ -31,6 +31,11 @@ public class LlmAgentApi
         if (messages != null)
         {
             Messages = messages;
+        }
+
+        if (tools != null)
+        {
+            AddTool(tools);
         }
     }
 
