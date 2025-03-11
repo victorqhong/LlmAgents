@@ -51,7 +51,7 @@ public class LlmAgentApi
 
     public int MaxTokens { get; set; } = 8192;
 
-    public double Temperature { get; set; } = 0.7;
+    public double Temperature { get; set; } = 1.2;
 
     public void AddTool(params Tool[] tools)
     {
@@ -126,7 +126,7 @@ public class LlmAgentApi
         }
 
         var content = message["content"]?.ToString();
-        if (string.Equals(finishReason, "stop") || string.Equals(finishReason, "length"))
+        if (string.Equals(finishReason, "stop"))
         {
             if (!string.IsNullOrEmpty(content))
             {
@@ -138,6 +138,10 @@ public class LlmAgentApi
             }
 
             return content;
+        }
+        else if (string.Equals(finishReason, "length"))
+        {
+            throw new ApplicationException(finishReason);
         }
         else if (string.Equals(finishReason, "tool_calls"))
         {
