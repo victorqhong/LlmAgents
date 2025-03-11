@@ -28,7 +28,7 @@ if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey))
     return;
 }
 
-var defaultSystemPrompt = "You are a Software Engineer with over 10 years of professional experience. You are proficient at programming and communication.";
+var defaultSystemPrompt = "You are a Software Engineer with over 10 years of professional experience. You are proficient at programming and communication. You are expected to implement code changes. If something needs clarification, how to proceed, or given a choice, use the 'question_ask' tool.";
 var toolsPrompt = "Summarize the tools available and their parameters";
 var questionairePrompt = "Write a questionaire to gather requirements for a new software project minimum viable product. Save the file to MVP.md";
 var planPrompt = "Read the file 'MVP.md' and generate an implementation plan, and save the file to PLAN.md";
@@ -36,11 +36,12 @@ var todoPrompt = "Read the file 'PLAN.md' and create todos in appropriate groups
 
 var todoDatabase = new TodoDatabase("todo.db");
 var basePath = Environment.CurrentDirectory;
+var restrictToBasePath = true;
 
-var shellTool = new Shell();
-var fileReadTool = new FileRead(basePath, false);
-var fileWriteTool = new FileWrite(basePath, false);
-var fileListTool = new FileList(basePath, false);
+var shellTool = new Shell(workingDirectory: basePath);
+var fileReadTool = new FileRead(basePath, restrictToBasePath);
+var fileWriteTool = new FileWrite(basePath, restrictToBasePath);
+var fileListTool = new FileList(basePath, restrictToBasePath);
 var sqliteFileRun = new SqliteFileRun();
 var sqliteSqlRun = new SqliteSqlRun();
 var todoContainerCreate = new TodoGroupCreate(todoDatabase);
@@ -49,6 +50,7 @@ var todoContainerList = new TodoGroupList(todoDatabase);
 var todoCreate = new TodoCreate(todoDatabase);
 var todoRead = new TodoRead(todoDatabase);
 var todoUpdate = new TodoUpdate(todoDatabase);
+var askQuestionTool = new AskQuestion();
 
 var tools = new Tool[]
 {
@@ -63,7 +65,8 @@ var tools = new Tool[]
     todoContainerList.Tool,
     todoCreate.Tool,
     todoRead.Tool,
-    todoUpdate.Tool
+    todoUpdate.Tool,
+    askQuestionTool.Tool,
 };
 
 string GetMessagesFile(string id)
@@ -105,7 +108,7 @@ JObject CreateMessage(string role, string content)
     return JObject.FromObject(new { role, content });
 }
 
-var agent1 = LoadAgent("agent1", apiEndpoint, apiKey, model, true);
+var agent = LoadAgent("agent1", apiEndpoint, apiKey, model, true);
 while (true)
 {
     var optionRunTool = "Run tool";
@@ -120,12 +123,12 @@ while (true)
     var options = new string[]
     {
         optionRunTool,
+        optionRunConversation,
         optionChatMode,
         optionPrintContext,
         optionMeasureContext,
         optionClearContext,
         optionPruneContext,
-        optionRunConversation
     };
 
     for (int i = 0; i < options.Length; i++)
@@ -189,32 +192,32 @@ while (true)
                 break;
             }
 
-            var response = agent1.GenerateCompletion(line);
+            var response = agent.GenerateCompletion(line);
 
             Console.WriteLine(response);
 
-            File.WriteAllText(GetMessagesFile(agent1.Id), JsonConvert.SerializeObject(agent1.Messages));
+            File.WriteAllText(GetMessagesFile(agent.Id), JsonConvert.SerializeObject(agent.Messages));
         }
         while (!string.IsNullOrEmpty(line));
     }
     else if (string.Equals(option, optionMeasureContext))
     {
         var total = 0;
-        foreach (var message in agent1.Messages)
+        foreach (var message in agent.Messages)
         {
             total += message.ToString().Length;
         }
 
         Console.WriteLine($"Context size: {total}");
-        Console.WriteLine($"Message count: {agent1.Messages.Count}");
+        Console.WriteLine($"Message count: {agent.Messages.Count}");
     }
     else if (string.Equals(option, optionClearContext))
     {
-        agent1.Messages.Clear();
+        agent.Messages.Clear();
     }
     else if (string.Equals(option, optionPrintContext))
     {
-        foreach (var message in agent1.Messages)
+        foreach (var message in agent.Messages)
         {
             Console.WriteLine(message);
         }
@@ -229,63 +232,68 @@ while (true)
         }
 
         var pruneCount = int.Parse(pruneResponse);
-        agent1.Messages.RemoveRange(0, pruneCount);
+        agent.Messages.RemoveRange(0, pruneCount);
 
-        while (agent1.Messages.Count > 0 && !string.Equals(agent1.Messages[0].Value<string>("role"), "user"))
+        while (agent.Messages.Count > 0 && !string.Equals(agent.Messages[0].Value<string>("role"), "user"))
         {
-            agent1.Messages.RemoveAt(0);
+            agent.Messages.RemoveAt(0);
         }
     }
     else if (string.Equals(option, optionRunConversation))
     {
-        int turns = 10;
-        var name1 = "Jack";
-        var name2 = "John";
-        var systemPrompt1 = "Have a conversation as two people just meeting each other would.";
-        var systemPrompt2 = "Have a conversation as two people just meeting each other would.";
-        var initialMessage = "Hi, what's your name?";
-
-        void Conversation(string name1, string name2, string systemPrompt1, string systemPrompt2, string initialMessage, int turns)
+        Console.Write("Turns> ");
+        var turnsInput = Console.ReadLine();
+        if (string.IsNullOrEmpty(turnsInput))
         {
-            var messages1 = new List<JObject>()
-            {
-                CreateMessage("system", $"You name is {name1}. {systemPrompt1}"),
-            };
-
-            var messages2 = new List<JObject>()
-            {
-                CreateMessage("system", $"Your name is {name2}. {systemPrompt2}")
-            };
-
-            var agent1 = new LlmAgentApi(name1, apiEndpoint, apiKey, model, messages1);
-            var agent2 = new LlmAgentApi(name2, apiEndpoint, apiKey, model, messages2);
-
-            messages1.Add(CreateMessage("user", initialMessage));
-            messages2.Add(CreateMessage("assistant", initialMessage));
-
-            Console.WriteLine($"{agent2.Id}> {initialMessage}");
-            Console.WriteLine($"====================================");
-
-            var response = string.Empty;
-            for (int i = 0; i < turns; i++)
-            {
-                if (i > 0)
-                {
-                    messages1.Add(CreateMessage("user", response));
-                }
-
-                response = agent1.GenerateCompletion(messages1);
-                Console.WriteLine($"{agent1.Id}> {response}");
-                Console.WriteLine($"====================================");
-
-                messages2.Add(CreateMessage("user", response));
-                response = agent2.GenerateCompletion(messages2);
-                Console.WriteLine($"{agent2.Id}> {response}");
-                Console.WriteLine($"====================================");
-            }
+            continue;
         }
 
-        Conversation(name1, name2, systemPrompt1, systemPrompt2, initialMessage, turns);
+        int turns = int.Parse(turnsInput);
+
+        var systemPromptCommon = $"{defaultSystemPrompt}";
+        var systemPrompt1 = $"{systemPromptCommon}";
+        var systemPrompt2 = $"You are expected to guide the user.";
+        var initialMessage = "Read 'PLAN.md' and start implementing the plan.";
+
+        var messages1 = new List<JObject>()
+        {
+            CreateMessage("system", systemPrompt1),
+        };
+
+        var messages2 = new List<JObject>()
+        {
+            CreateMessage("system", systemPrompt2)
+        };
+
+        var agent1 = new LlmAgentApi("Agent1", apiEndpoint, apiKey, model, messages1, tools);
+        var agent2 = new LlmAgentApi("Agent2", apiEndpoint, apiKey, model, messages2, tools);
+
+        messages1.Add(CreateMessage("user", initialMessage));
+        messages2.Add(CreateMessage("assistant", initialMessage));
+
+        Console.WriteLine($"{agent2.Id}> {initialMessage}");
+        Console.WriteLine($"====================================");
+
+        var agent1Response = string.Empty;
+        var agent2Response = string.Empty;
+        for (int i = 0; i < turns; i++)
+        {
+            if (i > 0)
+            {
+                messages1.Add(CreateMessage("user", agent2Response));
+            }
+
+            agent1Response = agent1.GenerateCompletion(messages1);
+            Console.WriteLine($"{agent1.Id}> {agent1Response}");
+            Console.WriteLine($"====================================");
+            Console.ReadLine();
+
+            messages2.Add(CreateMessage("user", agent1Response));
+            agent2Response = agent2.GenerateCompletion(messages2);
+            Console.WriteLine($"{agent2.Id}> {agent2Response}");
+            Console.WriteLine($"====================================");
+            Console.ReadLine();
+        }
     }
 }
 
