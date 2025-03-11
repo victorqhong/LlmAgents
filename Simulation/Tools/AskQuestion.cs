@@ -2,8 +2,6 @@ namespace Simulation.Tools;
 
 using Newtonsoft.Json.Linq;
 using System;
-using System.IO;
-using System.Linq;
 
 public class AskQuestion
 {
@@ -13,7 +11,7 @@ public class AskQuestion
         function = new
         {
             name = "question_ask",
-            description = "Ask a question to someone knowledgeable.",
+            description = "Ask a question to someone knowledgeable",
             parameters = new
             {
                 type = "object",

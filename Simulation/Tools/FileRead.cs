@@ -59,7 +59,14 @@ public class FileRead
 
         try
         {
-            path = Path.GetFullPath(path);
+            if (restrictToBasePath && !Path.IsPathRooted(path))
+            {
+                path = Path.Combine(basePath, path);
+            }
+            else
+            { 
+                path = Path.GetFullPath(path);
+            }
 
             if (restrictToBasePath && !path.StartsWith(basePath))
             {
