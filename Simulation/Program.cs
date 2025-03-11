@@ -34,9 +34,10 @@ var questionairePrompt = "Write a questionaire to gather requirements for a new 
 var planPrompt = "Read the file 'MVP.md' and generate an implementation plan, and save the file to PLAN.md";
 var todoPrompt = "Read the file 'PLAN.md' and create todos in appropriate groups. Each phase should have one or more todos.";
 
-var todoDatabase = new TodoDatabase("todo.db");
 var basePath = Environment.CurrentDirectory;
 var restrictToBasePath = true;
+
+var todoDatabase = new TodoDatabase(Path.Join(basePath, "todo.db"));
 
 var shellTool = new Shell(workingDirectory: basePath);
 var fileReadTool = new FileRead(basePath, restrictToBasePath);
