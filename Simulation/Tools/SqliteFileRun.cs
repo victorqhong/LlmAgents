@@ -2,9 +2,13 @@ namespace Simulation.Tools;
 
 using Newtonsoft.Json.Linq;
 using System;
+using System.IO;
 
 public class SqliteFileRun
 {
+    private readonly string basePath;
+    private readonly bool restrictToBasePath;
+
     private JObject schema = JObject.FromObject(new
     {
         type = "function",
@@ -33,8 +37,11 @@ public class SqliteFileRun
         }
     });
 
-    public SqliteFileRun()
+    public SqliteFileRun(string? basePath = null, bool restrictToBasePath = true)
     {
+        this.basePath = Path.GetFullPath(basePath ?? Environment.CurrentDirectory);
+        this.restrictToBasePath = restrictToBasePath;
+
         Tool = new Tool
         {
             Schema = schema,
@@ -64,19 +71,35 @@ public class SqliteFileRun
 
         try
         {
+            if (restrictToBasePath && !Path.IsPathRooted(file))
+            {
+                file = Path.Combine(basePath, file);
+            }
+            else
+            {
+                file = Path.GetFullPath(file);
+            }
+
+            if (restrictToBasePath && !file.StartsWith(basePath))
+            {
+                result.Add("error", $"files outside {basePath} can not be read");
+                return result;
+            }
+
             var process = new System.Diagnostics.Process();
+            process.StartInfo.WorkingDirectory = restrictToBasePath ? basePath : Environment.CurrentDirectory;
             process.StartInfo.FileName = "sqlite3";
             process.StartInfo.Arguments = $"-init {file} {db}";
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardInput = true;
+            process.StartInfo.RedirectStandardError = true;
             process.Start();
             process.StandardInput.WriteLine(".quit");
             process.WaitForExit();
-            var output = process.StandardOutput.ReadToEnd();
 
-            result.Add("stdout", output);
+            result.Add("stdout", process.StandardOutput.ReadToEnd());
+            result.Add("stderr", process.StandardError.ReadToEnd());
             result.Add("exitcode", process.ExitCode);
-
         }
         catch (Exception e)
         {
