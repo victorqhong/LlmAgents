@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 public class LlmAgentApi
 {
@@ -70,15 +71,15 @@ public class LlmAgentApi
         ToolMap.Add(tool.Name, tool);
     }
 
-    public string GenerateCompletion(string userMessage)
+    public string? GenerateCompletion(string userMessage, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(userMessage);
 
         Messages.Add(JObject.FromObject(new { role = "user", content = userMessage }));
-        return GenerateCompletion(Messages);
+        return GenerateCompletion(Messages, cancellationToken);
     }
 
-    public string GenerateCompletion(List<JObject> messages)
+    public string? GenerateCompletion(List<JObject> messages, CancellationToken cancellationToken = default)
     {
         if (messages == null || messages.Count < 1)
         {
@@ -93,7 +94,12 @@ public class LlmAgentApi
             throw new ApplicationException("Could not retrieve completion");
         }
 
-        var result = ProcessCompletion(completion);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+
+        var result = ProcessCompletion(completion, cancellationToken);
         if (string.IsNullOrEmpty(result))
         {
             throw new ApplicationException("Could not process completion");
@@ -102,8 +108,14 @@ public class LlmAgentApi
         return result;
     }
 
-    public string? ProcessCompletion(JObject completion)
+    public string? ProcessCompletion(JObject completion, CancellationToken cancellationToken = default)
     {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            log.LogInformation("Cancellation requested");
+            return null;
+        }
+
         var choice = completion["choices"]?[0];
         if (choice == null)
         {
@@ -157,10 +169,6 @@ public class LlmAgentApi
             foreach (var toolCall in toolCalls)
             {
                 var id = toolCall["id"]?.Value<string>();
-                if (string.IsNullOrEmpty(id))
-                {
-                    id = Guid.NewGuid().ToString();
-                }
 
                 var function = toolCall["function"];
                 if (function == null)
@@ -203,7 +211,7 @@ public class LlmAgentApi
                 }));
             }
 
-            return GenerateCompletion(Messages);
+            return GenerateCompletion(Messages, cancellationToken);
         }
         else
         {
@@ -211,7 +219,7 @@ public class LlmAgentApi
         }
     }
 
-    private async Task<JObject?> Post(string apiEndpoint, string apiKey, string content, int retryAttempt = 0)
+    private async Task<JObject?> Post(string apiEndpoint, string apiKey, string content, CancellationToken cancellationToken = default, int retryAttempt = 0)
     {
         using (HttpClient client = new())
         {
@@ -220,7 +228,7 @@ public class LlmAgentApi
             var body = new StringContent(content, System.Text.Encoding.UTF8, "application/json");
             try
             {
-                var response = await client.PostAsync(apiEndpoint, body);
+                var response = await client.PostAsync(apiEndpoint, body, cancellationToken);
                 var responseContent = await response.Content.ReadAsStringAsync();
                 var responseMessage = JObject.Parse(responseContent);
 
@@ -249,7 +257,7 @@ public class LlmAgentApi
 
                             log.LogInformation("Request throttled... waiting {seconds} seconds and retrying.", seconds);
                             System.Threading.Thread.Sleep(seconds * 1000);
-                            return await Post(apiEndpoint, apiKey, content, retryAttempt + 1);
+                            return await Post(apiEndpoint, apiKey, content, cancellationToken, retryAttempt + 1);
                         }
                         else
                         {

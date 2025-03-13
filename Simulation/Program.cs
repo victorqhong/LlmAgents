@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -43,7 +44,7 @@ var shellTool = new Shell(workingDirectory: basePath);
 var fileReadTool = new FileRead(basePath, restrictToBasePath);
 var fileWriteTool = new FileWrite(basePath, restrictToBasePath);
 var fileListTool = new FileList(basePath, restrictToBasePath);
-var sqliteFileRun = new SqliteFileRun();
+var sqliteFileRun = new SqliteFileRun(basePath, restrictToBasePath);
 var sqliteSqlRun = new SqliteSqlRun();
 var todoContainerCreate = new TodoGroupCreate(todoDatabase);
 var todoContainerRead = new TodoGroupRead(todoDatabase);
@@ -112,6 +113,15 @@ JObject CreateMessage(string role, string content)
 var agent = LoadAgent("agent1", apiEndpoint, apiKey, model, true);
 while (true)
 {
+    var cancellationToken = new CancellationTokenSource();
+    Console.CancelKeyPress += (sender, e) =>
+    {
+        if (e.Cancel)
+        {
+            cancellationToken.Cancel();
+        }
+    };
+
     var optionRunTool = "Run tool";
     var optionChatMode = "Chat mode";
     var optionMeasureContext = "Measure context";
@@ -193,7 +203,7 @@ while (true)
                 break;
             }
 
-            var response = agent.GenerateCompletion(line);
+            var response = agent.GenerateCompletion(line, cancellationToken.Token);
 
             Console.WriteLine(response);
 
