@@ -11,7 +11,7 @@ public class AskQuestion
         function = new
         {
             name = "question_ask",
-            description = "Ask a question to someone knowledgeable",
+            description = "Ask a question to someone knowledgeable only when there is a choice to be made",
             parameters = new
             {
                 type = "object",
@@ -20,7 +20,7 @@ public class AskQuestion
                     question = new
                     {
                         type = "string",
-                        description = "The question you want to ask"
+                        description = "The question to ask"
                     }
                 },
                 required = new[] { "question" }
