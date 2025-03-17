@@ -60,6 +60,11 @@ public class FileList
 
         try
         {
+            if (restrictToBasePath && !Path.IsPathRooted(path))
+            {
+                path = Path.Combine(basePath, path);
+            }
+
             path = Path.GetFullPath(path);
 
             if (restrictToBasePath && !path.StartsWith(basePath))
