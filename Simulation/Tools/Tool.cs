@@ -1,4 +1,4 @@
-namespace Simulation;
+namespace Simulation.Tools;
 
 using Newtonsoft.Json.Linq;
 using System;
