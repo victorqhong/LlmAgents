@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using System.Threading;
+using Simulation.Tools;
 
 public class LlmAgentApi
 {
@@ -86,22 +87,32 @@ public class LlmAgentApi
             throw new ArgumentException($"{nameof(messages)} is null or doesn't contain messages", nameof(messages));
         }
 
-        var payload = GetPayload(Model, messages, MaxTokens, Temperature, ToolDefinitions, "auto");
-
-        var completion = Post(ApiEndpoint, ApiKey, payload).ConfigureAwait(false).GetAwaiter().GetResult();
-        if (completion == null)
-        {
-            throw new ApplicationException("Could not retrieve completion");
-        }
-
         if (cancellationToken.IsCancellationRequested)
         {
             return null;
         }
 
+        var payload = GetPayload(Model, messages, MaxTokens, Temperature, ToolDefinitions, "auto");
+
+        var completion = Post(ApiEndpoint, ApiKey, payload, cancellationToken).ConfigureAwait(false).GetAwaiter().GetResult();
+        if (completion == null)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            throw new ApplicationException("Could not retrieve completion");
+        }
+
         var result = ProcessCompletion(completion, cancellationToken);
         if (string.IsNullOrEmpty(result))
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return null;
+            }
+
             throw new ApplicationException("Could not process completion");
         }
 
@@ -261,18 +272,18 @@ public class LlmAgentApi
                         }
                         else
                         {
-                            Console.WriteLine($"Error: {message}");
+                            log.LogError("Error: {message}", message);
                         }
                     }
                     else
                     {
-                        Console.WriteLine($"Error: {responseContent}");
+                        log.LogError("Error: {responseContent}", responseContent);
                     }
                 }
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Exception: {e}");
+                log.LogError(e, "Got exception");
             }
         }
 
