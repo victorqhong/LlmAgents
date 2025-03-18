@@ -1,13 +1,25 @@
 namespace Simulation.Tools;
 
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Diagnostics;
 using System.Text;
+using System.Threading;
 
 public class Shell
 {
+    private const int waitCheckTimeMs = 1000;
+
+    private readonly ILogger log = Program.loggerFactory.CreateLogger(nameof(Shell));
+
     private readonly int waitTimeMs;
-    private readonly string workingDirectory;
+
+    private readonly StringBuilder stdout = new StringBuilder();
+    private readonly StringBuilder stderr = new StringBuilder();
+
+    private string? commandDelimiter;
+    private bool receivedOutput = false;
 
     private JObject schema = JObject.FromObject(new
     {
@@ -15,7 +27,7 @@ public class Shell
         function = new
         {
             name = "shell",
-            description = "Runs a shell command in PowerShell Core",
+            description = "Runs a shell command in PowerShell Core. Prefer the 'file_write' tool for writing files.",
             parameters = new
             {
                 type = "object",
@@ -32,16 +44,71 @@ public class Shell
         }
     });
 
+    public Process Process { get; private set; }
+
     public Shell(int waitTimeMs = 180000, string? workingDirectory = null)
     {
         this.waitTimeMs = waitTimeMs;
-        this.workingDirectory = workingDirectory ?? Environment.CurrentDirectory;
 
         Tool = new Tool
         {
             Schema = schema,
             Function = Function
         };
+
+        Process = new Process();
+
+        Process.StartInfo.FileName = "pwsh";
+        Process.StartInfo.ArgumentList.Add("-NoLogo");
+        Process.StartInfo.ArgumentList.Add("-NonInteractive");
+
+        Process.StartInfo.WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory; ;
+
+        Process.StartInfo.UseShellExecute = false;
+        Process.StartInfo.RedirectStandardOutput = true;
+        Process.StartInfo.RedirectStandardInput = true;
+        Process.StartInfo.RedirectStandardError = true;
+        Process.EnableRaisingEvents = true;
+
+        Process.OutputDataReceived += (sender, e) =>
+        {
+            if (string.IsNullOrEmpty(e.Data))
+            {
+                return;
+            }
+
+            receivedOutput = !string.IsNullOrEmpty(commandDelimiter) && e.Data.Contains(commandDelimiter);
+            if (receivedOutput)
+            {
+                return;
+            }
+
+            stdout.AppendLine(e.Data);
+            log.LogInformation("{data}", e.Data);
+        };
+
+        Process.ErrorDataReceived += (sender, e) =>
+        {
+            if (string.IsNullOrEmpty(e.Data))
+            {
+                return;
+            }
+
+            if (receivedOutput)
+            {
+                return;
+            }
+
+            stderr.AppendLine(e.Data);
+            log.LogInformation("{data}", e.Data);
+        };
+
+        Process.Start();
+        Process.BeginOutputReadLine();
+        Process.BeginErrorReadLine();
+
+        receivedOutput = true;
+        Process.StandardInput.WriteLine("$PSStyle.OutputRendering='Plain'");
     }
 
     public Tool Tool { get; private set; }
@@ -59,59 +126,35 @@ public class Shell
 
         try
         {
-            var process = new System.Diagnostics.Process();
+            var commandId = Guid.NewGuid().ToString();
+            commandDelimiter = $"Write-Host \"{commandId}\"";
 
-            process.StartInfo.FileName = "pwsh";
-            process.StartInfo.Arguments = $"-NoLogo -NonInteractive -Command -";
-            process.StartInfo.WorkingDirectory = workingDirectory;
+            receivedOutput = false;
 
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardInput = true;
-            process.StartInfo.RedirectStandardError = true;
-            process.EnableRaisingEvents = true;
+            stdout.Clear();
+            stderr.Clear();
+            Process.StandardInput.WriteLine(command);
+            Process.StandardInput.WriteLine(commandDelimiter);
+            Process.StandardInput.Flush();
 
-            var stdout = new StringBuilder();
-            process.OutputDataReceived += (sender, e) =>
-            {
-                Console.WriteLine(e.Data);
-                stdout.AppendLine(e.Data);
-            };
-
-            var stderr = new StringBuilder();
-            process.ErrorDataReceived += (sender, e) =>
-            {
-                Console.WriteLine(e.Data);
-                stderr.AppendLine(e.Data);
-            };
-
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-
-            process.StandardInput.WriteLine("$PSStyle.OutputRendering = \"PlainText\"");
-            process.StandardInput.WriteLine(command);
-            process.StandardInput.Flush();
-            process.StandardInput.Close();
-
-            var checkTimeMs = 1000;
             var totalWaitTimeMs = 0;
-            var exited = false;
-            while (!exited)
+            while (!receivedOutput)
             {
                 if (totalWaitTimeMs >= waitTimeMs)
                 {
+                    log.LogInformation("shell command did not exit after {waitTimeMs} milliseconds", waitTimeMs);
                     break;
                 }
 
-                exited = process.WaitForExit(checkTimeMs);
-                totalWaitTimeMs += checkTimeMs;
+                Thread.Sleep(waitCheckTimeMs);
+                totalWaitTimeMs += waitCheckTimeMs;
             }
 
-            process.Kill(true);
+            if (!receivedOutput)
+            {
+                result.Add("warning", $"shell did not exit and may still be running");
+            }
 
-            result.Add("exitcode", process.ExitCode);
-            result.Add("exited", exited);
             result.Add("stdout", stdout.ToString());
             result.Add("stderr", stderr.ToString());
         }
