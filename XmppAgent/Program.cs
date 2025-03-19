@@ -62,6 +62,16 @@ var xmppConfigOption = new Option<string>(
     description: "",
     getDefaultValue: () => Environment.GetEnvironmentVariable("XMPP_CONFIG", environmentVariableTarget) ?? string.Empty);
 
+var toolsWorkingDirectoryOption = new Option<string>(
+    name: "--toolsWorkingDirectory",
+    description: "",
+    getDefaultValue: () => Environment.CurrentDirectory);
+
+var toolsRestrictToWorkingDirectoryOption = new Option<bool>(
+    name: "--toolsRestrictToWorkingDirectory",
+    description: "",
+    getDefaultValue: () => true);
+
 var rootCommand = new RootCommand("XmppAgent");
 rootCommand.SetHandler(RootCommandHandler);
 rootCommand.AddOption(apiEndpointOption);
@@ -75,6 +85,8 @@ rootCommand.AddOption(xmppPasswordOption);
 rootCommand.AddOption(xmppTargetJidOption);
 rootCommand.AddOption(xmppTrustHostOption);
 rootCommand.AddOption(xmppConfigOption);
+rootCommand.AddOption(toolsWorkingDirectoryOption);
+rootCommand.AddOption(toolsRestrictToWorkingDirectoryOption);
 
 void RootCommandHandler(InvocationContext context)
 {
@@ -87,6 +99,8 @@ void RootCommandHandler(InvocationContext context)
     var xmppUsername = string.Empty;
     var xmppPassword = string.Empty;
     var xmppTrustHost = false;
+    var toolsWorkingDirectory = string.Empty;
+    var toolsRestrictToWorkingDirectory = true;
 
     var apiConfigValue = context.ParseResult.GetValueForOption(apiConfigOption);
     if (!string.IsNullOrEmpty(apiConfigValue))
@@ -130,19 +144,22 @@ void RootCommandHandler(InvocationContext context)
         xmppTrustHost = context.ParseResult.GetValueForOption(xmppTrustHostOption);
     }
 
-    persistent = context.ParseResult.GetValueForOption(persistentOption);
-
     if (string.IsNullOrEmpty(xmppDomain) || string.IsNullOrEmpty(xmppUsername) || string.IsNullOrEmpty(xmppPassword) || string.IsNullOrEmpty(xmppTargetJid))
     {
         Console.Error.WriteLine("xmppDomain, xmppUsername, xmppPassword and/or xmppTargetJid is null or empty.");
         return;
     }
 
+    persistent = context.ParseResult.GetValueForOption(persistentOption);
+
+    toolsWorkingDirectory = context.ParseResult.GetValueForOption(toolsWorkingDirectoryOption);
+    toolsRestrictToWorkingDirectory = context.ParseResult.GetValueForOption(toolsRestrictToWorkingDirectoryOption);
+
     var xmppCommunication = new XmppCommunication(xmppUsername, xmppDomain, xmppPassword, trustHost: xmppTrustHost);
 
     using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication, xmppTargetJid)));
 
-    var agent = CreateAgent(loggerFactory, apiModel, apiEndpoint, apiKey, apiModel, persistent);
+    var agent = CreateAgent(loggerFactory, apiModel, apiEndpoint, apiKey, apiModel, persistent, basePath: toolsWorkingDirectory, restrictToBasePath: toolsRestrictToWorkingDirectory);
 
     var cancellationToken = context.GetCancellationToken();
     while (!cancellationToken.IsCancellationRequested)
@@ -177,11 +194,8 @@ string GetMessagesFile(string id)
     return $"messages-{id}.json";
 }
 
-LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false, string? systemPrompt = null)
+LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false, string? systemPrompt = null, string? basePath = null, bool restrictToBasePath = true)
 {
-    var basePath = Environment.CurrentDirectory;
-    var restrictToBasePath = true;
-
     var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(basePath, "todo.db"));
 
     var shellTool = new Shell(loggerFactory, basePath);
