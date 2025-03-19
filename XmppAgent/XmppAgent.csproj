@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
     <PackageReference Include="XmppDotNet" Version="3.2.5" />
     <PackageReference Include="XmppDotNet.Extensions" Version="3.2.5" />
     <PackageReference Include="XmppDotNet.Srv" Version="3.2.5" />
