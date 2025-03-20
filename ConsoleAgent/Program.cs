@@ -1,5 +1,6 @@
 ﻿using LlmAgents;
 using LlmAgents.Agents;
+using LlmAgents.Communication;
 using LlmAgents.Todo;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
@@ -27,6 +28,8 @@ if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey))
     return;
 }
 
+var consoleCommunication = new ConsoleCommunication();
+
 var basePath = Environment.CurrentDirectory;
 var restrictToBasePath = true;
 
@@ -44,7 +47,7 @@ var todoContainerList = new TodoGroupList(todoDatabase);
 var todoCreate = new TodoCreate(todoDatabase);
 var todoRead = new TodoRead(todoDatabase);
 var todoUpdate = new TodoUpdate(todoDatabase);
-var askQuestionTool = new AskQuestion(LoggerFactory);
+var askQuestionTool = new AskQuestion(consoleCommunication);
 
 var tools = new Tool[]
 {
