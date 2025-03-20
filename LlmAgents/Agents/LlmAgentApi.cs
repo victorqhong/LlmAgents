@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using System.Threading;
 using LlmAgents.Tools;
+using Newtonsoft.Json;
 
 public class LlmAgentApi
 {
@@ -96,7 +97,7 @@ public class LlmAgentApi
 
         var payload = GetPayload(Model, messages, MaxTokens, Temperature, ToolDefinitions, "auto");
 
-        var completion = Post(ApiEndpoint, ApiKey, payload, cancellationToken).ConfigureAwait(false).GetAwaiter().GetResult();
+        var completion = Post(ApiEndpoint, ApiKey, payload, retryAttempt: 0, cancellationToken).ConfigureAwait(false).GetAwaiter().GetResult();
         if (completion == null)
         {
             if (cancellationToken.IsCancellationRequested)
@@ -232,61 +233,59 @@ public class LlmAgentApi
         }
     }
 
-    private async Task<JObject?> Post(string apiEndpoint, string apiKey, string content, CancellationToken cancellationToken = default, int retryAttempt = 0)
+    private async Task<JObject?> Post(string apiEndpoint, string apiKey, string content, int retryAttempt = 0, CancellationToken cancellationToken = default)
     {
-        using (HttpClient client = new())
+        using HttpClient client = new();
+        client.DefaultRequestHeaders.Add("api-key", apiKey);
+
+        var body = new StringContent(content, System.Text.Encoding.UTF8, "application/json");
+        try
         {
-            client.DefaultRequestHeaders.Add("api-key", apiKey);
+            var response = await client.PostAsync(apiEndpoint, body, cancellationToken);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var responseMessage = JObject.Parse(responseContent);
 
-            var body = new StringContent(content, System.Text.Encoding.UTF8, "application/json");
-            try
+            if (response.IsSuccessStatusCode)
             {
-                var response = await client.PostAsync(apiEndpoint, body, cancellationToken);
-                var responseContent = await response.Content.ReadAsStringAsync();
-                var responseMessage = JObject.Parse(responseContent);
-
-                if (response.IsSuccessStatusCode)
+                return responseMessage;
+            }
+            else
+            {
+                var error = responseMessage.Value<JObject>("error");
+                if (error != null)
                 {
-                    return responseMessage;
-                }
-                else
-                {
-                    var error = responseMessage.Value<JObject>("error");
-                    if (error != null)
+                    var message = error.Value<string>("message");
+                    var code = error.Value<string>("code");
+                    if (string.Equals("429", code) && retryAttempt < 3)
                     {
-                        var message = error.Value<string>("message");
-                        var code = error.Value<string>("code");
-                        if (string.Equals("429", code) && retryAttempt < 3)
-                        {
-                            var seconds = 30 * (retryAttempt + 1);
+                        var seconds = 30 * (retryAttempt + 1);
 
-                            string pattern = @"retry\s+after\s+(\d+)\s+seconds";
-                            Regex regex = new Regex(pattern, RegexOptions.IgnoreCase);
-                            Match match = regex.Match(message ?? string.Empty);
-                            if (match.Success)
-                            {
-                                seconds = int.Parse(match.Groups[1].Value) + 5;
-                            }
-
-                            Log.LogInformation("Request throttled... waiting {seconds} seconds and retrying.", seconds);
-                            System.Threading.Thread.Sleep(seconds * 1000);
-                            return await Post(apiEndpoint, apiKey, content, cancellationToken, retryAttempt + 1);
-                        }
-                        else
+                        string pattern = @"retry\s+after\s+(\d+)\s+seconds";
+                        Regex regex = new Regex(pattern, RegexOptions.IgnoreCase);
+                        Match match = regex.Match(message ?? string.Empty);
+                        if (match.Success)
                         {
-                            Log.LogError("Error: {message}", message);
+                            seconds = int.Parse(match.Groups[1].Value) + 5;
                         }
+
+                        Log.LogInformation("Request throttled... waiting {seconds} seconds and retrying.", seconds);
+                        System.Threading.Thread.Sleep(seconds * 1000);
+                        return await Post(apiEndpoint, apiKey, content, retryAttempt + 1, cancellationToken);
                     }
                     else
                     {
-                        Log.LogError("Error: {responseContent}", responseContent);
+                        Log.LogError("Error: {message}", message);
                     }
                 }
+                else
+                {
+                    Log.LogError("Error: {responseContent}", responseContent);
+                }
             }
-            catch (Exception e)
-            {
-                Log.LogError(e, "Got exception");
-            }
+        }
+        catch (Exception e)
+        {
+            Log.LogError(e, "Got exception");
         }
 
         return null;
@@ -309,5 +308,29 @@ public class LlmAgentApi
         }
 
         return payload.ToString(Newtonsoft.Json.Formatting.None);
+    }
+
+    public static List<JObject>? LoadMessages(string agentId, string? messagesFile = null)
+    {
+        List<JObject>? messages = null;
+
+        messagesFile ??= GetMessagesFile(agentId);
+        if (File.Exists(messagesFile))
+        {
+            messages = JsonConvert.DeserializeObject<List<JObject>>(File.ReadAllText(messagesFile));
+        }
+
+        return messages;
+    }
+
+    public static void SaveMessages(LlmAgentApi agent, string? messagesFile = null)
+    {
+        messagesFile ??= GetMessagesFile(agent.Id);
+        File.WriteAllText(messagesFile, JsonConvert.SerializeObject(agent.Messages));
+    }
+
+    private static string GetMessagesFile(string agentId)
+    {
+        return $"messages-{agentId}.json";
     }
 }
