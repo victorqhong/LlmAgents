@@ -7,17 +7,15 @@ namespace XmppAgent.Logging
     public class XmppLoggerProvider : ILoggerProvider
     {
         private readonly XmppCommunication xmppCommunication;
-        private readonly string targetJid;
 
-        public XmppLoggerProvider(XmppCommunication xmppCommunication, string targetJid)
+        public XmppLoggerProvider(XmppCommunication xmppCommunication)
         {
             this.xmppCommunication = xmppCommunication;
-            this.targetJid = targetJid;
         }
 
         public ILogger CreateLogger(string categoryName)
         {
-            return new XmppLogger(xmppCommunication, targetJid);
+            return new XmppLogger(xmppCommunication);
         }
 
         public void Dispose()

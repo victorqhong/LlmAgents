@@ -6,12 +6,10 @@ namespace XmppAgent.Logging
     public class XmppLogger : ILogger
     {
         private readonly XmppCommunication xmppCommunication;
-        private readonly string targetJid;
 
-        public XmppLogger(XmppCommunication xmppCommunication, string targetJid)
+        public XmppLogger(XmppCommunication xmppCommunication)
         {
             this.xmppCommunication = xmppCommunication;
-            this.targetJid = targetJid;
         }
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => default!;
@@ -31,11 +29,15 @@ namespace XmppAgent.Logging
 
             try
             {
-                xmppCommunication.SendMessage(targetJid, message);
+                xmppCommunication.SendMessage(message);
+                if (exception != null)
+                {
+                    xmppCommunication.SendMessage(exception.Message);
+                }
             }
             catch (Exception e)
             {
-                xmppCommunication.SendMessage(targetJid, e.Message);
+                xmppCommunication.SendMessage(e.Message);
             }
         }
     }

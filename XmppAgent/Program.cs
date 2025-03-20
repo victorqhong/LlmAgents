@@ -1,9 +1,9 @@
 ﻿using LlmAgents;
 using LlmAgents.Agents;
+using LlmAgents.Communication;
 using LlmAgents.Todo;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.CommandLine;
 using System.CommandLine.Invocation;
@@ -52,15 +52,15 @@ var xmppTrustHostOption = new Option<bool>(
     description: "",
     getDefaultValue: () => false);
 
-var apiConfigOption = new Option<string>(
+var apiConfigOption = new Option<string?>(
     name: "--apiConfig",
     description: "",
-    getDefaultValue: () => Environment.GetEnvironmentVariable("API_CONFIG", environmentVariableTarget) ?? string.Empty);
+    getDefaultValue: () => Environment.GetEnvironmentVariable("API_CONFIG", environmentVariableTarget));
 
-var xmppConfigOption = new Option<string>(
+var xmppConfigOption = new Option<string?>(
     name: "--xmppConfig",
     description: "",
-    getDefaultValue: () => Environment.GetEnvironmentVariable("XMPP_CONFIG", environmentVariableTarget) ?? string.Empty);
+    getDefaultValue: () => Environment.GetEnvironmentVariable("XMPP_CONFIG", environmentVariableTarget));
 
 var toolsWorkingDirectoryOption = new Option<string>(
     name: "--toolsWorkingDirectory",
@@ -103,7 +103,7 @@ void RootCommandHandler(InvocationContext context)
     var toolsRestrictToWorkingDirectory = true;
 
     var apiConfigValue = context.ParseResult.GetValueForOption(apiConfigOption);
-    if (!string.IsNullOrEmpty(apiConfigValue))
+    if (!string.IsNullOrEmpty(apiConfigValue) && File.Exists(apiConfigValue))
     {
         var apiConfig = JObject.Parse(File.ReadAllText(apiConfigValue));
 
@@ -125,7 +125,7 @@ void RootCommandHandler(InvocationContext context)
     }
 
     var xmppConfigValue = context.ParseResult.GetValueForOption(xmppConfigOption);
-    if (!string.IsNullOrEmpty(xmppConfigValue))
+    if (!string.IsNullOrEmpty(xmppConfigValue) && File.Exists(xmppConfigValue))
     {
         var xmppConfig = JObject.Parse(File.ReadAllText(xmppConfigValue));
 
@@ -155,18 +155,19 @@ void RootCommandHandler(InvocationContext context)
     toolsWorkingDirectory = context.ParseResult.GetValueForOption(toolsWorkingDirectoryOption);
     toolsRestrictToWorkingDirectory = context.ParseResult.GetValueForOption(toolsRestrictToWorkingDirectoryOption);
 
-    var xmppCommunication = new XmppCommunication(xmppUsername, xmppDomain, xmppPassword, trustHost: xmppTrustHost);
+    var xmppCommunication = new XmppCommunication(xmppUsername, xmppDomain, xmppPassword, trustHost: xmppTrustHost)
+    {
+        TargetJid = xmppTargetJid
+    };
 
-    using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication, xmppTargetJid)));
+    using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
 
-    var agent = CreateAgent(loggerFactory, apiModel, apiEndpoint, apiKey, apiModel, persistent, basePath: toolsWorkingDirectory, restrictToBasePath: toolsRestrictToWorkingDirectory);
+    var agent = CreateAgent(loggerFactory, xmppCommunication, apiModel, apiEndpoint, apiKey, apiModel, persistent, basePath: toolsWorkingDirectory, restrictToBasePath: toolsRestrictToWorkingDirectory);
 
     var cancellationToken = context.GetCancellationToken();
     while (!cancellationToken.IsCancellationRequested)
     {
-        xmppCommunication.SendPresence(Show.Chat);
-
-        var line = xmppCommunication.WaitForMessage(xmppTargetJid, cancellationToken);
+        var line = xmppCommunication.WaitForMessage(cancellationToken);
         if (string.IsNullOrEmpty(line))
         {
             continue;
@@ -180,21 +181,16 @@ void RootCommandHandler(InvocationContext context)
             continue;
         }
 
-        xmppCommunication.SendMessage(xmppTargetJid, response);
+        xmppCommunication.SendMessage(response);
 
         if (persistent)
         {
-            File.WriteAllText(GetMessagesFile(agent.Id), JsonConvert.SerializeObject(agent.Messages));
+            LlmAgentApi.SaveMessages(agent);
         }
     }
 }
 
-string GetMessagesFile(string id)
-{
-    return $"messages-{id}.json";
-}
-
-LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false, string? systemPrompt = null, string? basePath = null, bool restrictToBasePath = true)
+LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false, string? systemPrompt = null, string? basePath = null, bool restrictToBasePath = true)
 {
     var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(basePath, "todo.db"));
 
@@ -210,7 +206,8 @@ LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, string id, string apiEndpo
     var todoCreate = new TodoCreate(todoDatabase);
     var todoRead = new TodoRead(todoDatabase);
     var todoUpdate = new TodoUpdate(todoDatabase);
-    var askQuestionTool = new AskQuestion(loggerFactory);
+    var todoDelete = new TodoDelete(todoDatabase);
+    var askQuestionTool = new AskQuestion(agentCommunication);
 
     var tools = new Tool[]
     {
@@ -226,30 +223,16 @@ LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, string id, string apiEndpo
         todoCreate.Tool,
         todoRead.Tool,
         todoUpdate.Tool,
+        todoDelete.Tool,
         askQuestionTool.Tool,
     };
 
-    var messagesFile = GetMessagesFile(id);
-
-    List<JObject>? messages = null;
-    if (loadMessages)
-    {
-        if (File.Exists(messagesFile))
-        {
-            messages = JsonConvert.DeserializeObject<List<JObject>>(File.ReadAllText(messagesFile));
-        }
-    }
-
+    List<JObject>? messages = LlmAgentApi.LoadMessages(id);
     if (messages == null)
     {
-        if (systemPrompt == null)
-        {
-            systemPrompt = Prompts.DefaultSystemPrompt;
-        }
-
         messages =
         [
-            JObject.FromObject(new { role = "system", content = systemPrompt })
+            JObject.FromObject(new { role = "system", content = systemPrompt ?? Prompts.DefaultSystemPrompt })
         ];
     }
 

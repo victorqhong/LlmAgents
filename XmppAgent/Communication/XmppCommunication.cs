@@ -1,4 +1,5 @@
-﻿using System.Reactive.Linq;
+﻿using LlmAgents.Communication;
+using System.Reactive.Linq;
 using XmppDotNet;
 using XmppDotNet.Extensions.Client.Message;
 using XmppDotNet.Extensions.Client.Presence;
@@ -10,11 +11,15 @@ using XmppDotNet.Xmpp.Client;
 
 namespace XmppAgent.Communication;
 
-public class XmppCommunication
+public class XmppCommunication : IAgentCommunication
 {
     public XmppClient XmppClient { get; private set; }
 
     public bool Connected { get; private set; }
+
+    public required string TargetJid { get; set; }
+
+    public Show Presence { get; private set; }
 
     public XmppCommunication(string username, string domain, string password, string? resource = null, string? host = null, string? port = null, bool trustHost = false)
     {
@@ -58,22 +63,23 @@ public class XmppCommunication
     public void SendPresence(Show show)
     {
         XmppClient.SendPresenceAsync(show).ConfigureAwait(false).GetAwaiter().GetResult();
+        Presence = show;
     }
 
-    public string? WaitForMessage(string jid, CancellationToken cancellationToken = default)
+    public string? WaitForMessage(CancellationToken cancellationToken = default)
     {
         if (!Connected)
         {
             return null;
         }
 
-        var body = string.Empty;
+        string? body = null;
         Action<XmppXElement> onNext = el =>
         {
             body = el.GetTag("body");
         };
 
-        var subscriber = XmppClient.XmppXElementReceived
+        using var subscriber = XmppClient.XmppXElementReceived
             .Where(el =>
             {
                 if (!el.OfType<Message>())
@@ -87,34 +93,36 @@ public class XmppCommunication
                     return false;
                 }
 
-                var fromJid = new Jid(jid);
+                var fromJid = new Jid(TargetJid);
                 return fromJid.EqualsBare(message.From);
             })
             .Subscribe(onNext);
+
+        var savedPresence = Presence;
 
         XmppClient.SendPresenceAsync(Show.Chat).ConfigureAwait(false).GetAwaiter().GetResult();
         while (string.IsNullOrEmpty(body))
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                return null;
+                break;
             }
 
             Thread.Sleep(1000);
         }
 
-        subscriber.Dispose();
+        XmppClient.SendPresenceAsync(savedPresence).ConfigureAwait(false).GetAwaiter().GetResult();
 
         return body;
     }
 
-    public void SendMessage(string jid, string message)
+    public void SendMessage(string message)
     {
         if (!Connected)
         {
             return;
         }
 
-        XmppClient.SendChatMessageAsync(new Jid(jid), message).ConfigureAwait(false).GetAwaiter().GetResult();
+        XmppClient.SendChatMessageAsync(new Jid(TargetJid), message).ConfigureAwait(false).GetAwaiter().GetResult();
     }
 }

@@ -1,12 +1,12 @@
 namespace LlmAgents.Tools;
 
-using Microsoft.Extensions.Logging;
+using LlmAgents.Communication;
 using Newtonsoft.Json.Linq;
 using System;
 
 public class AskQuestion
 {
-    private readonly ILogger Log;
+    private readonly IAgentCommunication agentCommunication;
 
     private JObject schema = JObject.FromObject(new
     {
@@ -31,9 +31,9 @@ public class AskQuestion
         }
     });
 
-    public AskQuestion(ILoggerFactory loggerFactory)
+    public AskQuestion(IAgentCommunication agentCommunication)
     {
-        Log = loggerFactory.CreateLogger(nameof(AskQuestion));
+        this.agentCommunication = agentCommunication;
 
         Tool = new Tool
         {
@@ -59,9 +59,8 @@ public class AskQuestion
         {
             var answer = string.Empty;
 
-            Console.WriteLine($"Question: {question}");
-            Console.Write("Answer> ");
-            answer = Console.ReadLine();
+            agentCommunication.SendMessage(question);
+            answer = agentCommunication.WaitForMessage();
 
             result.Add("answer", answer);
         }
