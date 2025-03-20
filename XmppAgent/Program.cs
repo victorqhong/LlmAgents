@@ -16,60 +16,60 @@ var environmentVariableTarget = RuntimeInformation.IsOSPlatform(OSPlatform.Windo
 
 var apiEndpointOption = new Option<string>(
     name: "--apiEndpoint",
-    description: "");
+    description: "HTTP(s) endpoint of OpenAI compatiable API");
 
 var apiKeyOption = new Option<string>(
     name: "--apiKey",
-    description: "key used to communicate with the api");
+    description: "Key used to authenticate to the api");
 
 var apiModelOption = new Option<string>(
     name: "--apiModel",
-    description: "");
+    description: "Name of the model to include in requests");
 
 var persistentOption = new Option<bool>(
     name: "--persistent",
-    description: "",
+    description: "Whether messages are saved",
     getDefaultValue: () => false);
 
 var xmppDomainOption = new Option<string>(
     name: "--xmppDomain",
-    description: "");
+    description: "XMPP domain used for agent communication");
 
 var xmppUsernameOption = new Option<string>(
     name: "--xmppUsername",
-    description: "");
+    description: "XMPP username used for agent communication");
 
 var xmppPasswordOption = new Option<string>(
     name: "--xmppPassword",
-    description: "");
+    description: "XMPP password used for agent communication");
 
 var xmppTargetJidOption = new Option<string>(
     name: "--xmppTargetJid",
-    description: "");
+    description: "The target address the agent should communicate with");
 
 var xmppTrustHostOption = new Option<bool>(
     name: "--xmppTrustHost",
-    description: "",
+    description: "Whether the XMPP connection should accept untrusted TLS certificates",
     getDefaultValue: () => false);
 
 var apiConfigOption = new Option<string?>(
     name: "--apiConfig",
-    description: "",
-    getDefaultValue: () => Environment.GetEnvironmentVariable("API_CONFIG", environmentVariableTarget));
+    description: "Path to a JSON file with configuration for api values",
+    getDefaultValue: () => Environment.GetEnvironmentVariable("API_CONFIG", environmentVariableTarget) ?? "api.json");
 
 var xmppConfigOption = new Option<string?>(
     name: "--xmppConfig",
-    description: "",
-    getDefaultValue: () => Environment.GetEnvironmentVariable("XMPP_CONFIG", environmentVariableTarget));
+    description: "Path to a JSON file with configuration for XMPP values",
+    getDefaultValue: () => Environment.GetEnvironmentVariable("XMPP_CONFIG", environmentVariableTarget) ?? "xmpp.json");
 
 var toolsWorkingDirectoryOption = new Option<string>(
     name: "--toolsWorkingDirectory",
-    description: "",
+    description: "The working directory tools will use",
     getDefaultValue: () => Environment.CurrentDirectory);
 
 var toolsRestrictToWorkingDirectoryOption = new Option<bool>(
     name: "--toolsRestrictToWorkingDirectory",
-    description: "",
+    description: "Whether tools should be restricted to the working directory",
     getDefaultValue: () => true);
 
 var rootCommand = new RootCommand("XmppAgent");
@@ -227,7 +227,12 @@ LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentC
         askQuestionTool.Tool,
     };
 
-    List<JObject>? messages = LlmAgentApi.LoadMessages(id);
+    List<JObject>? messages = null;
+    if (loadMessages)
+    {
+        messages = LlmAgentApi.LoadMessages(id);
+    }
+
     if (messages == null)
     {
         messages =
