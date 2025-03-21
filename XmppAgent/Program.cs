@@ -65,7 +65,7 @@ var xmppConfigOption = new Option<string?>(
 var toolsConfigOption = new Option<string>(
     name: "--toolsConfig",
     description: "Path to a JSON file with configuration for tool values",
-    getDefaultValue: () => "tools.json");
+    getDefaultValue: () => Environment.GetEnvironmentVariable("TOOLS_CONFIG", environmentVariableTarget) ?? "tools.json");
 
 var workingDirectoryOption = new Option<string>(
     name: "--workingDirectory",
