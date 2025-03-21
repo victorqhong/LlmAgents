@@ -5,6 +5,11 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PackAsTool>true</PackAsTool>
+    <PackageId>XmppAgent</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Victor Hong</Authors>
+    <Description>Exposes a LLM agent on an XMPP server</Description>
   </PropertyGroup>
 
   <ItemGroup>
