@@ -7,7 +7,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Threading;
 
-public class Shell
+public class Shell : Tool
 {
     private const int waitCheckTimeMs = 1000;
 
@@ -21,40 +21,14 @@ public class Shell
     private string? commandId;
     private bool receivedOutput = false;
 
-    private JObject schema = JObject.FromObject(new
+    public Shell(ToolFactory toolFactory)
+        : base(toolFactory)
     {
-        type = "function",
-        function = new
-        {
-            name = "shell",
-            description = "Runs a shell command in PowerShell Core. Prefer the 'file_write' tool for writing files.",
-            parameters = new
-            {
-                type = "object",
-                properties = new
-                {
-                    command = new
-                    {
-                        type = "string",
-                        description = "Shell command and arguments to run"
-                    }
-                },
-                required = new[] { "command" }
-            }
-        }
-    });
+        Log = toolFactory.Resolve<ILoggerFactory>().CreateLogger(nameof(Shell));
 
-    public Shell(ILoggerFactory loggerFactory, string? workingDirectory = null, int waitTimeMs = 180000)
-    {
-        this.waitTimeMs = waitTimeMs;
+        waitTimeMs = int.TryParse(toolFactory.GetParameter($"{nameof(Shell)}.{nameof(waitTimeMs)}"), out waitTimeMs) ? waitTimeMs : 180000;
 
-        Log = loggerFactory.CreateLogger(nameof(Shell));
-
-        Tool = new Tool
-        {
-            Schema = schema,
-            Function = Function
-        };
+        var workingDirectory = toolFactory.GetParameter("basePath") ?? Environment.CurrentDirectory;
 
         Process = new Process();
 
@@ -62,7 +36,7 @@ public class Shell
         Process.StartInfo.ArgumentList.Add("-NoLogo");
         Process.StartInfo.ArgumentList.Add("-NonInteractive");
 
-        Process.StartInfo.WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory;
+        Process.StartInfo.WorkingDirectory = workingDirectory;
 
         Process.StartInfo.UseShellExecute = false;
         Process.StartInfo.RedirectStandardOutput = true;
@@ -116,13 +90,34 @@ public class Shell
         Process.StandardInput.WriteLine("$PSStyle.OutputRendering='Plain'");
     }
 
-    public Tool Tool { get; private set; }
-
     public Process Process { get; private set; }
 
     public CancellationTokenSource CancellationTokenSource { get; private set; } = new();
 
-    private JObject Function(JObject parameters)
+    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    {
+        type = "function",
+        function = new
+        {
+            name = "shell",
+            description = "Runs a shell command in PowerShell Core. Prefer the 'file_write' tool for writing files.",
+            parameters = new
+            {
+                type = "object",
+                properties = new
+                {
+                    command = new
+                    {
+                        type = "string",
+                        description = "Shell command and arguments to run"
+                    }
+                },
+                required = new[] { "command" }
+            }
+        }
+    });
+
+    public override JObject Function(JObject parameters)
     {
         var result = new JObject();
 

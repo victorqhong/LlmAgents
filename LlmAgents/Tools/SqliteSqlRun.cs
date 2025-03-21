@@ -3,9 +3,14 @@ namespace LlmAgents.Tools;
 using Newtonsoft.Json.Linq;
 using System;
 
-public class SqliteSqlRun
+public class SqliteSqlRun : Tool
 {
-    private JObject schema = JObject.FromObject(new
+    public SqliteSqlRun(ToolFactory toolFactory)
+        : base(toolFactory)
+    {
+    }
+
+    public override JObject Schema { get; protected set; } = JObject.FromObject(new
     {
         type = "function",
         function = new
@@ -33,18 +38,7 @@ public class SqliteSqlRun
         }
     });
 
-    public SqliteSqlRun()
-    {
-        Tool = new Tool
-        {
-            Schema = schema,
-            Function = Function
-        };
-    }
-
-    public Tool Tool { get; private set; }
-
-    private JObject Function(JObject parameters)
+    public override JObject Function(JObject parameters)
     {
         var result = new JObject();
 

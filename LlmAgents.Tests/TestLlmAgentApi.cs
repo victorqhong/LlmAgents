@@ -1,4 +1,5 @@
 ﻿using LlmAgents.Agents;
+using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json.Linq;
@@ -55,13 +56,15 @@ public sealed class TestLlmAgentApi
     public void TestGetPayload_Tools()
     {
         var loggerFactory = LoggerFactory.Create(builder => { });
-        var shellTool = new LlmAgents.Tools.Shell(loggerFactory);
+        var toolFactory = new ToolFactory(loggerFactory);
+        toolFactory.Register(loggerFactory);
+        var shellTool = new Shell(toolFactory);
 
         var model = "gpt-4o";
         var messages = new List<JObject>();
         var maxTokens = 100;
         var temperature = 0.7;
-        var tools = new List<JObject>() { shellTool.Tool.Schema };
+        var tools = new List<JObject>() { shellTool.Schema };
         var toolChoice = "auto";
 
         var payload = JObject.Parse(LlmAgentApi.GetPayload(model, messages, maxTokens, temperature, tools, toolChoice));

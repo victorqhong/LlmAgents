@@ -3,10 +3,13 @@ namespace LlmAgents.Tools;
 using Newtonsoft.Json.Linq;
 using System;
 
-public class Tool
+public abstract class Tool
 {
-    public required JObject Schema;
-    public required Func<JObject, JToken> Function;
+    public Tool(ToolFactory toolFactory)
+    {
+    }
+
+    public abstract JObject Schema { get; protected set; }
 
     public string Name
     {
@@ -21,4 +24,6 @@ public class Tool
             return name;
         }
     }
+
+    public abstract JToken Function(JObject parameters);
 }

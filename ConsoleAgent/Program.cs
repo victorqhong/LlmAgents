@@ -31,40 +31,24 @@ if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey))
 var consoleCommunication = new ConsoleCommunication();
 
 var basePath = Environment.CurrentDirectory;
-var restrictToBasePath = true;
+var toolsFilePath = "tools.json";
 
 var todoDatabase = new TodoDatabase(LoggerFactory, Path.Join(basePath, "todo.db"));
 
-var shellTool = new Shell(LoggerFactory, basePath);
-var fileReadTool = new FileRead(basePath, restrictToBasePath);
-var fileWriteTool = new FileWrite(basePath, restrictToBasePath);
-var fileListTool = new FileList(basePath, restrictToBasePath);
-var sqliteFileRun = new SqliteFileRun(basePath, restrictToBasePath);
-var sqliteSqlRun = new SqliteSqlRun();
-var todoContainerCreate = new TodoGroupCreate(todoDatabase);
-var todoContainerRead = new TodoGroupRead(todoDatabase);
-var todoContainerList = new TodoGroupList(todoDatabase);
-var todoCreate = new TodoCreate(todoDatabase);
-var todoRead = new TodoRead(todoDatabase);
-var todoUpdate = new TodoUpdate(todoDatabase);
-var askQuestionTool = new AskQuestion(consoleCommunication);
-
-var tools = new Tool[]
+Tool[]? tools = null;
+if (!string.IsNullOrEmpty(toolsFilePath))
 {
-    shellTool.Tool,
-    fileReadTool.Tool,
-    fileWriteTool.Tool,
-    fileListTool.Tool,
-    sqliteFileRun.Tool,
-    sqliteSqlRun.Tool,
-    todoContainerCreate.Tool,
-    todoContainerRead.Tool,
-    todoContainerList.Tool,
-    todoCreate.Tool,
-    todoRead.Tool,
-    todoUpdate.Tool,
-    askQuestionTool.Tool,
-};
+    var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
+    var toolFactory = new ToolFactory(LoggerFactory, toolsFile);
+
+    toolFactory.Register<IAgentCommunication>(consoleCommunication);
+    toolFactory.Register(LoggerFactory);
+    toolFactory.Register(todoDatabase);
+
+    toolFactory.AddParameter("basePath", basePath);
+
+    tools = toolFactory.Load();
+}
 
 string GetMessagesFile(string id)
 {

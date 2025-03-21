@@ -5,12 +5,19 @@ using System;
 using System.IO;
 using System.Linq;
 
-public class FileList
+public class FileList : Tool
 {
     private readonly string basePath;
     private readonly bool restrictToBasePath;
 
-    private JObject schema = JObject.FromObject(new
+    public FileList(ToolFactory toolFactory)
+        : base(toolFactory)
+    {
+        basePath = Path.GetFullPath(toolFactory.GetParameter(nameof(basePath)) ?? Environment.CurrentDirectory);
+        restrictToBasePath = bool.TryParse(toolFactory.GetParameter(nameof(restrictToBasePath)), out restrictToBasePath) ? restrictToBasePath : true;
+    }
+
+    public override JObject Schema { get; protected set; } = JObject.FromObject(new
     {
         type = "function",
         function = new
@@ -33,21 +40,7 @@ public class FileList
         }
     });
 
-    public FileList(string? basePath = null, bool restrictToBasePath = true)
-    {
-        this.basePath = Path.GetFullPath(basePath ?? Environment.CurrentDirectory);
-        this.restrictToBasePath = restrictToBasePath;
-
-        Tool = new Tool
-        {
-            Schema = schema,
-            Function = Function
-        };
-    }
-
-    public Tool Tool { get; private set; }
-
-    private JToken Function(JObject parameters)
+    public override JToken Function(JObject parameters)
     {
         var result = new JObject();
 

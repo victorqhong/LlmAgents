@@ -4,9 +4,17 @@ using Newtonsoft.Json.Linq;
 using LlmAgents.Todo;
 using System;
 
-public class TodoCreate
+public class TodoCreate : Tool
 {
-    private JObject schema = JObject.FromObject(new
+    private readonly TodoDatabase todoDatabase;
+
+    public TodoCreate(ToolFactory toolFactory)
+        : base(toolFactory)
+    {
+        todoDatabase = toolFactory.Resolve<TodoDatabase>();
+    }
+
+    public override JObject Schema { get; protected set; } = JObject.FromObject(new
     {
         type = "function",
         function = new
@@ -39,22 +47,7 @@ public class TodoCreate
         }
     });
 
-    private readonly TodoDatabase todoDatabase;
-
-    public TodoCreate(TodoDatabase todoDatabase)
-    {
-        this.todoDatabase = todoDatabase;
-
-        Tool = new Tool
-        {
-            Schema = schema,
-            Function = Function
-        };
-    }
-
-    public Tool Tool { get; private set; }
-
-    private JObject Function(JObject parameters)
+    public override JObject Function(JObject parameters)
     {
         var result = new JObject();
 

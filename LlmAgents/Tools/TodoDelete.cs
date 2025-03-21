@@ -4,9 +4,17 @@ using Newtonsoft.Json.Linq;
 using LlmAgents.Todo;
 using System;
 
-public class TodoDelete
+public class TodoDelete : Tool
 {
-    private readonly static JObject schema = JObject.FromObject(new
+    private readonly TodoDatabase todoDatabase;
+
+    public TodoDelete(ToolFactory toolFactory)
+        : base(toolFactory)
+    {
+        todoDatabase = toolFactory.Resolve<TodoDatabase>();
+    }
+
+    public override JObject Schema { get; protected set; } = JObject.FromObject(new
     {
         type = "function",
         function = new
@@ -34,22 +42,7 @@ public class TodoDelete
         }
     });
 
-    private readonly TodoDatabase todoDatabase;
-
-    public TodoDelete(TodoDatabase todoDatabase)
-    {
-        this.todoDatabase = todoDatabase;
-
-        Tool = new Tool
-        {
-            Schema = schema,
-            Function = Function
-        };
-    }
-
-    public Tool Tool { get; private set; }
-
-    private JToken Function(JObject parameters)
+    public override JToken Function(JObject parameters)
     {
         var result = new JObject();
 

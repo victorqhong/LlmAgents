@@ -4,11 +4,17 @@ using LlmAgents.Communication;
 using Newtonsoft.Json.Linq;
 using System;
 
-public class AskQuestion
+public class AskQuestion : Tool
 {
     private readonly IAgentCommunication agentCommunication;
 
-    private JObject schema = JObject.FromObject(new
+    public AskQuestion(ToolFactory toolFactory)
+        : base(toolFactory)
+    {
+        agentCommunication = toolFactory.Resolve<IAgentCommunication>();
+    }
+
+    public override JObject Schema { get ; protected set; } = JObject.FromObject(new
     {
         type = "function",
         function = new
@@ -31,20 +37,7 @@ public class AskQuestion
         }
     });
 
-    public AskQuestion(IAgentCommunication agentCommunication)
-    {
-        this.agentCommunication = agentCommunication;
-
-        Tool = new Tool
-        {
-            Schema = schema,
-            Function = Function
-        };
-    }
-
-    public Tool Tool { get; private set; }
-
-    private JToken Function(JObject parameters)
+    public override JToken Function(JObject parameters)
     {
         var result = new JObject();
 

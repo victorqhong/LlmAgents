@@ -62,15 +62,15 @@ var xmppConfigOption = new Option<string?>(
     description: "Path to a JSON file with configuration for XMPP values",
     getDefaultValue: () => Environment.GetEnvironmentVariable("XMPP_CONFIG", environmentVariableTarget) ?? "xmpp.json");
 
-var toolsWorkingDirectoryOption = new Option<string>(
-    name: "--toolsWorkingDirectory",
-    description: "The working directory tools will use",
-    getDefaultValue: () => Environment.CurrentDirectory);
+var toolsConfigOption = new Option<string>(
+    name: "--toolsConfig",
+    description: "Path to a JSON file with configuration for tool values",
+    getDefaultValue: () => "tools.json");
 
-var toolsRestrictToWorkingDirectoryOption = new Option<bool>(
-    name: "--toolsRestrictToWorkingDirectory",
-    description: "Whether tools should be restricted to the working directory",
-    getDefaultValue: () => true);
+var workingDirectoryOption = new Option<string>(
+    name: "--workingDirectory",
+    description: "",
+    getDefaultValue: () => Environment.CurrentDirectory);
 
 var rootCommand = new RootCommand("XmppAgent");
 rootCommand.SetHandler(RootCommandHandler);
@@ -85,8 +85,8 @@ rootCommand.AddOption(xmppPasswordOption);
 rootCommand.AddOption(xmppTargetJidOption);
 rootCommand.AddOption(xmppTrustHostOption);
 rootCommand.AddOption(xmppConfigOption);
-rootCommand.AddOption(toolsWorkingDirectoryOption);
-rootCommand.AddOption(toolsRestrictToWorkingDirectoryOption);
+rootCommand.AddOption(toolsConfigOption);
+rootCommand.AddOption(workingDirectoryOption);
 
 void RootCommandHandler(InvocationContext context)
 {
@@ -99,8 +99,6 @@ void RootCommandHandler(InvocationContext context)
     var xmppUsername = string.Empty;
     var xmppPassword = string.Empty;
     var xmppTrustHost = false;
-    var toolsWorkingDirectory = string.Empty;
-    var toolsRestrictToWorkingDirectory = true;
 
     var apiConfigValue = context.ParseResult.GetValueForOption(apiConfigOption);
     if (!string.IsNullOrEmpty(apiConfigValue) && File.Exists(apiConfigValue))
@@ -152,8 +150,8 @@ void RootCommandHandler(InvocationContext context)
 
     persistent = context.ParseResult.GetValueForOption(persistentOption);
 
-    toolsWorkingDirectory = context.ParseResult.GetValueForOption(toolsWorkingDirectoryOption);
-    toolsRestrictToWorkingDirectory = context.ParseResult.GetValueForOption(toolsRestrictToWorkingDirectoryOption);
+    var toolsConfigValue = context.ParseResult.GetValueForOption(toolsConfigOption);
+    var workingDirectoryValue = context.ParseResult.GetValueForOption(workingDirectoryOption);
 
     var xmppCommunication = new XmppCommunication(xmppUsername, xmppDomain, xmppPassword, trustHost: xmppTrustHost)
     {
@@ -162,7 +160,7 @@ void RootCommandHandler(InvocationContext context)
 
     using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
 
-    var agent = CreateAgent(loggerFactory, xmppCommunication, apiModel, apiEndpoint, apiKey, apiModel, persistent, basePath: toolsWorkingDirectory, restrictToBasePath: toolsRestrictToWorkingDirectory);
+    var agent = CreateAgent(loggerFactory, xmppCommunication, apiModel, apiEndpoint, apiKey, apiModel, persistent, basePath: workingDirectoryValue, toolsFilePath: toolsConfigValue);
 
     var cancellationToken = context.GetCancellationToken();
     while (!cancellationToken.IsCancellationRequested)
@@ -190,42 +188,24 @@ void RootCommandHandler(InvocationContext context)
     }
 }
 
-LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false, string? systemPrompt = null, string? basePath = null, bool restrictToBasePath = true)
+LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false, string? systemPrompt = null, string? basePath = null, string? toolsFilePath = null)
 {
     var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(basePath, "todo.db"));
 
-    var shellTool = new Shell(loggerFactory, basePath);
-    var fileReadTool = new FileRead(basePath, restrictToBasePath);
-    var fileWriteTool = new FileWrite(basePath, restrictToBasePath);
-    var fileListTool = new FileList(basePath, restrictToBasePath);
-    var sqliteFileRun = new SqliteFileRun(basePath, restrictToBasePath);
-    var sqliteSqlRun = new SqliteSqlRun();
-    var todoContainerCreate = new TodoGroupCreate(todoDatabase);
-    var todoContainerRead = new TodoGroupRead(todoDatabase);
-    var todoContainerList = new TodoGroupList(todoDatabase);
-    var todoCreate = new TodoCreate(todoDatabase);
-    var todoRead = new TodoRead(todoDatabase);
-    var todoUpdate = new TodoUpdate(todoDatabase);
-    var todoDelete = new TodoDelete(todoDatabase);
-    var askQuestionTool = new AskQuestion(agentCommunication);
-
-    var tools = new Tool[]
+    Tool[]? tools = null;
+    if (!string.IsNullOrEmpty(toolsFilePath))
     {
-        shellTool.Tool,
-        fileReadTool.Tool,
-        fileWriteTool.Tool,
-        fileListTool.Tool,
-        sqliteFileRun.Tool,
-        sqliteSqlRun.Tool,
-        todoContainerCreate.Tool,
-        todoContainerRead.Tool,
-        todoContainerList.Tool,
-        todoCreate.Tool,
-        todoRead.Tool,
-        todoUpdate.Tool,
-        todoDelete.Tool,
-        askQuestionTool.Tool,
-    };
+        var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
+        var toolFactory = new ToolFactory(loggerFactory, toolsFile);
+
+        toolFactory.Register(agentCommunication);
+        toolFactory.Register(loggerFactory);
+        toolFactory.Register(todoDatabase);
+
+        toolFactory.AddParameter("basePath", basePath ?? Environment.CurrentDirectory);
+
+        tools = toolFactory.Load();
+    }
 
     List<JObject>? messages = null;
     if (loadMessages)
