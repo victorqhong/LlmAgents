@@ -42,19 +42,13 @@ public class ToolFactory
             }
         }
 
-        var assemblies = this.toolDefinitions.Value<JArray>("assemblies");
+        var assemblies = this.toolDefinitions.Value<JObject>("assemblies");
         if (assemblies != null)
         {
-            foreach (var assembly in assemblies)
+            foreach (var assembly in assemblies.Properties())
             {
-                var assemblyObject = assembly.Value<JObject>();
-                if (assemblyObject == null)
-                {
-                    continue;
-                }
-
-                var name = assemblyObject.Value<string>("name");
-                var path = assemblyObject.Value<string>("path");
+                var name = assembly.Name;
+                var path = assembly.Value.Value<string>();
 
                 if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(path))
                 {
@@ -165,7 +159,7 @@ public class ToolFactory
                         continue;
                     }
 
-                    toolType = assembly.GetType(typeName);
+                    toolType = assembly.GetType(parts[0]);
                     if (toolType == null)
                     {
                         continue;

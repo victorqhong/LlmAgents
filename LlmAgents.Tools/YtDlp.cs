@@ -1,13 +1,15 @@
+namespace LlmAgents.Tools;
 
 using Newtonsoft.Json.Linq;
 
-namespace LlmAgents.Tools;
-
 public class YtDlp : Tool
 {
+    private readonly string workingDirectory;
+
     public YtDlp(ToolFactory toolFactory)
         : base(toolFactory)
     {
+        workingDirectory = toolFactory.GetParameter("basePath") ?? Environment.CurrentDirectory;
     }
 
     public override JObject Schema { get; protected set; } = JObject.FromObject(new
@@ -49,8 +51,8 @@ public class YtDlp : Tool
             var process = new System.Diagnostics.Process();
             process.StartInfo.FileName = "yt-dlp";
             process.StartInfo.Arguments = $"-x --audio-format mp3 --audio-quality 0 {videoUrl}";
+            process.StartInfo.WorkingDirectory = workingDirectory;
             process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardInput = true;
             process.StartInfo.RedirectStandardError = true;
             process.Start();
             process.WaitForExit();

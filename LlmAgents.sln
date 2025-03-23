@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LlmAgents", "LlmAgents\LlmA
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LlmAgents.Tests", "LlmAgents.Tests\LlmAgents.Tests.csproj", "{02A0701E-97DD-9966-2F80-B9EA083E8149}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LlmAgents.Tools", "LlmAgents.Tools\LlmAgents.Tools.csproj", "{E048B1C3-29D2-4B50-BF7F-D9A1B7C57883}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,10 @@ Global
 		{02A0701E-97DD-9966-2F80-B9EA083E8149}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{02A0701E-97DD-9966-2F80-B9EA083E8149}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{02A0701E-97DD-9966-2F80-B9EA083E8149}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E048B1C3-29D2-4B50-BF7F-D9A1B7C57883}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E048B1C3-29D2-4B50-BF7F-D9A1B7C57883}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E048B1C3-29D2-4B50-BF7F-D9A1B7C57883}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E048B1C3-29D2-4B50-BF7F-D9A1B7C57883}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
