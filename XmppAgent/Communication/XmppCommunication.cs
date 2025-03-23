@@ -76,6 +76,11 @@ public class XmppCommunication : IAgentCommunication
         string? body = null;
         Action<XmppXElement> onNext = el =>
         {
+            if (body != null)
+            {
+                return;
+            }
+
             body = el.GetTag("body");
         };
 
