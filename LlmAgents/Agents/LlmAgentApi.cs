@@ -54,9 +54,9 @@ public class LlmAgentApi
 
     public string Model { get; set; }
 
-    public int MaxTokens { get; set; } = 8192;
+    public int? MaxCompletionTokens { get; set; } = 8192;
 
-    public double Temperature { get; set; } = 1.2;
+    public double Temperature { get; set; } = 0.8;
 
     public void AddTool(params Tool[] tools)
     {
@@ -95,7 +95,7 @@ public class LlmAgentApi
             return null;
         }
 
-        var payload = GetPayload(Model, messages, MaxTokens, Temperature, ToolDefinitions, "auto");
+        var payload = GetPayload(Model, messages, MaxCompletionTokens, Temperature, ToolDefinitions, "auto");
 
         var completion = Post(ApiEndpoint, ApiKey, payload, retryAttempt: 0, cancellationToken).ConfigureAwait(false).GetAwaiter().GetResult();
         if (completion == null)
@@ -291,14 +291,14 @@ public class LlmAgentApi
         return null;
     }
 
-    public static string GetPayload(string model, List<JObject> messages, int maxTokens = -1, double temperature = 0.7, List<JObject>? tools = null, string toolChoice = "auto")
+    public static string GetPayload(string model, List<JObject> messages, int? maxCompletionTokns, double temperature, List<JObject>? tools = null, string toolChoice = "auto")
     {
         var payload = new JObject();
         payload.Add("model", model);
         payload.Add("messages", JArray.FromObject(messages));
-        if (maxTokens > 0)
+        if (maxCompletionTokns > 0)
         {
-            payload.Add("max_tokens", maxTokens);
+            payload.Add("max_completion_tokens", maxCompletionTokns);
         }
         payload.Add("temperature", temperature);
         if (tools != null && tools.Count > 0)

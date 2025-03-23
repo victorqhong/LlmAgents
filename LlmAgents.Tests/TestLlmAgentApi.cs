@@ -24,18 +24,18 @@ public sealed class TestLlmAgentApi
         var temperature = 0.7;
 
         var payload = LlmAgentApi.GetPayload(model, messages, maxTokens, temperature);
-        var expected = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"this is the system prompt\"},{\"role\":\"user\",\"content\":\"this is the user message\"},{\"role\":\"assistant\",\"content\":\"this is the assistant message\"}],\"max_tokens\":100,\"temperature\":0.7}";
+        var expected = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"this is the system prompt\"},{\"role\":\"user\",\"content\":\"this is the user message\"},{\"role\":\"assistant\",\"content\":\"this is the assistant message\"}],\"max_completion_tokens\":100,\"temperature\":0.7}";
         Assert.AreEqual(expected, payload);
     }
 
     [TestMethod]
-    public void TestGetPayload_NoMaxTokens()
+    public void TestGetPayload_NoMaxCompletionTokens()
     {
         var model = "gpt-4o";
         var messages = new List<JObject>();
 
-        var payload = LlmAgentApi.GetPayload(model, messages);
-        var expected = "{\"model\":\"gpt-4o\",\"messages\":[],\"temperature\":0.7}";
+        var payload = LlmAgentApi.GetPayload(model, messages, null, 1);
+        var expected = "{\"model\":\"gpt-4o\",\"messages\":[],\"temperature\":1.0}";
         Assert.AreEqual(expected, payload);
     }
 
@@ -48,7 +48,7 @@ public sealed class TestLlmAgentApi
         var temperature = 0.7;
 
         var payload = LlmAgentApi.GetPayload(model, messages, maxTokens, temperature);
-        var expected = "{\"model\":\"gpt-4o\",\"messages\":[],\"max_tokens\":100,\"temperature\":0.7}";
+        var expected = "{\"model\":\"gpt-4o\",\"messages\":[],\"max_completion_tokens\":100,\"temperature\":0.7}";
         Assert.AreEqual(expected, payload);
     }
 
