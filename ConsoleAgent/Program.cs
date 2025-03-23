@@ -4,12 +4,9 @@ using LlmAgents.Communication;
 using LlmAgents.Todo;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.CommandLine;
 using System.CommandLine.Invocation;
-using System.Net;
-using System.Reflection;
 using System.Runtime.InteropServices;
 
 var environmentVariableTarget = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? EnvironmentVariableTarget.User : EnvironmentVariableTarget.Process;
