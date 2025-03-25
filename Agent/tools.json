@@ -1,0 +1,12 @@
+{
+    "assemblies": {
+        "LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "..\\..\\LlmAgents\\LlmAgents.Tools\\bin\\Debug\\net9.0\\LlmAgents.Tools.dll"
+    },
+    "types": [
+        "LlmAgents.Tools.Shell, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+    ],
+    "parameters": {
+        "restrictToBasePath": "true",
+        "Shell.waitTimeMs": "180000"
+    }
+}

@@ -145,7 +145,7 @@ public class ToolFactory
                     continue;
                 }
 
-                var assemblyPath = assemblyMap[assemblyName];
+                var assemblyPath = Path.GetFullPath(assemblyMap[assemblyName]);
                 if (!File.Exists(assemblyPath))
                 {
                     continue;

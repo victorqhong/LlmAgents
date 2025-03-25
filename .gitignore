@@ -2,3 +2,8 @@ obj/
 bin/
 .vs/
 *.db
+
+launchSettings.json
+api.json
+xmpp.json
+tools.json
