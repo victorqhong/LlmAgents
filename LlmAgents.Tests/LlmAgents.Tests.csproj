@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LlmAgents\LlmAgents.csproj" />
+    <ProjectReference Include="..\LlmAgents.Tools\LlmAgents.Tools.csproj" />
   </ItemGroup>
 
   <ItemGroup>
