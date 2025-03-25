@@ -38,6 +38,8 @@ public class XmppCommunication : IAgentCommunication
             {
                 conf.WithCertificateValidator(new AlwaysAcceptCertificateValidator());
             }
+
+            conf.AutoReconnect = true;
         })
         {
             Jid = $"{username}@{domain}",
@@ -53,10 +55,16 @@ public class XmppCommunication : IAgentCommunication
         await XmppClient.ConnectAsync();
 
         XmppClient.StateChanged
-            .Where(s => s == SessionState.Binded)
-            .Subscribe(v =>
+            .Subscribe(state =>
             {
-                Connected = true;
+                if (state == SessionState.Binded)
+                {
+                    Connected = true;
+                }
+                else if (state == SessionState.Disconnected)
+                {
+                    Connected = false;
+                }
             });
     }
 

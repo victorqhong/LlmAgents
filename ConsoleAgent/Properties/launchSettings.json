@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "ConsoleAgent": {
+      "commandName": "Project",
+      "commandLineArgs": "--apiConfig api.json --toolsConfig tools.json --workingDirectory work",
+      "workingDirectory": "C:\\Users\\victo\\Code\\agents\\ytdlp"
+    }
+  }
+}
