@@ -129,6 +129,11 @@ void RootCommandHandler(InvocationContext context)
 
     void RunTool()
     {
+        if (tools == null)
+        {
+            return;
+        }
+
         for (int i = 0; i < tools.Length; i++)
         {
             Console.WriteLine($"{i + 1}) {tools[i].Name}");
@@ -157,14 +162,14 @@ void RootCommandHandler(InvocationContext context)
 
     void ChatMode()
     {
-        while (!cancellationToken.IsCancellationRequested)
+        while (true)
         {
             Console.Write("> ");
 
             var line = consoleCommunication.WaitForMessage(cancellationToken);
             if (string.IsNullOrEmpty(line))
             {
-                continue;
+                break;
             }
 
             var response = agent.GenerateCompletion(line, cancellationToken);
@@ -211,7 +216,7 @@ void RootCommandHandler(InvocationContext context)
         var messages2 = new List<JObject>()
         {
             CreateMessage("system", systemPrompt2)
-    };
+        };
 
         var agent1 = new LlmAgentApi(loggerFactory, "Agent1", apiEndpoint, apiKey, apiModel, messages1, tools);
         var agent2 = new LlmAgentApi(loggerFactory, "Agent2", apiEndpoint, apiKey, apiModel, messages2, tools);
@@ -287,7 +292,7 @@ void RootCommandHandler(InvocationContext context)
         }
     }
 
-    while (true)
+    while (!cancellationToken.IsCancellationRequested)
     {
         for (int i = 0; i < options.Length; i++)
         {
@@ -300,7 +305,7 @@ void RootCommandHandler(InvocationContext context)
         var input = Console.ReadLine();
         if (string.IsNullOrEmpty(input))
         {
-            return;
+            break;
         }
 
         Console.WriteLine();
