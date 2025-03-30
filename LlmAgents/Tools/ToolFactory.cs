@@ -12,6 +12,8 @@ public class ToolFactory
 
     private readonly Dictionary<string, string> assemblyMap = new Dictionary<string, string>();
 
+    private readonly Dictionary<string, Assembly> assemblies = new Dictionary<string, Assembly>();
+
     private readonly Dictionary<Type, object> container = new Dictionary<Type, object>();
 
     private readonly Dictionary<string, string> parameters = new Dictionary<string, string>();
@@ -134,47 +136,56 @@ public class ToolFactory
                 continue;
             }
 
-            var toolType = Type.GetType(typeName);
-            if (toolType == null)
-            {
-                var parts = typeName.Split(',', 2);
+            var parts = typeName.Split(',', 2);
 
-                var assemblyName = parts[1].Trim();
+            typeName = parts[0].Trim();
+            var assemblyName = parts[1].Trim();
+
+            if (!assemblies.ContainsKey(assemblyName))
+            {
                 if (!assemblyMap.ContainsKey(assemblyName))
                 {
+                    log.LogWarning("Assembly definition not found: {assemblyName}", assemblyName);
                     continue;
                 }
 
                 var assemblyPath = Path.GetFullPath(assemblyMap[assemblyName]);
                 if (!File.Exists(assemblyPath))
                 {
+                    log.LogWarning("Could not load assembly: {assemblyPath}", assemblyPath);
                     continue;
                 }
 
                 try
                 {
+                    log.LogTrace("Loading assembly from path: {assemblyPath}", assemblyPath);
                     var assembly = Assembly.LoadFile(assemblyPath);
                     if (assembly == null)
                     {
+                        log.LogError("Could not load assembly from file: {assemblyPath}", assemblyPath);
                         continue;
                     }
 
-                    toolType = assembly.GetType(parts[0]);
-                    if (toolType == null)
-                    {
-                        continue;
-                    }
+                    assemblies[assemblyName] = assembly;
                 }
                 catch (Exception e)
                 {
-                    log.LogError(e, "Could not load tool: {typeName}", typeName);
+                    log.LogError(e, "Exception while loading asembly: {assemblyPath}", assemblyPath);
                     continue;
                 }
+            }
+
+            var toolType = assemblies[assemblyName].GetType(typeName);
+            if (toolType == null)
+            {
+                log.LogError("Could not load type from assembly");
+                continue;
             }
 
             var tool = Create(toolType);
             if (tool == null)
             {
+                log.LogError("Could not create tool");
                 continue;
             }
 
