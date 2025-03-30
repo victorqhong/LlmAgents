@@ -195,7 +195,7 @@ LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentC
     Tool[]? tools = null;
     if (!string.IsNullOrEmpty(toolsFilePath))
     {
-        var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
+        var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));                          
         var toolFactory = new ToolFactory(loggerFactory, toolsFile);
 
         toolFactory.Register(agentCommunication);
