@@ -55,11 +55,20 @@ public class YtDlp : Tool
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
             process.Start();
-            process.WaitForExit();
+            process.WaitForExit(60 * 1000);
+
+            if (!process.HasExited)
+            {
+                result.Add("warning", "yt-dlp did not exit after 60 seconds and command may have failed");
+                process.Kill();
+            }
+            else
+            {
+                result.Add("exitcode", process.ExitCode);
+            }
 
             result.Add("stdout", process.StandardOutput.ReadToEnd());
             result.Add("stderr", process.StandardError.ReadToEnd());
-            result.Add("exitcode", process.ExitCode);
         }
         catch (Exception e)
         {
