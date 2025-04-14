@@ -310,26 +310,39 @@ public class LlmAgentApi
         return payload.ToString(Newtonsoft.Json.Formatting.None);
     }
 
-    public static List<JObject>? LoadMessages(string agentId, string? messagesFile = null)
+    public static List<JObject>? LoadMessages(string agentId, string? messagesDirectoryPath = null)
     {
-        List<JObject>? messages = null;
-
-        messagesFile ??= GetMessagesFile(agentId);
-        if (File.Exists(messagesFile))
+        if (string.IsNullOrEmpty(messagesDirectoryPath))
         {
-            messages = JsonConvert.DeserializeObject<List<JObject>>(File.ReadAllText(messagesFile));
+            messagesDirectoryPath = Environment.CurrentDirectory;
+        }
+
+        var messagesFileName = GetMessagesFilename(agentId);
+        var messagesFilePath = Path.GetFullPath(Path.Combine(messagesDirectoryPath, messagesFileName));
+
+        List<JObject>? messages = null;
+        if (File.Exists(messagesFilePath))
+        {
+            messages = JsonConvert.DeserializeObject<List<JObject>>(File.ReadAllText(messagesFilePath));
         }
 
         return messages;
     }
 
-    public static void SaveMessages(LlmAgentApi agent, string? messagesFile = null)
+    public static void SaveMessages(LlmAgentApi agent, string? messagesDirectoryPath = null)
     {
-        messagesFile ??= GetMessagesFile(agent.Id);
-        File.WriteAllText(messagesFile, JsonConvert.SerializeObject(agent.Messages));
+        if (string.IsNullOrEmpty(messagesDirectoryPath))
+        {
+            messagesDirectoryPath = Environment.CurrentDirectory;
+        }
+
+        var messagesFileName = GetMessagesFilename(agent.Id);
+        var messagesFilePath = Path.GetFullPath(Path.Combine(messagesDirectoryPath, messagesFileName));
+
+        File.WriteAllText(messagesFilePath, JsonConvert.SerializeObject(agent.Messages));
     }
 
-    private static string GetMessagesFile(string agentId)
+    private static string GetMessagesFilename(string agentId)
     {
         return $"messages-{agentId}.json";
     }

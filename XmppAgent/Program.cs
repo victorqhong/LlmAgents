@@ -72,6 +72,11 @@ var workingDirectoryOption = new Option<string>(
     description: "",
     getDefaultValue: () => Environment.CurrentDirectory);
 
+var agentDirectoryOption = new Option<string>(
+    name: "--agentDirectory",
+    description: "",
+    getDefaultValue: () => Environment.CurrentDirectory);
+
 var agentsConfigOption = new Option<string>(
     name: "--agentsConfig",
     description: "Path to a JSON file with configuration for agents",
@@ -97,6 +102,7 @@ agentCommand.AddOption(xmppTrustHostOption);
 agentCommand.AddOption(xmppConfigOption);
 agentCommand.AddOption(toolsConfigOption);
 agentCommand.AddOption(workingDirectoryOption);
+agentCommand.AddOption(agentDirectoryOption);
 rootCommand.AddCommand(agentCommand);
 
 async Task RootCommandHander(InvocationContext context)
@@ -118,13 +124,14 @@ async Task RootCommandHander(InvocationContext context)
         var toolsConfig = agentProperty.Value.Value<string>("toolsConfig");
         var persistent = agentProperty.Value.Value<bool>("persistent");
         var workingDirectory = agentProperty.Value.Value<string>("workingDirectory");
+        var agentDirectory = agentProperty.Value.Value<string>("agentDirectory");
 
-        if (string.IsNullOrEmpty(apiConfig) || string.IsNullOrEmpty(xmppConfig) || string.IsNullOrEmpty(toolsConfig) || string.IsNullOrEmpty(workingDirectory))
+        if (string.IsNullOrEmpty(apiConfig) || string.IsNullOrEmpty(xmppConfig) || string.IsNullOrEmpty(toolsConfig) || string.IsNullOrEmpty(workingDirectory) || string.IsNullOrEmpty(agentDirectory))
         {
             continue;
         }
 
-        var agentParameters = AgentParameters.Create(apiConfig, xmppConfig, toolsConfig, persistent, workingDirectory);
+        var agentParameters = AgentParameters.Create(apiConfig, xmppConfig, toolsConfig, agentDirectory, workingDirectory, persistent);
         if (agentParameters == null)
         {
             continue;
@@ -151,10 +158,11 @@ async Task AgentCommandHandler(InvocationContext context)
     var toolsConfigValue = context.ParseResult.GetValueForOption(toolsConfigOption);
     var persistent = context.ParseResult.GetValueForOption(persistentOption);
     var workingDirectoryValue = context.ParseResult.GetValueForOption(workingDirectoryOption) ?? Environment.CurrentDirectory;
+    var agentDirectoryValue = context.ParseResult.GetValueForOption(agentDirectoryOption);
 
     if (!string.IsNullOrEmpty(apiConfigValue) && File.Exists(apiConfigValue) && !string.IsNullOrEmpty(xmppConfigValue) && File.Exists(xmppConfigValue) && !string.IsNullOrEmpty(toolsConfigValue) && File.Exists(toolsConfigValue))
     {
-        parameters = AgentParameters.Create(apiConfigValue, xmppConfigValue, toolsConfigValue, persistent, workingDirectoryValue);
+        parameters = AgentParameters.Create(apiConfigValue, xmppConfigValue, toolsConfigValue, agentDirectoryValue, workingDirectoryValue, persistent);
     }
 
     if (parameters == null)
@@ -169,7 +177,9 @@ async Task AgentCommandHandler(InvocationContext context)
         var xmppTargetJid = context.ParseResult.GetValueForOption(xmppTargetJidOption);
         var xmppTrustHost = context.ParseResult.GetValueForOption(xmppTrustHostOption);
 
-        parameters = AgentParameters.Create(apiEndpoint, apiKey, apiModel, xmppDomain, xmppUsername, xmppPassword, xmppTargetJid, xmppTrustHost, toolsConfigValue, workingDirectoryValue, persistent);
+        parameters = AgentParameters.Create(apiEndpoint, apiKey, apiModel,
+            xmppDomain, xmppUsername, xmppPassword, xmppTargetJid, xmppTrustHost,
+            toolsConfigValue, agentDirectoryValue, workingDirectoryValue, persistent);
     }
 
     if (parameters != null)
@@ -180,14 +190,20 @@ async Task AgentCommandHandler(InvocationContext context)
 
 void RunAgent(AgentParameters agentParameters, CancellationToken cancellationToken = default)
 {
-    var xmppCommunication = new XmppCommunication(agentParameters.xmppUsername, agentParameters.xmppDomain, agentParameters.xmppPassword, trustHost: agentParameters.xmppTrustHost)
+    var xmppCommunication = new XmppCommunication(
+        agentParameters.xmppParameters.xmppUsername, agentParameters.xmppParameters.xmppDomain, agentParameters.xmppParameters.xmppPassword, trustHost: agentParameters.xmppParameters.xmppTrustHost)
     {
-        TargetJid = agentParameters.xmppTargetJid
+        TargetJid = agentParameters.xmppParameters.xmppTargetJid
     };
 
     using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
 
-    var agent = CreateAgent(loggerFactory, xmppCommunication, agentParameters.apiModel, agentParameters.apiEndpoint, agentParameters.apiKey, agentParameters.apiModel, agentParameters.persistent, basePath: agentParameters.workingDirectory, toolsFilePath: agentParameters.toolsConfigPath);
+    var agent = CreateAgent(loggerFactory, xmppCommunication, 
+        agentParameters.apiParameters.apiModel, agentParameters.apiParameters.apiEndpoint, agentParameters.apiParameters.apiKey, agentParameters.apiParameters.apiModel, 
+        agentParameters.persistent, 
+        workingDirectory: agentParameters.workingDirectory, 
+        toolsFilePath: agentParameters.toolsConfigPath,
+        agentDirectory: agentParameters.agentDirectory);
 
     while (!cancellationToken.IsCancellationRequested)
     {
@@ -214,12 +230,12 @@ void RunAgent(AgentParameters agentParameters, CancellationToken cancellationTok
     }
 }
 
-LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false, string? systemPrompt = null, string? basePath = null, string? toolsFilePath = null)
+LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false, string? systemPrompt = null, string? workingDirectory = null, string? agentDirectory = null, string? toolsFilePath = null)
 {
     Tool[]? tools = null;
     if (!string.IsNullOrEmpty(toolsFilePath))
     {
-        var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(basePath, "todo.db"));
+        var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(workingDirectory, "todo.db"));
 
         var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
         var toolFactory = new ToolFactory(loggerFactory, toolsFile);
@@ -228,7 +244,7 @@ LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentC
         toolFactory.Register(loggerFactory);
         toolFactory.Register(todoDatabase);
 
-        toolFactory.AddParameter("basePath", basePath ?? Environment.CurrentDirectory);
+        toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
 
         tools = toolFactory.Load();
     }
@@ -236,7 +252,7 @@ LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentC
     List<JObject>? messages = null;
     if (loadMessages)
     {
-        messages = LlmAgentApi.LoadMessages(id);
+        messages = LlmAgentApi.LoadMessages(id, agentDirectory);
     }
 
     if (messages == null)
@@ -252,21 +268,13 @@ LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentC
 
 return await rootCommand.InvokeAsync(args);
 
-class AgentParameters
+class ApiParameters
 {
     public string apiEndpoint = string.Empty;
     public string apiKey = string.Empty;
     public string apiModel = string.Empty;
-    public bool persistent = false;
-    public string xmppTargetJid = string.Empty;
-    public string xmppDomain = string.Empty;
-    public string xmppUsername = string.Empty;
-    public string xmppPassword = string.Empty;
-    public bool xmppTrustHost = false;
-    public string? workingDirectory = null;
-    public string? toolsConfigPath = null;
 
-    public static AgentParameters? Create(string? apiEndpoint, string? apiKey, string? apiModel, string? xmppDomain, string? xmppUsername, string? xmppPassword, string? xmppTargetJid, bool xmppTrustHost, string? toolsConfigPath, string? workingDirectory, bool persistent)
+    public static ApiParameters? Create(string? apiEndpoint, string? apiKey, string? apiModel)
     {
         if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(apiModel))
         {
@@ -274,29 +282,87 @@ class AgentParameters
             return null;
         }
 
+        return new ApiParameters
+        {
+            apiEndpoint = apiEndpoint,
+            apiKey = apiKey,
+            apiModel = apiModel
+        };
+    }
+}
+
+public class XmppParameters
+{
+    public string xmppTargetJid = string.Empty;
+    public string xmppDomain = string.Empty;
+    public string xmppUsername = string.Empty;
+    public string xmppPassword = string.Empty;
+    public bool xmppTrustHost = false;
+
+    public static XmppParameters? Create(string? xmppDomain, string? xmppUsername, string? xmppPassword, string? xmppTargetJid, bool xmppTrustHost)
+    {
         if (string.IsNullOrEmpty(xmppDomain) || string.IsNullOrEmpty(xmppUsername) || string.IsNullOrEmpty(xmppPassword) || string.IsNullOrEmpty(xmppTargetJid))
         {
             Console.Error.WriteLine("xmppDomain, xmppUsername, xmppPassword and/or xmppTargetJid is null or empty.");
             return null;
         }
 
-        return new AgentParameters
+        return new XmppParameters
         {
-            apiEndpoint = apiEndpoint,
-            apiKey = apiKey,
-            apiModel = apiModel,
             xmppDomain = xmppDomain,
             xmppUsername = xmppUsername,
             xmppPassword = xmppPassword,
-            xmppTrustHost = xmppTrustHost,
             xmppTargetJid = xmppTargetJid,
+            xmppTrustHost = xmppTrustHost
+        };
+    }
+}
+
+class AgentParameters
+{
+    public readonly ApiParameters apiParameters;
+    public readonly XmppParameters xmppParameters;
+    public bool persistent = false;
+    public string? workingDirectory = null;
+    public string? toolsConfigPath = null;
+    public string? agentDirectory = null;
+
+    public AgentParameters(ApiParameters apiParameters, XmppParameters xmppParameters)
+    {
+        ArgumentNullException.ThrowIfNull(apiParameters);
+        ArgumentNullException.ThrowIfNull(xmppParameters);
+
+        this.apiParameters = apiParameters;
+        this.xmppParameters = xmppParameters;
+    }
+
+    public static AgentParameters? Create(
+        string? apiEndpoint, string? apiKey, string? apiModel,
+        string? xmppDomain, string? xmppUsername, string? xmppPassword, string? xmppTargetJid, bool xmppTrustHost,
+        string? toolsConfigPath, string? agentDirectory, string? workingDirectory, bool persistent)
+    {
+        var apiParameters = ApiParameters.Create(apiEndpoint, apiKey, apiModel);
+        if (apiParameters == null)
+        {
+            return null;
+        }
+
+        var xmppParameters = XmppParameters.Create(xmppDomain, xmppUsername, xmppPassword, xmppTargetJid, xmppTrustHost);
+        if (xmppParameters == null)
+        {
+            return null;
+        }
+
+        return new AgentParameters(apiParameters, xmppParameters)
+        {
+            agentDirectory = agentDirectory,
             workingDirectory = workingDirectory,
             toolsConfigPath = toolsConfigPath,
             persistent = persistent
         };
     }
 
-    public static AgentParameters? Create(string? apiConfigPath, string? xmppConfigPath, string toolsConfigPath, bool persistent, string workingDirectory)
+    public static AgentParameters? Create(string? apiConfigPath, string? xmppConfigPath, string? toolsConfigPath, string? agentDirectory, string workingDirectory, bool persistent)
     {
         if (string.IsNullOrEmpty(apiConfigPath) || !File.Exists(apiConfigPath))
         {
@@ -320,6 +386,6 @@ class AgentParameters
         var xmppTargetJid = xmppConfig.Value<string>("xmppTargetJid");
         var xmppTrustHost = xmppConfig.Value<bool>("xmppTrustHost");
 
-        return Create(apiEndpoint, apiKey, apiModel, xmppDomain, xmppUsername, xmppPassword, xmppTargetJid, xmppTrustHost, toolsConfigPath, workingDirectory, persistent);
+        return Create(apiEndpoint, apiKey, apiModel, xmppDomain, xmppUsername, xmppPassword, xmppTargetJid, xmppTrustHost, toolsConfigPath, agentDirectory, workingDirectory, persistent);
     }
 }
