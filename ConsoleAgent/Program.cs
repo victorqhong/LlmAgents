@@ -322,23 +322,6 @@ void RootCommandHandler(InvocationContext context)
 
 LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, string id, string apiEndpoint, string apiKey, string model, out Tool[]? tools, bool loadMessages = false, string? systemPrompt = null, string? basePath = null, string? toolsFilePath = null)
 {
-    var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(basePath, "todo.db"));
-
-    tools = null;
-    if (!string.IsNullOrEmpty(toolsFilePath))
-    {
-        var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
-        var toolFactory = new ToolFactory(loggerFactory, toolsFile);
-
-        toolFactory.Register(agentCommunication);
-        toolFactory.Register(loggerFactory);
-        toolFactory.Register(todoDatabase);
-
-        toolFactory.AddParameter("basePath", basePath ?? Environment.CurrentDirectory);
-
-        tools = toolFactory.Load();
-    }
-
     List<JObject>? messages = null;
     if (loadMessages)
     {
@@ -353,7 +336,32 @@ LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentC
         ];
     }
 
-    return new LlmAgentApi(loggerFactory, id, apiEndpoint, apiKey, model, messages, tools);
+    var agent = new LlmAgentApi(loggerFactory, id, apiEndpoint, apiKey, model, messages);
+
+    var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(basePath, "todo.db"));
+
+    tools = null;
+    if (!string.IsNullOrEmpty(toolsFilePath))
+    {
+        var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
+        var toolFactory = new ToolFactory(loggerFactory, toolsFile);
+
+        toolFactory.Register(agentCommunication);
+        toolFactory.Register(loggerFactory);
+        toolFactory.Register(todoDatabase);
+        toolFactory.Register(agent);
+
+        toolFactory.AddParameter("basePath", basePath ?? Environment.CurrentDirectory);
+
+        tools = toolFactory.Load();
+
+        if (tools != null)
+        {
+            agent.AddTool(tools);
+        }
+    }
+
+    return agent;
 }
 
 return await rootCommand.InvokeAsync(args);
