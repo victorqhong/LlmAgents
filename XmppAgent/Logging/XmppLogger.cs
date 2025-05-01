@@ -37,7 +37,7 @@ namespace XmppAgent.Logging
             }
             catch (Exception e)
             {
-                xmppCommunication.SendMessage(e.Message);
+                Console.WriteLine(e);
             }
         }
     }
