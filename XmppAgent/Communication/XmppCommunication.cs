@@ -21,6 +21,11 @@ public class XmppCommunication : IAgentCommunication
 
     public Show Presence { get; private set; }
 
+    public XmppCommunication(XmppParameters xmppParameters)
+        : this(xmppParameters.xmppUsername, xmppParameters.xmppDomain, xmppParameters.xmppPassword, null, null, null, xmppParameters.xmppTrustHost)
+    {
+    }
+
     public XmppCommunication(string username, string domain, string password, string? resource = null, string? host = null, string? port = null, bool trustHost = false)
     {
         XmppClient = new XmppClient(conf =>
