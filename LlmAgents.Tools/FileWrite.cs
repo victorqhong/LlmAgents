@@ -79,7 +79,7 @@ public class FileWrite : Tool
                 return result;
             }
 
-            File.WriteAllText(path, contents.Replace("\n", Environment.NewLine));
+            File.WriteAllText(path, contents.Replace("\n", Environment.NewLine).Replace("\r\n", Environment.NewLine));
             result.Add("result", "success");
         }
         catch (Exception e)
