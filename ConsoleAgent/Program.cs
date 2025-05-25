@@ -116,7 +116,7 @@ void RootCommandHandler(InvocationContext context)
         optionRunConversation,
     };
 
-    var optionsMap = new Dictionary<string, Action>()
+    var optionsMap = new Dictionary<string, Func<Task>>()
     {
         { optionRunTool, RunTool },
         { optionRunConversation, RunConversation },
@@ -127,7 +127,7 @@ void RootCommandHandler(InvocationContext context)
         { optionPruneContext, PruneContext },
     };
 
-    void RunTool()
+    async Task RunTool()
     {
         if (tools == null)
         {
@@ -160,25 +160,25 @@ void RootCommandHandler(InvocationContext context)
         }
     }
 
-    void ChatMode()
+    async Task ChatMode()
     {
         while (true)
         {
             Console.Write("> ");
 
-            var line = consoleCommunication.WaitForMessage(cancellationToken);
+            var line = await consoleCommunication.WaitForMessage(cancellationToken);
             if (string.IsNullOrEmpty(line))
             {
                 break;
             }
 
-            var response = agent.GenerateCompletion(line, cancellationToken);
+            var response = await agent.GenerateCompletion(line, null, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 continue;
             }
 
-            consoleCommunication.SendMessage(response);
+            await consoleCommunication.SendMessage(response);
 
             if (persistent)
             {
@@ -187,7 +187,7 @@ void RootCommandHandler(InvocationContext context)
         }
     }
 
-    void RunConversation()
+    async Task RunConversation()
     {
         JObject CreateMessage(string role, string content)
         {
@@ -236,20 +236,20 @@ void RootCommandHandler(InvocationContext context)
                 messages1.Add(CreateMessage("user", agent2Response));
             }
 
-            agent1Response = agent1.GenerateCompletion(messages1);
+            agent1Response = await agent1.GenerateCompletion(messages1);
             Console.WriteLine($"{agent1.Id}> {agent1Response}");
             Console.WriteLine($"====================================");
             Console.ReadLine();
 
             messages2.Add(CreateMessage("user", agent1Response));
-            agent2Response = agent2.GenerateCompletion(messages2);
+            agent2Response = await agent2.GenerateCompletion(messages2);
             Console.WriteLine($"{agent2.Id}> {agent2Response}");
             Console.WriteLine($"====================================");
             Console.ReadLine();
         }
     }
 
-    void MeasureContext()
+    async Task MeasureContext()
     {
         var total = 0;
         foreach (var message in agent.Messages)
@@ -261,12 +261,12 @@ void RootCommandHandler(InvocationContext context)
         Console.WriteLine($"Message count: {agent.Messages.Count}");
     }
 
-    void ClearContext()
+    async Task ClearContext()
     {
         agent.Messages.Clear();
     }
 
-    void PrintContext()
+    async Task PrintContext()
     {
         foreach (var message in agent.Messages)
         {
@@ -274,7 +274,7 @@ void RootCommandHandler(InvocationContext context)
         }
     }
 
-    void PruneContext()
+    async Task PruneContext()
     {
         Console.Write("Number of messages to prune> ");
         var pruneResponse = Console.ReadLine();
@@ -341,7 +341,7 @@ LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentC
     var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(basePath, "todo.db"));
 
     tools = null;
-    if (!string.IsNullOrEmpty(toolsFilePath))
+    if (!string.IsNullOrEmpty(toolsFilePath) && System.IO.File.Exists(toolsFilePath))
     {
         var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
         var toolFactory = new ToolFactory(loggerFactory, toolsFile);

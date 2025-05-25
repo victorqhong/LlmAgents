@@ -29,11 +29,14 @@ namespace XmppAgent.Logging
 
             try
             {
-                xmppCommunication.SendMessage(message);
-                if (exception != null)
+                Task.Run(async () =>
                 {
-                    xmppCommunication.SendMessage(exception.Message);
-                }
+                    await xmppCommunication.SendMessage(message);
+                    if (exception != null)
+                    {
+                        await xmppCommunication.SendMessage(exception.Message);
+                    }
+                }).ConfigureAwait(false).GetAwaiter().GetResult();
             }
             catch (Exception e)
             {

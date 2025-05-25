@@ -51,11 +51,9 @@ public class XmppCommunication : IAgentCommunication
             Resource = !string.IsNullOrEmpty(resource) ? resource : string.Empty,
             Password = password,
         };
-
-        Initialize().ConfigureAwait(false).GetAwaiter().GetResult();
     }
 
-    private async Task Initialize()
+    public async Task Initialize()
     {
         await XmppClient.ConnectAsync();
 
@@ -73,13 +71,18 @@ public class XmppCommunication : IAgentCommunication
             });
     }
 
-    public void SendPresence(Show show)
+    public async Task SendPresence(Show show)
     {
-        XmppClient.SendPresenceAsync(show).ConfigureAwait(false).GetAwaiter().GetResult();
+        if (!Connected)
+        {
+            return;
+        }
+
+        await XmppClient.SendPresenceAsync(show);
         Presence = show;
     }
 
-    public string? WaitForMessage(CancellationToken cancellationToken = default)
+    public async Task<string?> WaitForMessage(CancellationToken cancellationToken = default)
     {
         if (!Connected)
         {
@@ -87,16 +90,6 @@ public class XmppCommunication : IAgentCommunication
         }
 
         string? body = null;
-        Action<XmppXElement> onNext = el =>
-        {
-            if (body != null)
-            {
-                return;
-            }
-
-            body = el.GetTag("body");
-        };
-
         using var subscriber = XmppClient.XmppXElementReceived
             .Where(el =>
             {
@@ -114,11 +107,19 @@ public class XmppCommunication : IAgentCommunication
                 var fromJid = new Jid(TargetJid);
                 return fromJid.EqualsBare(message.From);
             })
-            .Subscribe(onNext);
+            .Subscribe(el =>
+            {
+                if (body != null)
+                {
+                    return;
+                }
+
+                body = el.GetTag("body");
+            });
 
         var savedPresence = Presence;
 
-        XmppClient.SendPresenceAsync(Show.Chat).ConfigureAwait(false).GetAwaiter().GetResult();
+        await XmppClient.SendPresenceAsync(Show.Chat);
         while (string.IsNullOrEmpty(body))
         {
             if (cancellationToken.IsCancellationRequested)
@@ -129,18 +130,18 @@ public class XmppCommunication : IAgentCommunication
             Thread.Sleep(1000);
         }
 
-        XmppClient.SendPresenceAsync(savedPresence).ConfigureAwait(false).GetAwaiter().GetResult();
+        await XmppClient.SendPresenceAsync(savedPresence);
 
         return body;
     }
 
-    public void SendMessage(string message)
+    public async Task SendMessage(string message)
     {
         if (!Connected)
         {
             return;
         }
 
-        XmppClient.SendChatMessageAsync(new Jid(TargetJid), message).ConfigureAwait(false).GetAwaiter().GetResult();
+        await XmppClient.SendChatMessageAsync(new Jid(TargetJid), message);
     }
 }

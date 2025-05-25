@@ -137,7 +137,7 @@ async Task RootCommandHander(InvocationContext context)
             continue;
         }
 
-        agentTasks.Add(Task.Run(() => RunAgent(agentParameters)));
+        agentTasks.Add(Task.Run(async () => await RunAgent(agentParameters)));
     }
 
     if (agentTasks.Count < 1)
@@ -184,44 +184,45 @@ async Task AgentCommandHandler(InvocationContext context)
 
     if (parameters != null)
     {
-        await Task.Run(() => RunAgent(parameters));
+        await Task.Run(async () => await RunAgent(parameters));
     }
 }
 
-void RunAgent(AgentParameters agentParameters, CancellationToken cancellationToken = default)
+async Task RunAgent(AgentParameters agentParameters, CancellationToken cancellationToken = default)
 {
     var xmppCommunication = new XmppCommunication(
         agentParameters.xmppParameters.xmppUsername, agentParameters.xmppParameters.xmppDomain, agentParameters.xmppParameters.xmppPassword, trustHost: agentParameters.xmppParameters.xmppTrustHost)
     {
         TargetJid = agentParameters.xmppParameters.xmppTargetJid
     };
+    await xmppCommunication.Initialize();
 
     using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
 
-    var agent = CreateAgent(loggerFactory, xmppCommunication, 
-        agentParameters.apiParameters.apiModel, agentParameters.apiParameters.apiEndpoint, agentParameters.apiParameters.apiKey, agentParameters.apiParameters.apiModel, 
-        agentParameters.persistent, 
-        workingDirectory: agentParameters.workingDirectory, 
+    var agent = CreateAgent(loggerFactory, xmppCommunication,
+        agentParameters.apiParameters.apiModel, agentParameters.apiParameters.apiEndpoint, agentParameters.apiParameters.apiKey, agentParameters.apiParameters.apiModel,
+        agentParameters.persistent,
+        workingDirectory: agentParameters.workingDirectory,
         toolsFilePath: agentParameters.toolsConfigPath,
         agentDirectory: agentParameters.agentDirectory);
 
     while (!cancellationToken.IsCancellationRequested)
     {
-        var line = xmppCommunication.WaitForMessage(cancellationToken);
+        var line = await xmppCommunication.WaitForMessage(cancellationToken);
         if (string.IsNullOrEmpty(line))
         {
             continue;
         }
 
-        xmppCommunication.SendPresence(Show.DoNotDisturb);
+        await xmppCommunication.SendPresence(Show.DoNotDisturb);
 
-        var response = agent.GenerateCompletion(line, cancellationToken);
+        var response = await agent.GenerateCompletion(line, null, cancellationToken);
         if (string.IsNullOrEmpty(response))
         {
             continue;
         }
 
-        xmppCommunication.SendMessage(response);
+        await xmppCommunication.SendMessage(response);
 
         if (agentParameters.persistent)
         {

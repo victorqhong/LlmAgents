@@ -14,7 +14,7 @@ public class AskQuestion : Tool
         agentCommunication = toolFactory.Resolve<IAgentCommunication>();
     }
 
-    public override JObject Schema { get ; protected set; } = JObject.FromObject(new
+    public override JObject Schema { get; protected set; } = JObject.FromObject(new
     {
         type = "function",
         function = new
@@ -50,12 +50,15 @@ public class AskQuestion : Tool
 
         try
         {
-            var answer = string.Empty;
+            Task.Run(async () =>
+            {
+                var answer = string.Empty;
 
-            agentCommunication.SendMessage(question);
-            answer = agentCommunication.WaitForMessage();
+                await agentCommunication.SendMessage(question);
+                answer = await agentCommunication.WaitForMessage();
 
-            result.Add("answer", answer);
+                result.Add("answer", answer);
+            }).ConfigureAwait(false).GetAwaiter().GetResult();
         }
         catch (Exception e)
         {

@@ -75,15 +75,37 @@ public class LlmAgentApi
         ToolMap.Add(tool.Name, tool);
     }
 
-    public string? GenerateCompletion(string userMessage, CancellationToken cancellationToken = default)
+    public async Task<string?> GenerateCompletion(string userMessage, MessageContentImageUrl? imageUrl = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(userMessage);
 
-        Messages.Add(JObject.FromObject(new { role = "user", content = userMessage }));
-        return GenerateCompletion(Messages, cancellationToken);
+        var textContent = new JObject();
+        textContent.Add("type", "text");
+        textContent.Add("text", userMessage);
+
+        var content = new JArray();
+        content.Add(textContent);
+
+        if (imageUrl != null)
+        {
+            var url = string.Format("data:{0};base64,{1}", imageUrl.MimeType, imageUrl.DataBase64);
+
+            var imageContent = new JObject();
+            imageContent.Add("type", "image_url");
+            imageContent.Add("image_url", JObject.FromObject(new { url = url }));
+
+            content.Add(imageContent);
+        }
+
+        var message = new JObject();
+        message.Add("role", "user");
+        message.Add("content", content);
+
+        Messages.Add(message);
+        return await GenerateCompletion(Messages, cancellationToken);
     }
 
-    public string? GenerateCompletion(List<JObject> messages, CancellationToken cancellationToken = default)
+    public async Task<string?> GenerateCompletion(List<JObject> messages, CancellationToken cancellationToken = default)
     {
         if (messages == null || messages.Count < 1)
         {
@@ -97,7 +119,7 @@ public class LlmAgentApi
 
         var payload = GetPayload(Model, messages, MaxCompletionTokens, Temperature, ToolDefinitions, "auto");
 
-        var completion = Post(ApiEndpoint, ApiKey, payload, retryAttempt: 0, cancellationToken).ConfigureAwait(false).GetAwaiter().GetResult();
+        var completion = await Post(ApiEndpoint, ApiKey, payload, retryAttempt: 0, cancellationToken);
         if (completion == null)
         {
             if (cancellationToken.IsCancellationRequested)
@@ -108,7 +130,7 @@ public class LlmAgentApi
             throw new ApplicationException("Could not retrieve completion");
         }
 
-        var result = ProcessCompletion(completion, cancellationToken);
+        var result = await ProcessCompletion(completion, cancellationToken);
         if (string.IsNullOrEmpty(result))
         {
             if (cancellationToken.IsCancellationRequested)
@@ -122,7 +144,7 @@ public class LlmAgentApi
         return result;
     }
 
-    public string? ProcessCompletion(JObject completion, CancellationToken cancellationToken = default)
+    public async Task<string?> ProcessCompletion(JObject completion, CancellationToken cancellationToken = default)
     {
         if (cancellationToken.IsCancellationRequested)
         {
@@ -225,7 +247,7 @@ public class LlmAgentApi
                 }));
             }
 
-            return GenerateCompletion(Messages, cancellationToken);
+            return await GenerateCompletion(Messages, cancellationToken);
         }
         else
         {
