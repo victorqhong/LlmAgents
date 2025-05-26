@@ -1,13 +1,12 @@
 ﻿using LlmAgents.Communication;
 using System.Reactive.Linq;
+using XmppAgent.Xmpp;
 using XmppDotNet;
 using XmppDotNet.Extensions.Client.Message;
 using XmppDotNet.Extensions.Client.Presence;
 using XmppDotNet.Transport;
 using XmppDotNet.Transport.Socket;
-using XmppDotNet.Xml;
 using XmppDotNet.Xmpp;
-using XmppDotNet.Xmpp.Client;
 
 namespace XmppAgent.Communication;
 
@@ -20,6 +19,10 @@ public class XmppCommunication : IAgentCommunication
     public required string TargetJid { get; set; }
 
     public Show Presence { get; private set; }
+
+    private readonly IncomingMessageStateMachine incomingMessageStateMachine;
+
+    private readonly FileTransferStateMachine fileTransferStateMachine;
 
     public XmppCommunication(XmppParameters xmppParameters)
         : this(xmppParameters.xmppUsername, xmppParameters.xmppDomain, xmppParameters.xmppPassword, null, null, null, xmppParameters.xmppTrustHost)
@@ -51,6 +54,9 @@ public class XmppCommunication : IAgentCommunication
             Resource = !string.IsNullOrEmpty(resource) ? resource : string.Empty,
             Password = password,
         };
+
+        incomingMessageStateMachine = new IncomingMessageStateMachine(XmppClient);
+        fileTransferStateMachine = new FileTransferStateMachine(XmppClient);
     }
 
     public async Task Initialize()
@@ -89,38 +95,18 @@ public class XmppCommunication : IAgentCommunication
             return null;
         }
 
-        string? body = null;
-        using var subscriber = XmppClient.XmppXElementReceived
-            .Where(el =>
-            {
-                if (!el.OfType<Message>())
-                {
-                    return false;
-                }
+        if (string.IsNullOrEmpty(TargetJid))
+        {
+            return null;
+        }
 
-                var message = el.Cast<Message>();
-                if (message.Type != MessageType.Chat)
-                {
-                    return false;
-                }
-
-                var fromJid = new Jid(TargetJid);
-                return fromJid.EqualsBare(message.From);
-            })
-            .Subscribe(el =>
-            {
-                if (body != null)
-                {
-                    return;
-                }
-
-                body = el.GetTag("body");
-            });
+        incomingMessageStateMachine.TargetJid = TargetJid;
+        incomingMessageStateMachine.Reset();
 
         var savedPresence = Presence;
 
         await XmppClient.SendPresenceAsync(Show.Chat);
-        while (string.IsNullOrEmpty(body))
+        while (string.IsNullOrEmpty(incomingMessageStateMachine.Result))
         {
             if (cancellationToken.IsCancellationRequested)
             {
@@ -132,7 +118,7 @@ public class XmppCommunication : IAgentCommunication
 
         await XmppClient.SendPresenceAsync(savedPresence);
 
-        return body;
+        return incomingMessageStateMachine.Result;
     }
 
     public async Task SendMessage(string message)
