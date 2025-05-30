@@ -2,7 +2,7 @@
   "profiles": {
     "XmppAgent": {
       "commandName": "Project",
-      "commandLineArgs": "--apiConfig api.json --xmppConfig xmpp.json --toolsConfig tools.json --workingDirectory work",
+      "commandLineArgs": "agent --apiConfig api.json --xmppConfig xmpp.json --toolsConfig tools.json --workingDirectory work",
       "workingDirectory": "..\\Agent"
     }
   }
