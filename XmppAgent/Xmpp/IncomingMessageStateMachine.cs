@@ -1,56 +1,84 @@
 namespace XmppAgent.Xmpp;
 
+using LlmAgents.Agents;
 using System.Reactive.Linq;
 using XmppDotNet;
 using XmppDotNet.Xml;
 using XmppDotNet.Xmpp;
 using XmppDotNet.Xmpp.Client;
 
-public class IncomingMessageStateMachine : XmppStateMachine<string>
+public class IncomingMessageStateMachine : XmppStateMachine<MessageContentText>
 {
     private IDisposable? subscriber;
 
-    public string? TargetJid { get; set; }
+    private Jid? incomingMessageAddress;
 
     public IncomingMessageStateMachine(XmppClient xmppClient)
         : base(xmppClient)
     {
     }
 
-    public override void Reset()
+    public override void Begin()
     {
-        if (subscriber != null)
-        {
-            subscriber.Dispose();
-        }
-
         Result = null;
 
-        var fromJid = new Jid(TargetJid);
-        subscriber = XmppClient.XmppXElementReceived
-            .Where(el =>
-            {
-                if (!el.OfType<Message>())
-                {
-                    return false;
-                }
+        if (subscriber == null)
+        {
+            subscriber = XmppClient.XmppXElementReceived
+                .Where(FilterElement)
+                .Subscribe(SubscribeElement);
+        }
+    }
 
-                var message = el.Cast<Message>();
-                if (message.Type != MessageType.Chat)
-                {
-                    return false;
-                }
+    public override void End()
+    {
+        subscriber?.Dispose();
+        subscriber = null;
+    }
 
-                return fromJid.EqualsBare(message.From);
-            })
-            .Subscribe(el =>
-            {
-                if (Result != null)
-                {
-                    return;
-                }
+    public override void Run()
+    {
+    }
 
-                Result = el.GetTag("body");
-            });
+    public void SetIncomingMessageAddress(string address)
+    {
+        incomingMessageAddress = new Jid(address);
+    }
+
+    private bool FilterElement(XmppXElement el)
+    {
+        if (!el.OfType<Message>())
+        {
+            return false;
+        }
+
+        var message = el.Cast<Message>();
+        if (message.Type != MessageType.Chat)
+        {
+            return false;
+        }
+
+        if (message.From == null)
+        {
+            return false;
+        }
+
+        return message.From.EqualsBare(incomingMessageAddress);
+    }
+
+    private void SubscribeElement(XmppXElement el)
+    {
+        if (Result != null)
+        {
+            return;
+        }
+
+        var body = el.GetTag("body");
+        if (string.IsNullOrEmpty(body))
+        {
+            return;
+        }
+
+        Result = new MessageContentText { Text = body };
     }
 }

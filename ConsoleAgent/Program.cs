@@ -166,13 +166,9 @@ void RootCommandHandler(InvocationContext context)
         {
             Console.Write("> ");
 
-            var line = await consoleCommunication.WaitForMessage(cancellationToken);
-            if (string.IsNullOrEmpty(line))
-            {
-                break;
-            }
+            var content = await consoleCommunication.WaitForContent(cancellationToken);
 
-            var response = await agent.GenerateCompletion(line, null, cancellationToken);
+            var response = await agent.GenerateCompletion(content, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 continue;

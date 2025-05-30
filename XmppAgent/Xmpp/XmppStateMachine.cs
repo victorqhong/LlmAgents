@@ -15,5 +15,9 @@ public abstract class XmppStateMachine<T>
         XmppClient = xmppClient;
     }
 
-    public abstract void Reset();
+    public abstract void Begin();
+
+    public abstract void End();
+
+    public abstract void Run();
 }

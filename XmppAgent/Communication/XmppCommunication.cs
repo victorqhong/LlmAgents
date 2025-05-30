@@ -1,12 +1,16 @@
-﻿using LlmAgents.Communication;
+﻿using LlmAgents.Agents;
+using LlmAgents.Communication;
 using System.Reactive.Linq;
+using System.Xml.Linq;
 using XmppAgent.Xmpp;
 using XmppDotNet;
 using XmppDotNet.Extensions.Client.Message;
 using XmppDotNet.Extensions.Client.Presence;
 using XmppDotNet.Transport;
 using XmppDotNet.Transport.Socket;
+using XmppDotNet.Xml;
 using XmppDotNet.Xmpp;
+using XmppDotNet.Xmpp.Client;
 
 namespace XmppAgent.Communication;
 
@@ -20,6 +24,8 @@ public class XmppCommunication : IAgentCommunication
 
     public Show Presence { get; private set; }
 
+    public bool Debug { get; set; } = false;
+
     private readonly IncomingMessageStateMachine incomingMessageStateMachine;
 
     private readonly FileTransferStateMachine fileTransferStateMachine;
@@ -31,23 +37,23 @@ public class XmppCommunication : IAgentCommunication
 
     public XmppCommunication(string username, string domain, string password, string? resource = null, string? host = null, string? port = null, bool trustHost = false)
     {
-        XmppClient = new XmppClient(conf =>
+        XmppClient = new XmppClient(configuration =>
         {
             if (!string.IsNullOrEmpty(host) && !string.IsNullOrEmpty(port))
             {
-                conf.UseSocketTransport(new StaticNameResolver(new Uri($"tcp://{host}:{port}")));
+                configuration.UseSocketTransport(new StaticNameResolver(new Uri($"tcp://{host}:{port}")));
             }
             else
             {
-                conf.UseSocketTransport();
+                configuration.UseSocketTransport();
             }
 
             if (trustHost)
             {
-                conf.WithCertificateValidator(new AlwaysAcceptCertificateValidator());
+                configuration.WithCertificateValidator(new AlwaysAcceptCertificateValidator());
             }
 
-            conf.AutoReconnect = true;
+            configuration.AutoReconnect = true;
         })
         {
             Jid = $"{username}@{domain}",
@@ -61,7 +67,10 @@ public class XmppCommunication : IAgentCommunication
 
     public async Task Initialize()
     {
-        await XmppClient.ConnectAsync();
+        if (Debug)
+        {
+            XmppClient.XmppXElementReceived.Subscribe(Console.WriteLine);
+        }
 
         XmppClient.StateChanged
             .Subscribe(state =>
@@ -75,6 +84,10 @@ public class XmppCommunication : IAgentCommunication
                     Connected = false;
                 }
             });
+
+        HandleDiscoInfo();
+
+        await XmppClient.ConnectAsync();
     }
 
     public async Task SendPresence(Show show)
@@ -88,37 +101,58 @@ public class XmppCommunication : IAgentCommunication
         Presence = show;
     }
 
-    public async Task<string?> WaitForMessage(CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<IMessageContent>> WaitForContent(CancellationToken cancellationToken = default)
     {
         if (!Connected)
         {
-            return null;
+            return [];
         }
 
         if (string.IsNullOrEmpty(TargetJid))
         {
-            return null;
+            return [];
         }
 
-        incomingMessageStateMachine.TargetJid = TargetJid;
-        incomingMessageStateMachine.Reset();
+        incomingMessageStateMachine.SetIncomingMessageAddress(TargetJid);
+
+        incomingMessageStateMachine.Begin();
+        fileTransferStateMachine.Begin();
 
         var savedPresence = Presence;
 
         await XmppClient.SendPresenceAsync(Show.Chat);
-        while (string.IsNullOrEmpty(incomingMessageStateMachine.Result))
+        while (incomingMessageStateMachine.Result == null)
         {
             if (cancellationToken.IsCancellationRequested)
             {
                 break;
             }
 
+            incomingMessageStateMachine.Run();
+            fileTransferStateMachine.Run();
+
             Thread.Sleep(1000);
         }
 
         await XmppClient.SendPresenceAsync(savedPresence);
 
-        return incomingMessageStateMachine.Result;
+        fileTransferStateMachine.End();
+        incomingMessageStateMachine.End();
+
+        if (incomingMessageStateMachine.Result == null)
+        {
+            return [];
+        }
+
+        var content = new List<IMessageContent>();
+        content.Add(incomingMessageStateMachine.Result);
+
+        if (fileTransferStateMachine.Result != null)
+        {
+            content.AddRange(fileTransferStateMachine.Result);
+        }
+
+        return content;
     }
 
     public async Task SendMessage(string message)
@@ -129,5 +163,64 @@ public class XmppCommunication : IAgentCommunication
         }
 
         await XmppClient.SendChatMessageAsync(new Jid(TargetJid), message);
+    }
+
+    private void HandleDiscoInfo()
+    {
+        Func<string, XmppXElement> CreateFeature = var =>
+        {
+            var el = new XmppXElement(XName.Get("feature", "http://jabber.org/protocol/disco#info"));
+            el.SetAttribute("var", var);
+
+            return el;
+        };
+        XmppClient.XmppXElementReceived
+            .Where(el =>
+            {
+                if (!el.OfType<Iq>())
+                {
+                    return false;
+                }
+
+                var query = el.Element(XName.Get("query", "http://jabber.org/protocol/disco#info"));
+                if (query == null)
+                {
+                    return false;
+                }
+
+                return true;
+            })
+            .Subscribe(el =>
+            {
+                var elQuery = el.Element(XName.Get("query", "http://jabber.org/protocol/disco#info"));
+                if (elQuery == null)
+                {
+                    return;
+                }
+
+                var elTo = el.GetAttributeJid("to");
+                var elFrom = el.GetAttributeJid("from");
+                var elId = el.GetAttribute("id");
+
+                var elNode = elQuery.Attribute("node");
+
+                var resultQuery = new XmppXElement(XName.Get("query", "http://jabber.org/protocol/disco#info"));
+
+                var resultIdentity = new XmppXElement(XName.Get("identity", "http://jabber.org/protocol/disco#info"))
+                    .SetAttribute("category", "client")
+                    .SetAttribute("type", "pc")
+                    .SetAttribute("name", "LlmAgents");
+                resultQuery.Add(resultIdentity);
+
+                resultQuery.Add(CreateFeature("http://jabber.org/protocol/disco#info"));
+                resultQuery.Add(CreateFeature("urn:xmpp:jingle:1"));
+                resultQuery.Add(CreateFeature("urn:xmpp:jingle:apps:file-transfer:5"));
+                resultQuery.Add(CreateFeature("urn:xmpp:jingle:transports:ibb:1"));
+
+                var result = new Iq(elFrom, elTo, IqType.Result, elId);
+                result.Add(resultQuery);
+
+                Task.Run(async () => await XmppClient.SendIqAsync(result));
+            });
     }
 }

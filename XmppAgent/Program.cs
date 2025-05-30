@@ -195,6 +195,9 @@ async Task RunAgent(AgentParameters agentParameters, CancellationToken cancellat
     {
         TargetJid = agentParameters.xmppParameters.xmppTargetJid
     };
+#if DEBUG
+    xmppCommunication.Debug = true;
+#endif
     await xmppCommunication.Initialize();
 
     using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
@@ -208,15 +211,11 @@ async Task RunAgent(AgentParameters agentParameters, CancellationToken cancellat
 
     while (!cancellationToken.IsCancellationRequested)
     {
-        var line = await xmppCommunication.WaitForMessage(cancellationToken);
-        if (string.IsNullOrEmpty(line))
-        {
-            continue;
-        }
+        var messageContent = await xmppCommunication.WaitForContent(cancellationToken);
 
         await xmppCommunication.SendPresence(Show.DoNotDisturb);
 
-        var response = await agent.GenerateCompletion(line, null, cancellationToken);
+        var response = await agent.GenerateCompletion(messageContent, cancellationToken);
         if (string.IsNullOrEmpty(response))
         {
             continue;
@@ -233,23 +232,6 @@ async Task RunAgent(AgentParameters agentParameters, CancellationToken cancellat
 
 LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false, string? systemPrompt = null, string? workingDirectory = null, string? agentDirectory = null, string? toolsFilePath = null)
 {
-    Tool[]? tools = null;
-    if (!string.IsNullOrEmpty(toolsFilePath))
-    {
-        var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(workingDirectory, "todo.db"));
-
-        var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
-        var toolFactory = new ToolFactory(loggerFactory, toolsFile);
-
-        toolFactory.Register(agentCommunication);
-        toolFactory.Register(loggerFactory);
-        toolFactory.Register(todoDatabase);
-
-        toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
-
-        tools = toolFactory.Load();
-    }
-
     List<JObject>? messages = null;
     if (loadMessages)
     {
@@ -264,7 +246,30 @@ LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentC
         ];
     }
 
-    return new LlmAgentApi(loggerFactory, id, apiEndpoint, apiKey, model, messages, tools);
+    var agent = new LlmAgentApi(loggerFactory, id, apiEndpoint, apiKey, model, messages);
+
+    if (!string.IsNullOrEmpty(toolsFilePath))
+    {
+        var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(workingDirectory, "todo.db"));
+
+        var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
+        var toolFactory = new ToolFactory(loggerFactory, toolsFile);
+
+        toolFactory.Register(agentCommunication);
+        toolFactory.Register(loggerFactory);
+        toolFactory.Register(todoDatabase);
+        toolFactory.Register(agent);
+
+        toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
+
+        var tools = toolFactory.Load();
+        if (tools != null)
+        {
+            agent.AddTool(tools);
+        }
+    }
+
+    return agent;
 }
 
 return await rootCommand.InvokeAsync(args);

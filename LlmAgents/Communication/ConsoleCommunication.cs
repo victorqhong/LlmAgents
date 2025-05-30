@@ -1,10 +1,12 @@
+using LlmAgents.Agents;
+
 namespace LlmAgents.Communication;
 
 public class ConsoleCommunication : IAgentCommunication
 {
-    public async Task<string?> WaitForMessage(CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<IMessageContent>> WaitForContent(CancellationToken cancellationToken = default)
     {
-        return Console.ReadLine();
+        return new[] { new MessageContentText { Text = Console.ReadLine() ?? string.Empty } };
     }
 
     public async Task SendMessage(string message)
