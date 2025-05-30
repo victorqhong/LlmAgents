@@ -13,6 +13,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LlmAgents.Tests", "LlmAgent
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LlmAgents.Tools", "LlmAgents.Tools\LlmAgents.Tools.csproj", "{E048B1C3-29D2-4B50-BF7F-D9A1B7C57883}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Agent", "Agent", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+	ProjectSection(SolutionItems) = preProject
+		Agent\api.json = Agent\api.json
+		Agent\tools.json = Agent\tools.json
+		Agent\xmpp.json = Agent\xmpp.json
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
