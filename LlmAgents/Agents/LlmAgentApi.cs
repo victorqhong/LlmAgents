@@ -75,26 +75,31 @@ public class LlmAgentApi
         ToolMap.Add(tool.Name, tool);
     }
 
-    public async Task<string?> GenerateCompletion(string userMessage, MessageContentImageUrl? imageUrl = null, CancellationToken cancellationToken = default)
+    public async Task<string?> GenerateCompletion(IEnumerable<IMessageContent> messageContents, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrEmpty(userMessage);
-
-        var textContent = new JObject();
-        textContent.Add("type", "text");
-        textContent.Add("text", userMessage);
+        ArgumentNullException.ThrowIfNull(messageContents);
 
         var content = new JArray();
-        content.Add(textContent);
 
-        if (imageUrl != null)
+        foreach (var messageContent in messageContents)
         {
-            var url = string.Format("data:{0};base64,{1}", imageUrl.MimeType, imageUrl.DataBase64);
+            if (messageContent is MessageContentText userMessage)
+            {
+                var textContent = new JObject();
+                textContent.Add("type", "text");
+                textContent.Add("text", userMessage.Text);
+                content.Add(textContent);
 
-            var imageContent = new JObject();
-            imageContent.Add("type", "image_url");
-            imageContent.Add("image_url", JObject.FromObject(new { url = url }));
+            }
+            else if (messageContent is MessageContentImageUrl imageUrl)
+            {
+                var url = string.Format("data:{0};base64,{1}", imageUrl.MimeType, imageUrl.DataBase64);
 
-            content.Add(imageContent);
+                var imageContent = new JObject();
+                imageContent.Add("type", "image_url");
+                imageContent.Add("image_url", JObject.FromObject(new { url = url }));
+                content.Add(imageContent);
+            }
         }
 
         var message = new JObject();
@@ -102,6 +107,7 @@ public class LlmAgentApi
         message.Add("content", content);
 
         Messages.Add(message);
+
         return await GenerateCompletion(Messages, cancellationToken);
     }
 

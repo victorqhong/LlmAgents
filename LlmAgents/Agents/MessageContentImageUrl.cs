@@ -1,7 +1,7 @@
 namespace LlmAgents.Agents;
 
-public class MessageContentImageUrl
+public class MessageContentImageUrl : IMessageContent
 {
-    required public string MimeType;
-    required public string DataBase64;
+    public required string MimeType;
+    public required string DataBase64;
 }
