@@ -1,5 +1,6 @@
 namespace LlmAgents.Tools;
 
+using LlmAgents.Agents;
 using LlmAgents.Communication;
 using Newtonsoft.Json.Linq;
 using System;
@@ -55,7 +56,19 @@ public class AskQuestion : Tool
                 var answer = string.Empty;
 
                 await agentCommunication.SendMessage(question);
-                answer = await agentCommunication.WaitForMessage();
+                while (string.IsNullOrEmpty(answer))
+                {
+                    foreach (var content in await agentCommunication.WaitForContent())
+                    {
+                        if (content is not MessageContentText textContent)
+                        {
+                            Thread.Sleep(1000);
+                            continue;
+                        }
+
+                        answer = textContent.Text;
+                    }
+                }
 
                 result.Add("answer", answer);
             }).ConfigureAwait(false).GetAwaiter().GetResult();

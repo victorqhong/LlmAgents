@@ -80,7 +80,7 @@ public class WebSearch : Tool
             JObject? response = null;
             using (var httpClient = new HttpClient())
             {
-                var uri = $"{baseUrl}?mkt={market}&safeSearch={safeSearch}&count={count}&offset={offset}&q={query}";
+                var uri = $"{baseUrl}?mkt={market}&safeSearch={safeSearch}&count={count}&offset={offset}&q={Uri.EscapeDataString(query)}";
                 var httpRequest = new HttpRequestMessage(HttpMethod.Get, uri);
                 httpRequest.Headers.Add("Ocp-Apim-Subscription-Key", apiKey);
 
