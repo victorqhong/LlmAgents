@@ -225,7 +225,7 @@ async Task RunAgent(AgentParameters agentParameters, CancellationToken cancellat
 
         if (agentParameters.persistent)
         {
-            LlmAgentApi.SaveMessages(agent);
+            LlmAgentApi.SaveMessages(agent, agentParameters.agentDirectory);
         }
     }
 }
