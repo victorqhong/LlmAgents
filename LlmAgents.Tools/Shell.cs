@@ -36,7 +36,7 @@ public class Shell : Tool
         Process.StartInfo.ArgumentList.Add("-NoLogo");
         Process.StartInfo.ArgumentList.Add("-NonInteractive");
 
-        Process.StartInfo.WorkingDirectory = workingDirectory;
+        Process.StartInfo.WorkingDirectory = Path.IsPathFullyQualified(workingDirectory) ? workingDirectory : Path.Combine(Environment.CurrentDirectory, workingDirectory);
 
         Process.StartInfo.UseShellExecute = false;
         Process.StartInfo.RedirectStandardOutput = true;
