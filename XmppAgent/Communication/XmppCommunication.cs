@@ -1,5 +1,5 @@
-﻿using LlmAgents.Agents;
-using LlmAgents.Communication;
+﻿using LlmAgents.Communication;
+using LlmAgents.LlmApi.Content;
 using System.Reactive.Linq;
 using System.Xml.Linq;
 using XmppAgent.Xmpp;

@@ -1,7 +1,7 @@
 namespace LlmAgents.Tools;
 
-using LlmAgents.Agents;
 using LlmAgents.Communication;
+using LlmAgents.LlmApi.Content;
 using Newtonsoft.Json.Linq;
 using System;
 

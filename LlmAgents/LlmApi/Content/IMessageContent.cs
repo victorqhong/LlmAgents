@@ -1,4 +1,4 @@
-namespace LlmAgents.Agents;
+namespace LlmAgents.LlmApi.Content;
 
 public interface IMessageContent
 {

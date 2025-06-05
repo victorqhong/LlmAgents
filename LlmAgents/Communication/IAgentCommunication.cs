@@ -1,4 +1,4 @@
-using LlmAgents.Agents;
+using LlmAgents.LlmApi.Content;
 
 namespace LlmAgents.Communication;
 

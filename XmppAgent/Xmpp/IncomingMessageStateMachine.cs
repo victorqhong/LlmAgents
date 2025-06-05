@@ -1,6 +1,6 @@
 namespace XmppAgent.Xmpp;
 
-using LlmAgents.Agents;
+using LlmAgents.LlmApi.Content;
 using System.Reactive.Linq;
 using XmppDotNet;
 using XmppDotNet.Xml;

@@ -10,6 +10,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using LlmAgents.Tools;
 using Newtonsoft.Json;
+using LlmAgents.LlmApi.Content;
 
 public class LlmAgentApi
 {
@@ -180,15 +181,16 @@ public class LlmAgentApi
         }
 
         var content = message["content"]?.ToString();
+        if (!string.IsNullOrEmpty(content))
+        {
+            Messages.Add(JObject.FromObject(new { role = "assistant", content }));
+        }
+
         if (string.Equals(finishReason, "stop"))
         {
-            if (!string.IsNullOrEmpty(content))
+            if (string.IsNullOrEmpty(content))
             {
-                Messages.Add(JObject.FromObject(new { role = "assistant", content }));
-            }
-            else
-            {
-                Log.LogError($"Content is null or empty. Finish reason: {finishReason}");
+                Log.LogError($"Content is null or empty");
             }
 
             return content;
