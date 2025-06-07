@@ -1,6 +1,7 @@
 ﻿using LlmAgents;
 using LlmAgents.Agents;
 using LlmAgents.Communication;
+using LlmAgents.LlmApi;
 using LlmAgents.Todo;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
@@ -13,7 +14,7 @@ var environmentVariableTarget = RuntimeInformation.IsOSPlatform(OSPlatform.Windo
 
 var apiEndpointOption = new Option<string>(
     name: "--apiEndpoint",
-    description: "HTTP(s) endpoint of OpenAI compatiable API");
+    description: "HTTP(s) endpoint of OpenAI compatible API");
 
 var apiKeyOption = new Option<string>(
     name: "--apiKey",
@@ -53,7 +54,7 @@ rootCommand.AddOption(persistentOption);
 rootCommand.AddOption(toolsConfigOption);
 rootCommand.AddOption(workingDirectoryOption);
 
-void RootCommandHandler(InvocationContext context)
+async Task RootCommandHandler(InvocationContext context)
 {
     var apiEndpoint = string.Empty;
     var apiKey = string.Empty;
@@ -98,33 +99,18 @@ void RootCommandHandler(InvocationContext context)
 
     var optionRunTool = "Run tool";
     var optionChatMode = "Chat mode";
-    var optionMeasureContext = "Measure context";
-    var optionClearContext = "Clear context";
-    var optionPrintContext = "Print context";
-    var optionPruneContext = "Prune context";
-    var optionRunConversation = "Run conversation";
     var optionExit = "Exit";
 
     var options = new string[]
     {
         optionRunTool,
         optionChatMode,
-        optionPrintContext,
-        optionMeasureContext,
-        optionClearContext,
-        optionPruneContext,
-        optionRunConversation,
     };
 
     var optionsMap = new Dictionary<string, Func<Task>>()
     {
         { optionRunTool, RunTool },
-        { optionRunConversation, RunConversation },
         { optionChatMode, ChatMode },
-        { optionPrintContext, PrintContext },
-        { optionMeasureContext, MeasureContext },
-        { optionClearContext, ClearContext },
-        { optionPruneContext, PruneContext },
     };
 
     async Task RunTool()
@@ -162,13 +148,17 @@ void RootCommandHandler(InvocationContext context)
 
     async Task ChatMode()
     {
-        while (true)
+        while (!cancellationToken.IsCancellationRequested)
         {
             Console.Write("> ");
 
             var content = await consoleCommunication.WaitForContent(cancellationToken);
+            if (cancellationToken.IsCancellationRequested || content == null)
+            {
+                break;
+            }
 
-            var response = await agent.GenerateCompletion(content, cancellationToken);
+            var response = await agent.llmApi.GenerateCompletion(content, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 continue;
@@ -178,7 +168,20 @@ void RootCommandHandler(InvocationContext context)
 
             if (persistent)
             {
-                LlmAgentApi.SaveMessages(agent);
+                agent.SaveMessages();
+            }
+
+            var toolCallResponse = await agent.llmApi.ProcessToolCalls(cancellationToken);
+            if (string.IsNullOrEmpty(toolCallResponse))
+            {
+                continue;
+            }
+
+            await consoleCommunication.SendMessage(toolCallResponse);
+
+            if (persistent)
+            {
+                agent.SaveMessages();
             }
         }
     }
@@ -214,8 +217,8 @@ void RootCommandHandler(InvocationContext context)
             CreateMessage("system", systemPrompt2)
         };
 
-        var agent1 = new LlmAgentApi(loggerFactory, "Agent1", apiEndpoint, apiKey, apiModel, messages1, tools);
-        var agent2 = new LlmAgentApi(loggerFactory, "Agent2", apiEndpoint, apiKey, apiModel, messages2, tools);
+        var agent1 = new LlmApiOpenAi(loggerFactory, "Agent1", apiEndpoint, apiKey, apiModel, messages1, tools);
+        var agent2 = new LlmApiOpenAi(loggerFactory, "Agent2", apiEndpoint, apiKey, apiModel, messages2, tools);
 
         messages1.Add(CreateMessage("user", initialMessage));
         messages2.Add(CreateMessage("assistant", initialMessage));
@@ -245,49 +248,6 @@ void RootCommandHandler(InvocationContext context)
         }
     }
 
-    async Task MeasureContext()
-    {
-        var total = 0;
-        foreach (var message in agent.Messages)
-        {
-            total += message.ToString().Length;
-        }
-
-        Console.WriteLine($"Context size: {total}");
-        Console.WriteLine($"Message count: {agent.Messages.Count}");
-    }
-
-    async Task ClearContext()
-    {
-        agent.Messages.Clear();
-    }
-
-    async Task PrintContext()
-    {
-        foreach (var message in agent.Messages)
-        {
-            Console.WriteLine(message);
-        }
-    }
-
-    async Task PruneContext()
-    {
-        Console.Write("Number of messages to prune> ");
-        var pruneResponse = Console.ReadLine();
-        if (string.IsNullOrEmpty(pruneResponse))
-        {
-            return;
-        }
-
-        var pruneCount = int.Parse(pruneResponse);
-        agent.Messages.RemoveRange(0, pruneCount);
-
-        while (agent.Messages.Count > 0 && !string.Equals(agent.Messages[0].Value<string>("role"), "user"))
-        {
-            agent.Messages.RemoveAt(0);
-        }
-    }
-
     while (!cancellationToken.IsCancellationRequested)
     {
         for (int i = 0; i < options.Length; i++)
@@ -312,27 +272,13 @@ void RootCommandHandler(InvocationContext context)
         }
 
         var choice = int.Parse(input) - 1;
-        optionsMap[options[choice]]();
+        await optionsMap[options[choice]]();
     }
 }
 
-LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, string id, string apiEndpoint, string apiKey, string model, out Tool[]? tools, bool loadMessages = false, string? systemPrompt = null, string? basePath = null, string? toolsFilePath = null)
+LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, string id, string apiEndpoint, string apiKey, string model, out Tool[]? tools, bool persistent = false, string? systemPrompt = null, string? basePath = null, string? toolsFilePath = null)
 {
-    List<JObject>? messages = null;
-    if (loadMessages)
-    {
-        messages = LlmAgentApi.LoadMessages(id);
-    }
-
-    if (messages == null)
-    {
-        messages =
-        [
-            JObject.FromObject(new { role = "system", content = systemPrompt ?? Prompts.DefaultSystemPrompt })
-        ];
-    }
-
-    var agent = new LlmAgentApi(loggerFactory, id, apiEndpoint, apiKey, model, messages);
+    var llmApi = new LlmApiOpenAi(loggerFactory, id, apiEndpoint, apiKey, model);
 
     var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(basePath, "todo.db"));
 
@@ -345,7 +291,7 @@ LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentC
         toolFactory.Register(agentCommunication);
         toolFactory.Register(loggerFactory);
         toolFactory.Register(todoDatabase);
-        toolFactory.Register(agent);
+        toolFactory.Register(llmApi);
 
         toolFactory.AddParameter("basePath", basePath ?? Environment.CurrentDirectory);
 
@@ -353,8 +299,24 @@ LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentC
 
         if (tools != null)
         {
-            agent.AddTool(tools);
+            llmApi.AddTool(tools);
         }
+    }
+
+    var agent = new LlmAgent(llmApi, agentCommunication)
+    {
+        Persistent = persistent,
+        PersistentMessagesPath = basePath ?? Environment.CurrentDirectory
+    };
+
+    if (persistent)
+    {
+        agent.LoadMessages();
+    }
+
+    if (agent.llmApi.Messages.Count == 0)
+    {
+        agent.llmApi.Messages.Add(JObject.FromObject(new { role = "system", content = systemPrompt ?? Prompts.DefaultSystemPrompt }));
     }
 
     return agent;

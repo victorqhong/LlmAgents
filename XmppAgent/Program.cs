@@ -1,6 +1,7 @@
 ﻿using LlmAgents;
 using LlmAgents.Agents;
 using LlmAgents.Communication;
+using LlmAgents.LlmApi;
 using LlmAgents.Todo;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
@@ -10,7 +11,6 @@ using System.CommandLine.Invocation;
 using System.Runtime.InteropServices;
 using XmppAgent.Communication;
 using XmppAgent.Logging;
-using XmppDotNet.Xmpp;
 
 var environmentVariableTarget = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? EnvironmentVariableTarget.User : EnvironmentVariableTarget.Process;
 
@@ -137,7 +137,7 @@ async Task RootCommandHander(InvocationContext context)
             continue;
         }
 
-        agentTasks.Add(Task.Run(async () => await RunAgent(agentParameters)));
+        agentTasks.Add(RunAgent(agentParameters));
     }
 
     if (agentTasks.Count < 1)
@@ -184,73 +184,42 @@ async Task AgentCommandHandler(InvocationContext context)
 
     if (parameters != null)
     {
-        await Task.Run(async () => await RunAgent(parameters));
+        await RunAgent(parameters);
     }
 }
 
-async Task RunAgent(AgentParameters agentParameters, CancellationToken cancellationToken = default)
+Task RunAgent(AgentParameters agentParameters, CancellationToken cancellationToken = default)
 {
-    var xmppCommunication = new XmppCommunication(
-        agentParameters.xmppParameters.xmppUsername, agentParameters.xmppParameters.xmppDomain, agentParameters.xmppParameters.xmppPassword, trustHost: agentParameters.xmppParameters.xmppTrustHost)
+    return Task.Run(async () =>
     {
-        TargetJid = agentParameters.xmppParameters.xmppTargetJid
-    };
+        var xmppCommunication = new XmppCommunication(
+            agentParameters.xmppParameters.xmppUsername, agentParameters.xmppParameters.xmppDomain, agentParameters.xmppParameters.xmppPassword, trustHost: agentParameters.xmppParameters.xmppTrustHost)
+        {
+            TargetJid = agentParameters.xmppParameters.xmppTargetJid
+        };
 #if DEBUG
-    xmppCommunication.Debug = true;
+        xmppCommunication.Debug = true;
 #endif
-    await xmppCommunication.Initialize();
+        await xmppCommunication.Initialize();
 
-    using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
 
-    var agent = CreateAgent(loggerFactory, xmppCommunication,
-        agentParameters.apiParameters.apiModel, agentParameters.apiParameters.apiEndpoint, agentParameters.apiParameters.apiKey, agentParameters.apiParameters.apiModel,
-        agentParameters.persistent,
-        workingDirectory: agentParameters.workingDirectory,
-        toolsFilePath: agentParameters.toolsConfigPath,
-        agentDirectory: agentParameters.agentDirectory);
+        var agent = CreateAgent(loggerFactory, xmppCommunication, agentParameters.apiParameters, agentParameters.persistent,
+            workingDirectory: agentParameters.workingDirectory,
+            toolsFilePath: agentParameters.toolsConfigPath,
+            agentDirectory: agentParameters.agentDirectory);
 
-    while (!cancellationToken.IsCancellationRequested)
-    {
-        var messageContent = await xmppCommunication.WaitForContent(cancellationToken);
-
-        await xmppCommunication.SendPresence(Show.DoNotDisturb);
-
-        var response = await agent.GenerateCompletion(messageContent, cancellationToken);
-        if (string.IsNullOrEmpty(response))
-        {
-            continue;
-        }
-
-        await xmppCommunication.SendMessage(response);
-
-        if (agentParameters.persistent)
-        {
-            LlmAgentApi.SaveMessages(agent, agentParameters.agentDirectory);
-        }
-    }
+        await agent.Run(cancellationToken);
+    }, cancellationToken);
 }
 
-LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, string id, string apiEndpoint, string apiKey, string model, bool loadMessages = false, string? systemPrompt = null, string? workingDirectory = null, string? agentDirectory = null, string? toolsFilePath = null)
+LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, ApiParameters apiParameters, bool persistent = false, string? systemPrompt = null, string? workingDirectory = null, string? agentDirectory = null, string? toolsFilePath = null)
 {
-    List<JObject>? messages = null;
-    if (loadMessages)
-    {
-        messages = LlmAgentApi.LoadMessages(id, agentDirectory);
-    }
-
-    if (messages == null)
-    {
-        messages =
-        [
-            JObject.FromObject(new { role = "system", content = systemPrompt ?? Prompts.DefaultSystemPrompt })
-        ];
-    }
-
-    var agent = new LlmAgentApi(loggerFactory, id, apiEndpoint, apiKey, model, messages);
+    var llmApi = new LlmApiOpenAi(loggerFactory, apiParameters.apiModel, apiParameters.apiEndpoint, apiParameters.apiKey, apiParameters.apiModel);
 
     if (!string.IsNullOrEmpty(toolsFilePath))
     {
-        var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(workingDirectory, "todo.db"));
+        var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(agentDirectory, "todo.db"));
 
         var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
         var toolFactory = new ToolFactory(loggerFactory, toolsFile);
@@ -258,15 +227,31 @@ LlmAgentApi CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentC
         toolFactory.Register(agentCommunication);
         toolFactory.Register(loggerFactory);
         toolFactory.Register(todoDatabase);
-        toolFactory.Register(agent);
+        toolFactory.Register(llmApi);
 
         toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
 
         var tools = toolFactory.Load();
         if (tools != null)
         {
-            agent.AddTool(tools);
+            llmApi.AddTool(tools);
         }
+    }
+
+    var agent = new LlmAgent(llmApi, agentCommunication)
+    {
+        Persistent = persistent,
+        PersistentMessagesPath = agentDirectory ?? Environment.CurrentDirectory
+    };
+
+    if (persistent)
+    {
+        agent.LoadMessages();
+    }
+
+    if (agent.llmApi.Messages.Count == 0)
+    {
+        agent.llmApi.Messages.Add(JObject.FromObject(new { role = "system", content = systemPrompt ?? Prompts.DefaultSystemPrompt }));
     }
 
     return agent;

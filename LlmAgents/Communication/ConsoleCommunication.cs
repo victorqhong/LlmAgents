@@ -4,9 +4,15 @@ namespace LlmAgents.Communication;
 
 public class ConsoleCommunication : IAgentCommunication
 {
-    public async Task<IEnumerable<IMessageContent>> WaitForContent(CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<IMessageContent>?> WaitForContent(CancellationToken cancellationToken = default)
     {
-        return new[] { new MessageContentText { Text = Console.ReadLine() ?? string.Empty } };
+        var line = Console.ReadLine();
+        if (line == null)
+        {
+            return null;
+        }
+
+        return new[] { new MessageContentText { Text = line } };
     }
 
     public async Task SendMessage(string message)

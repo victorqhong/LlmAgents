@@ -1,16 +1,16 @@
-﻿using LlmAgents.Agents;
+﻿using LlmAgents.LlmApi;
 using Newtonsoft.Json.Linq;
 
 namespace LlmAgents.Tools;
 
 public class AgentContextCount : Tool
 {
-    private readonly LlmAgentApi agent;
+    private readonly LlmApiOpenAi agent;
 
     public AgentContextCount(ToolFactory toolFactory)
         : base(toolFactory)
     {
-        agent = toolFactory.Resolve<LlmAgentApi>();
+        agent = toolFactory.Resolve<LlmApiOpenAi>();
 
         ArgumentNullException.ThrowIfNull(agent);
     }

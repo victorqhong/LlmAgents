@@ -101,16 +101,16 @@ public class XmppCommunication : IAgentCommunication
         Presence = show;
     }
 
-    public async Task<IEnumerable<IMessageContent>> WaitForContent(CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<IMessageContent>?> WaitForContent(CancellationToken cancellationToken = default)
     {
         if (!Connected)
         {
-            return [];
+            return null;
         }
 
         if (string.IsNullOrEmpty(TargetJid))
         {
-            return [];
+            return null;
         }
 
         incomingMessageStateMachine.SetIncomingMessageAddress(TargetJid);
