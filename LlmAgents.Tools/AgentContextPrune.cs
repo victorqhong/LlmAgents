@@ -55,12 +55,14 @@ public class AgentContextPrune : Tool
         {
             if (agent.Messages.Count > messagesKeep)
             {
-                var pruneCount = Math.Max(agent.Messages.Count - (int)messagesKeep, 0);
-                agent.Messages.RemoveRange(0, pruneCount);
+                // keep the first message (system prompt) and last message (a tool call is needed before a tool result)
+                var pruneCount = Math.Max(agent.Messages.Count - (int)messagesKeep, 0) - 1;
+                agent.Messages.RemoveRange(1, pruneCount - 1);
 
-                while (agent.Messages.Count > 0 && (!string.Equals(agent.Messages[0].Value<string>("role"), "user") && !string.Equals(agent.Messages[0].Value<string>("role"), "system")))
+                // remove messages from the beginning to maintain a well-formatted message list
+                while (agent.Messages.Count > 1 && (!string.Equals(agent.Messages[0].Value<string>("role"), "user") && !string.Equals(agent.Messages[0].Value<string>("role"), "system")))
                 {
-                    agent.Messages.RemoveAt(0);
+                    agent.Messages.RemoveAt(1);
                 }
 
                 result.Add("result", "success");

@@ -1,0 +1,205 @@
+﻿namespace LlmAgents.Tools;
+
+using Newtonsoft.Json.Linq;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+
+public class ApplyDiff : Tool
+{
+    private readonly string basePath;
+    private readonly bool restrictToBasePath;
+
+    public ApplyDiff(ToolFactory toolFactory)
+        : base(toolFactory)
+    {
+        basePath = Path.GetFullPath(toolFactory.GetParameter(nameof(basePath)) ?? Environment.CurrentDirectory);
+        restrictToBasePath = bool.TryParse(toolFactory.GetParameter(nameof(restrictToBasePath)), out bool restrict) ? restrict : true;
+    }
+
+    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    {
+        type = "function",
+        function = new
+        {
+            name = "apply_diff",
+            description = "Applies the provided unified diff contents to a file and modifies it in-place",
+            parameters = new
+            {
+                type = "object",
+                properties = new
+                {
+                    path = new
+                    {
+                        type = "string",
+                        description = "The path of the file to modify in-place"
+                    },
+                    diffContent = new
+                    {
+                        type = "string",
+                        description = "The contents of the unified diff (patch) to apply"
+                    }
+                },
+                required = new[] { "path", "diffContent" }
+            }
+        }
+    });
+
+    public override JObject Function(JObject parameters)
+    {
+        var result = new JObject();
+
+        var path = parameters["path"]?.ToString();
+        var diffContent = parameters["diffContent"]?.ToString();
+
+        // Validate input parameters
+        if (string.IsNullOrEmpty(path))
+        {
+            result.Add("error", "Path is null or empty");
+            return result;
+        }
+        if (string.IsNullOrEmpty(diffContent))
+        {
+            result.Add("error", "Diff content is null or empty");
+            return result;
+        }
+
+        try
+        {
+            // Resolve and validate file path
+            string resolvedPath = ResolvePath(path);
+
+            if (restrictToBasePath && !resolvedPath.StartsWith(basePath))
+            {
+                result.Add("error", $"File outside {basePath} cannot be modified");
+                return result;
+            }
+
+            // Check if the file exists
+            if (!File.Exists(resolvedPath))
+            {
+                result.Add("error", $"File not found: {resolvedPath}");
+                return result;
+            }
+
+            // Read the original file
+            List<string> originalLines = File.ReadAllLines(resolvedPath).ToList();
+            // Split diff content into lines
+            List<string> diffLines = diffContent.Split(new[] { "\n", "\r\n" }, StringSplitOptions.None).ToList();
+
+            // Apply the diff
+            List<string> modifiedLines = Apply(originalLines, diffLines);
+
+            // Write the result back to the same file (in-place)
+            File.WriteAllLines(resolvedPath, modifiedLines);
+            result.Add("success", $"Diff applied successfully! File modified in-place at {resolvedPath}");
+        }
+        catch (Exception e)
+        {
+            result.Add("exception", e.Message);
+        }
+
+        return result;
+    }
+
+    private string ResolvePath(string path)
+    {
+        if (restrictToBasePath && !Path.IsPathRooted(path))
+        {
+            return Path.GetFullPath(Path.Combine(basePath, path));
+        }
+        return Path.GetFullPath(path);
+    }
+
+    private List<string> Apply(List<string> original, List<string> diff)
+    {
+        List<string> result = new List<string>();
+        int currentLine = 0;
+        bool inHunk = false;
+        int originalStart = 0;
+        int originalLength = 0;
+
+        foreach (string line in diff)
+        {
+            // Check for hunk header (e.g., @@ -1,5 +1,6 @@)
+            if (line.StartsWith("@@"))
+            {
+                inHunk = true;
+                try
+                {
+                    string[] parts = line.Split(' ');
+                    if (parts.Length < 2)
+                    {
+                        throw new FormatException("Invalid hunk header format in diff");
+                    }
+                    string originalRange = parts[1]; // e.g., "-1,5"
+                    string[] rangeParts = originalRange.Split(',');
+                    if (!int.TryParse(rangeParts[0].Substring(1), out originalStart))
+                    {
+                        throw new FormatException("Failed to parse starting line in hunk header");
+                    }
+                    originalStart -= 1; // Convert to 0-based index
+                    originalLength = rangeParts.Length > 1 && int.TryParse(rangeParts[1].TrimEnd(']'), out int length) ? length : 1;
+                }
+                catch (Exception e)
+                {
+                    throw new FormatException($"Error parsing hunk header '{line}': {e.Message}");
+                }
+
+                // Copy lines before the hunk if needed
+                while (currentLine < originalStart)
+                {
+                    if (currentLine < original.Count)
+                    {
+                        result.Add(original[currentLine]);
+                    }
+                    currentLine++;
+                }
+                continue;
+            }
+
+            if (!inHunk) continue; // Skip non-hunk lines (e.g., ---, +++)
+
+            // Process the hunk
+            if (line.StartsWith("-"))
+            {
+                // Line removed, skip it in original
+                currentLine++;
+            }
+            else if (line.StartsWith("+"))
+            {
+                // Line added, include it in result
+                result.Add(line.Substring(1)); // Remove the '+' prefix
+            }
+            else if (!string.IsNullOrWhiteSpace(line))
+            {
+                // Context line, keep it and move forward
+                result.Add(line.TrimStart());
+                currentLine++;
+            }
+            else
+            {
+                // Handle empty lines in diff (context or literal empty line)
+                if (currentLine < original.Count && string.IsNullOrWhiteSpace(original[currentLine]))
+                {
+                    result.Add(original[currentLine]);
+                    currentLine++;
+                }
+                else
+                {
+                    result.Add(line); // Add empty line from diff
+                }
+            }
+        }
+
+        // Copy any remaining lines from the original file
+        while (currentLine < original.Count)
+        {
+            result.Add(original[currentLine]);
+            currentLine++;
+        }
+
+        return result;
+    }
+}
