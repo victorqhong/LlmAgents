@@ -27,10 +27,10 @@ public class RemoteTool : Tool
 
     public override JToken Function(JObject parameters)
     {
-        var result = jsonRpcToolService.CallTool(toolName, parameters.ToString()).ConfigureAwait(false).GetAwaiter().ToString();
+        var result = jsonRpcToolService.CallTool(toolName, parameters.ToString()).ConfigureAwait(false).GetAwaiter().GetResult();
         ArgumentException.ThrowIfNullOrEmpty(result);
 
-        return JObject.Parse(result);
+        return JToken.Parse(result);
     }
 }
 
