@@ -16,7 +16,7 @@ var environmentVariableTarget = RuntimeInformation.IsOSPlatform(OSPlatform.Windo
 
 var apiEndpointOption = new Option<string>(
     name: "--apiEndpoint",
-    description: "HTTP(s) endpoint of OpenAI compatiable API");
+    description: "HTTP(s) endpoint of OpenAI compatible API");
 
 var apiKeyOption = new Option<string>(
     name: "--apiKey",
