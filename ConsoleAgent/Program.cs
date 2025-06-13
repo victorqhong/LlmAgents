@@ -97,6 +97,15 @@ async Task RootCommandHandler(InvocationContext context)
     Tool[]? tools = null;
     var agent = CreateAgent(loggerFactory, consoleCommunication, apiModel, apiEndpoint, apiKey, apiModel, out tools, persistent, basePath: workingDirectoryValue, toolsFilePath: toolsConfigValue);
 
+
+    IJsonRpcToolService jsonRpcToolService = null;
+    var toolNames = await jsonRpcToolService.GetToolNames();
+    var remoteTools = new RemoteTool[toolNames.Length];
+    for (int i = 0; i < remoteTools.Length; i++)
+    {
+        remoteTools[i] = new RemoteTool(toolNames[i], jsonRpcToolService);
+    }
+
     var optionRunTool = "Run tool";
     var optionChatMode = "Chat mode";
     var optionExit = "Exit";

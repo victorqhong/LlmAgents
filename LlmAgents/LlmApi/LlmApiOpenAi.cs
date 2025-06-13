@@ -1,5 +1,4 @@
-﻿using LlmAgents.Agents;
-using LlmAgents.LlmApi.Content;
+﻿using LlmAgents.LlmApi.Content;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
