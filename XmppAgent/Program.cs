@@ -31,6 +31,11 @@ var persistentOption = new Option<bool>(
     description: "Whether messages are saved",
     getDefaultValue: () => false);
 
+var systemPromptOption = new Option<string?>(
+    name: "--systemPromptFile",
+    description: "File that contains the system prompt",
+    getDefaultValue: () => null);
+
 var xmppDomainOption = new Option<string>(
     name: "--xmppDomain",
     description: "XMPP domain used for agent communication");
@@ -94,6 +99,7 @@ agentCommand.AddOption(apiKeyOption);
 agentCommand.AddOption(apiModelOption);
 agentCommand.AddOption(apiConfigOption);
 agentCommand.AddOption(persistentOption);
+agentCommand.AddOption(systemPromptOption);
 agentCommand.AddOption(xmppDomainOption);
 agentCommand.AddOption(xmppUsernameOption);
 agentCommand.AddOption(xmppPasswordOption);
@@ -122,7 +128,6 @@ async Task RootCommandHander(InvocationContext context)
         var apiConfig = agentProperty.Value.Value<string>("apiConfig");
         var xmppConfig = agentProperty.Value.Value<string>("xmppConfig");
         var toolsConfig = agentProperty.Value.Value<string>("toolsConfig");
-        var persistent = agentProperty.Value.Value<bool>("persistent");
         var workingDirectory = agentProperty.Value.Value<string>("workingDirectory");
         var agentDirectory = agentProperty.Value.Value<string>("agentDirectory");
 
@@ -131,7 +136,10 @@ async Task RootCommandHander(InvocationContext context)
             continue;
         }
 
-        var agentParameters = AgentParameters.Create(apiConfig, xmppConfig, toolsConfig, agentDirectory, workingDirectory, persistent);
+        var systemPromptFile = agentProperty.Value.Value<string>("systemPromptFile") ?? null;
+        var persistent = agentProperty.Value.Value<bool>("persistent");
+
+        var agentParameters = AgentParameters.Create(apiConfig, xmppConfig, toolsConfig, agentDirectory, workingDirectory, persistent, systemPromptFile);
         if (agentParameters == null)
         {
             continue;
@@ -157,12 +165,13 @@ async Task AgentCommandHandler(InvocationContext context)
     var xmppConfigValue = context.ParseResult.GetValueForOption(xmppConfigOption);
     var toolsConfigValue = context.ParseResult.GetValueForOption(toolsConfigOption);
     var persistent = context.ParseResult.GetValueForOption(persistentOption);
+    var systemPromptFile = context.ParseResult.GetValueForOption(systemPromptOption);
     var workingDirectoryValue = context.ParseResult.GetValueForOption(workingDirectoryOption) ?? Environment.CurrentDirectory;
     var agentDirectoryValue = context.ParseResult.GetValueForOption(agentDirectoryOption);
 
     if (!string.IsNullOrEmpty(apiConfigValue) && File.Exists(apiConfigValue) && !string.IsNullOrEmpty(xmppConfigValue) && File.Exists(xmppConfigValue) && !string.IsNullOrEmpty(toolsConfigValue) && File.Exists(toolsConfigValue))
     {
-        parameters = AgentParameters.Create(apiConfigValue, xmppConfigValue, toolsConfigValue, agentDirectoryValue, workingDirectoryValue, persistent);
+        parameters = AgentParameters.Create(apiConfigValue, xmppConfigValue, toolsConfigValue, agentDirectoryValue, workingDirectoryValue, persistent, systemPromptFile);
     }
 
     if (parameters == null)
@@ -179,7 +188,7 @@ async Task AgentCommandHandler(InvocationContext context)
 
         parameters = AgentParameters.Create(apiEndpoint, apiKey, apiModel,
             xmppDomain, xmppUsername, xmppPassword, xmppTargetJid, xmppTrustHost,
-            toolsConfigValue, agentDirectoryValue, workingDirectoryValue, persistent);
+            toolsConfigValue, agentDirectoryValue, workingDirectoryValue, persistent, systemPromptFile);
     }
 
     if (parameters != null)
@@ -207,13 +216,14 @@ Task RunAgent(AgentParameters agentParameters, CancellationToken cancellationTok
         var agent = CreateAgent(loggerFactory, xmppCommunication, agentParameters.apiParameters, agentParameters.persistent,
             workingDirectory: agentParameters.workingDirectory,
             toolsFilePath: agentParameters.toolsConfigPath,
-            agentDirectory: agentParameters.agentDirectory);
+            agentDirectory: agentParameters.agentDirectory,
+            systemPromptFile: agentParameters.systemPromptFile);
 
         await agent.Run(cancellationToken);
     }, cancellationToken);
 }
 
-LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, ApiParameters apiParameters, bool persistent = false, string? systemPrompt = null, string? workingDirectory = null, string? agentDirectory = null, string? toolsFilePath = null)
+LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, ApiParameters apiParameters, bool persistent = false, string? systemPromptFile = null, string? workingDirectory = null, string? agentDirectory = null, string? toolsFilePath = null)
 {
     var llmApi = new LlmApiOpenAi(loggerFactory, apiParameters.apiModel, apiParameters.apiEndpoint, apiParameters.apiKey, apiParameters.apiModel);
 
@@ -251,7 +261,13 @@ LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentComm
 
     if (agent.llmApi.Messages.Count == 0)
     {
-        agent.llmApi.Messages.Add(JObject.FromObject(new { role = "system", content = systemPrompt ?? Prompts.DefaultSystemPrompt }));
+        var systemPrompt = Prompts.DefaultSystemPrompt;
+        if (!string.IsNullOrEmpty(systemPromptFile) && File.Exists(systemPromptFile))
+        {
+            systemPrompt = File.ReadAllText(systemPromptFile);
+        }
+
+        agent.llmApi.Messages.Add(JObject.FromObject(new { role = "system", content = systemPrompt }));
     }
 
     return agent;
@@ -313,6 +329,7 @@ class AgentParameters
 {
     public readonly ApiParameters apiParameters;
     public readonly XmppParameters xmppParameters;
+    public string? systemPromptFile = null;
     public bool persistent = false;
     public string? workingDirectory = null;
     public string? toolsConfigPath = null;
@@ -330,7 +347,7 @@ class AgentParameters
     public static AgentParameters? Create(
         string? apiEndpoint, string? apiKey, string? apiModel,
         string? xmppDomain, string? xmppUsername, string? xmppPassword, string? xmppTargetJid, bool xmppTrustHost,
-        string? toolsConfigPath, string? agentDirectory, string? workingDirectory, bool persistent)
+        string? toolsConfigPath, string? agentDirectory, string? workingDirectory, bool persistent, string? systemPromptFile)
     {
         var apiParameters = ApiParameters.Create(apiEndpoint, apiKey, apiModel);
         if (apiParameters == null)
@@ -349,11 +366,12 @@ class AgentParameters
             agentDirectory = agentDirectory,
             workingDirectory = workingDirectory,
             toolsConfigPath = toolsConfigPath,
-            persistent = persistent
+            persistent = persistent,
+            systemPromptFile = systemPromptFile
         };
     }
 
-    public static AgentParameters? Create(string? apiConfigPath, string? xmppConfigPath, string? toolsConfigPath, string? agentDirectory, string workingDirectory, bool persistent)
+    public static AgentParameters? Create(string? apiConfigPath, string? xmppConfigPath, string? toolsConfigPath, string? agentDirectory, string workingDirectory, bool persistent, string? systemPromptFile)
     {
         if (string.IsNullOrEmpty(apiConfigPath) || !File.Exists(apiConfigPath))
         {
@@ -377,6 +395,6 @@ class AgentParameters
         var xmppTargetJid = xmppConfig.Value<string>("xmppTargetJid");
         var xmppTrustHost = xmppConfig.Value<bool>("xmppTrustHost");
 
-        return Create(apiEndpoint, apiKey, apiModel, xmppDomain, xmppUsername, xmppPassword, xmppTargetJid, xmppTrustHost, toolsConfigPath, agentDirectory, workingDirectory, persistent);
+        return Create(apiEndpoint, apiKey, apiModel, xmppDomain, xmppUsername, xmppPassword, xmppTargetJid, xmppTrustHost, toolsConfigPath, agentDirectory, workingDirectory, persistent, systemPromptFile);
     }
 }
