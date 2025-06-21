@@ -170,7 +170,7 @@ public class ToolFactory
                 }
                 catch (Exception e)
                 {
-                    log.LogError(e, "Exception while loading asembly: {assemblyPath}", assemblyPath);
+                    log.LogError(e, "Exception while loading assembly: {assemblyPath}", assemblyPath);
                     continue;
                 }
             }

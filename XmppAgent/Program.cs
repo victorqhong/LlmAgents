@@ -16,7 +16,7 @@ var environmentVariableTarget = RuntimeInformation.IsOSPlatform(OSPlatform.Windo
 
 var apiEndpointOption = new Option<string>(
     name: "--apiEndpoint",
-    description: "HTTP(s) endpoint of OpenAI compatiable API");
+    description: "HTTP(s) endpoint of OpenAI compatible API");
 
 var apiKeyOption = new Option<string>(
     name: "--apiKey",
@@ -192,24 +192,33 @@ Task RunAgent(AgentParameters agentParameters, CancellationToken cancellationTok
 {
     return Task.Run(async () =>
     {
-        var xmppCommunication = new XmppCommunication(
-            agentParameters.xmppParameters.xmppUsername, agentParameters.xmppParameters.xmppDomain, agentParameters.xmppParameters.xmppPassword, trustHost: agentParameters.xmppParameters.xmppTrustHost)
+        try
         {
-            TargetJid = agentParameters.xmppParameters.xmppTargetJid
-        };
+            var xmppCommunication = new XmppCommunication(
+                agentParameters.xmppParameters.xmppUsername, agentParameters.xmppParameters.xmppDomain, agentParameters.xmppParameters.xmppPassword, trustHost: agentParameters.xmppParameters.xmppTrustHost)
+            {
+                TargetJid = agentParameters.xmppParameters.xmppTargetJid
+            };
 #if DEBUG
-        xmppCommunication.Debug = true;
+            xmppCommunication.Debug = true;
 #endif
-        await xmppCommunication.Initialize();
+            await xmppCommunication.Initialize();
 
-        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
+            using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
 
-        var agent = CreateAgent(loggerFactory, xmppCommunication, agentParameters.apiParameters, agentParameters.persistent,
-            workingDirectory: agentParameters.workingDirectory,
-            toolsFilePath: agentParameters.toolsConfigPath,
-            agentDirectory: agentParameters.agentDirectory);
+            var agent = CreateAgent(loggerFactory, xmppCommunication, agentParameters.apiParameters, agentParameters.persistent,
+                workingDirectory: agentParameters.workingDirectory,
+                toolsFilePath: agentParameters.toolsConfigPath,
+                agentDirectory: agentParameters.agentDirectory);
 
-        await agent.Run(cancellationToken);
+            await agent.Run(cancellationToken);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Error loading agent for: {agentParameters.agentDirectory}");
+            Console.WriteLine(e);
+        }
+
     }, cancellationToken);
 }
 
@@ -227,7 +236,7 @@ LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentComm
         toolFactory.Register(agentCommunication);
         toolFactory.Register(loggerFactory);
         toolFactory.Register(todoDatabase);
-        toolFactory.Register(llmApi);
+        toolFactory.Register<ILlmApiMessageProvider>(llmApi);
 
         toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
 
