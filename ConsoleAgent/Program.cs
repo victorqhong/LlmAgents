@@ -165,7 +165,7 @@ async Task RunAgent(string apiEndpoint, string apiKey, string apiModel,bool pers
             if (!string.IsNullOrEmpty(toolParametersInput))
             {
                 var toolParameters = JObject.Parse(toolParametersInput);
-                var toolOutput = tools[toolChoice].Function(toolParameters);
+                var toolOutput = await tools[toolChoice].Function(toolParameters);
                 Console.WriteLine(toolOutput);
             }
         }
@@ -313,7 +313,13 @@ async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunicati
             var tcpClient = new TcpClient();
             await tcpClient.ConnectAsync(IPAddress.Parse(toolServerAddress), toolServerPort);
             var stream = tcpClient.GetStream();
-            var rpc = JsonRpc.Attach(stream, agentCommunication);
+
+            var rpc = new JsonRpc(stream);
+
+            rpc.AddLocalRpcTarget(agentCommunication);
+            rpc.AddLocalRpcTarget<ILlmApiMessageProvider>(llmApi, null);
+
+            rpc.StartListening();
 
             var jsonRpcToolService = rpc.Attach<IJsonRpcToolService>();
 
@@ -343,7 +349,7 @@ async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunicati
         toolFactory.Register(agentCommunication);
         toolFactory.Register(loggerFactory);
         toolFactory.Register(todoDatabase);
-        toolFactory.Register(llmApi);
+        toolFactory.Register<ILlmApiMessageProvider>(llmApi);
 
         toolFactory.AddParameter("basePath", basePath ?? Environment.CurrentDirectory);
 

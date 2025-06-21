@@ -5,14 +5,14 @@ namespace LlmAgents.Tools;
 
 public class AgentContextCount : Tool
 {
-    private readonly LlmApiOpenAi agent;
+    private readonly ILlmApiMessageProvider messageProvider;
 
     public AgentContextCount(ToolFactory toolFactory)
         : base(toolFactory)
     {
-        agent = toolFactory.Resolve<LlmApiOpenAi>();
+        messageProvider = toolFactory.Resolve<ILlmApiMessageProvider>();
 
-        ArgumentNullException.ThrowIfNull(agent);
+        ArgumentNullException.ThrowIfNull(messageProvider);
     }
 
     public override JObject Schema { get; protected set; } = JObject.FromObject(new
@@ -30,14 +30,13 @@ public class AgentContextCount : Tool
         }
     });
 
-    public override JToken Function(JObject parameters)
+    public override async Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
         try
         {
-            result.Add("message_count", agent.Messages.Count);
-
+            result.Add("message_count", await messageProvider.CountMessages());
         }
         catch (Exception e)
         {

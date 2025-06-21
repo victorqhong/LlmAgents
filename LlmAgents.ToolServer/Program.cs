@@ -1,4 +1,5 @@
 ﻿using LlmAgents.Communication;
+using LlmAgents.LlmApi;
 using LlmAgents.Todo;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
@@ -72,7 +73,8 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigVal
                         using var stream = client.GetStream();
                         var rpc = new JsonRpc(stream);
                         var agentCommunication = rpc.Attach<IAgentCommunication>();
-                        var toolService = new JsonRpcToolService(loggerFactory, agentCommunication, toolsConfigValue);
+                        var messageProvider = rpc.Attach<ILlmApiMessageProvider>();
+                        var toolService = new JsonRpcToolService(loggerFactory, agentCommunication, messageProvider, toolsConfigValue);
                         rpc.AddLocalRpcTarget<IJsonRpcToolService>(toolService, null);
                         rpc.StartListening();
                         await rpc.Completion;
@@ -99,7 +101,7 @@ public class JsonRpcToolService : IJsonRpcToolService
 {
     private readonly Dictionary<string, Tool> toolMap = new Dictionary<string, Tool>();
 
-    public JsonRpcToolService(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, string toolsConfigPath, string? basePath = null)
+    public JsonRpcToolService(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, ILlmApiMessageProvider messageProvider, string toolsConfigPath, string? basePath = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(toolsConfigPath, nameof(toolsConfigPath));
 
@@ -116,7 +118,7 @@ public class JsonRpcToolService : IJsonRpcToolService
         toolFactory.Register(agentCommunication);
         toolFactory.Register(loggerFactory);
         toolFactory.Register(todoDatabase);
-        //toolFactory.Register(llmApi);
+        toolFactory.Register(messageProvider);
 
         toolFactory.AddParameter("basePath", basePath);
 
@@ -127,15 +129,15 @@ public class JsonRpcToolService : IJsonRpcToolService
         }
     }
 
-    public Task<string?> CallTool(string name, string parameters)
+    public async Task<string?> CallTool(string name, string parameters)
     {
         if (!toolMap.TryGetValue(name, out Tool? tool))
         {
-            return Task.FromResult<string?>(null);
+            return null;
         }
 
-        var result = tool.Function(JObject.Parse(parameters)).ToString();
-        return Task.FromResult<string?>(result);
+        var result = await tool.Function(JObject.Parse(parameters));
+        return result.ToString();
     }
 
     public Task<string[]> GetToolNames()
