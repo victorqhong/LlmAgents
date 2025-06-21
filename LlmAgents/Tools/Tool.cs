@@ -25,5 +25,5 @@ public abstract class Tool
         }
     }
 
-    public abstract JToken Function(JObject parameters);
+    public abstract Task<JToken> Function(JObject parameters);
 }

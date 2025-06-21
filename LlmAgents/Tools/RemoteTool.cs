@@ -25,9 +25,9 @@ public class RemoteTool : Tool
 
     public override JObject Schema { get; protected set; }
 
-    public override JToken Function(JObject parameters)
+    public override async Task<JToken> Function(JObject parameters)
     {
-        var result = jsonRpcToolService.CallTool(toolName, parameters.ToString()).ConfigureAwait(false).GetAwaiter().GetResult();
+        var result = await jsonRpcToolService.CallTool(toolName, parameters.ToString());
         ArgumentException.ThrowIfNullOrEmpty(result);
 
         return JToken.Parse(result);

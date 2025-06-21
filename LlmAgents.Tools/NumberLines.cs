@@ -41,7 +41,7 @@ public class NumberLines : Tool
         }
     });
 
-    public override JObject Function(JObject parameters)
+    public override async Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 

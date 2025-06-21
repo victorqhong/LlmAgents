@@ -5,9 +5,9 @@ using System;
 
 public class GenericTool : Tool
 {
-    private readonly Func<JObject, JToken> function;
+    private readonly Func<JObject, Task<JToken>> function;
 
-    public GenericTool(JObject schema, Func<JObject, JToken> function)
+    public GenericTool(JObject schema, Func<JObject, Task<JToken>> function)
         : base(null)
     {
         Schema = schema;
@@ -16,8 +16,8 @@ public class GenericTool : Tool
 
     public override JObject Schema { get; protected set; }
 
-    public override JToken Function(JObject parameters)
+    public override async Task<JToken> Function(JObject parameters)
     {
-        return function(parameters);
+        return await function(parameters);
     }
 }

@@ -55,7 +55,7 @@ public class WebSearch : Tool
         }
     });
 
-    public override JToken Function(JObject parameters)
+    public override async Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
