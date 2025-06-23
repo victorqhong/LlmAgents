@@ -5,14 +5,14 @@ namespace LlmAgents.Tools;
 
 public class AgentContextPrune : Tool
 {
-    private readonly LlmApiOpenAi agent;
+    private readonly ILlmApiMessageProvider messageProvider;
 
     public AgentContextPrune(ToolFactory toolFactory)
         : base(toolFactory)
     {
-        agent = toolFactory.Resolve<LlmApiOpenAi>();
+        messageProvider = toolFactory.Resolve<ILlmApiMessageProvider>();
 
-        ArgumentNullException.ThrowIfNull(agent);
+        ArgumentNullException.ThrowIfNull(messageProvider);
     }
 
     public override JObject Schema { get; protected set; } = JObject.FromObject(new
@@ -38,7 +38,7 @@ public class AgentContextPrune : Tool
         }
     });
 
-    public override JToken Function(JObject parameters)
+    public override async Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -49,31 +49,21 @@ public class AgentContextPrune : Tool
             return result;
         }
 
-        result.Add("message_count_before", agent.Messages.Count);
+        var messageCount = await messageProvider.CountMessages();
+        result.Add("message_count_before", await messageProvider.CountMessages());
 
         try
         {
-            if (agent.Messages.Count > messagesKeep)
-            {
-                // keep the first message (system prompt) and last message (a tool call is needed before a tool result)
-                var pruneCount = Math.Max(agent.Messages.Count - (int)messagesKeep, 0) - 1;
-                agent.Messages.RemoveRange(1, pruneCount - 1);
-
-                // remove messages from the beginning to maintain a well-formatted message list
-                while (agent.Messages.Count > 1 && (!string.Equals(agent.Messages[0].Value<string>("role"), "user") && !string.Equals(agent.Messages[0].Value<string>("role"), "system")))
-                {
-                    agent.Messages.RemoveAt(1);
-                }
-
-                result.Add("result", "success");
-            }
+            await messageProvider.PruneContext(messageCount);
+            result.Add("result", "success");
         }
         catch (Exception e)
         {
             result.Add("exception", e.Message);
         }
 
-        result.Add("message_count_after", agent.Messages.Count);
+        messageCount = await messageProvider.CountMessages();
+        result.Add("message_count_after", await messageProvider.CountMessages());
 
         return result;
     }

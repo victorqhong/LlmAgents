@@ -16,7 +16,7 @@ public abstract class Command : Tool
 
     public required Func<JObject, string?> Arguments { get; set; }
 
-    public override JToken Function(JObject parameters)
+    public override async Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 

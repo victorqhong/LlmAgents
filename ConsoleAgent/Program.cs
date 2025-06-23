@@ -9,6 +9,9 @@ using Newtonsoft.Json.Linq;
 using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.Runtime.InteropServices;
+using System.Net.Sockets;
+using StreamJsonRpc;
+using System.Net;
 
 var environmentVariableTarget = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? EnvironmentVariableTarget.User : EnvironmentVariableTarget.Process;
 
@@ -44,6 +47,18 @@ var workingDirectoryOption = new Option<string>(
     description: "",
     getDefaultValue: () => Environment.CurrentDirectory);
 
+var toolServerAddressOption = new Option<string>(
+    name: "--toolServerAddress",
+    description: "The IP address of the tool server",
+    getDefaultValue: () => "127.0.0.1");
+
+var toolServerPortOption = new Option<int>(
+    name: "--toolServerPort",
+    description: "The port of the tool server",
+    getDefaultValue: () => 5000);
+
+Tool[]? tools = null;
+
 var rootCommand = new RootCommand("XmppAgent");
 rootCommand.SetHandler(RootCommandHandler);
 rootCommand.AddOption(apiEndpointOption);
@@ -53,6 +68,8 @@ rootCommand.AddOption(apiConfigOption);
 rootCommand.AddOption(persistentOption);
 rootCommand.AddOption(toolsConfigOption);
 rootCommand.AddOption(workingDirectoryOption);
+rootCommand.AddOption(toolServerAddressOption);
+rootCommand.AddOption(toolServerPortOption);
 
 async Task RootCommandHandler(InvocationContext context)
 {
@@ -87,15 +104,24 @@ async Task RootCommandHandler(InvocationContext context)
 
     var toolsConfigValue = context.ParseResult.GetValueForOption(toolsConfigOption);
     var workingDirectoryValue = context.ParseResult.GetValueForOption(workingDirectoryOption);
+    var toolServerAddressValue = context.ParseResult.GetValueForOption(toolServerAddressOption);
+    var toolServerPortValue = context.ParseResult.GetValueForOption(toolServerPortOption);
 
     var cancellationToken = context.GetCancellationToken();
 
+    await RunAgent(apiEndpoint, apiKey, apiModel, persistent, toolsConfigValue, workingDirectoryValue, toolServerAddressValue, toolServerPortValue, cancellationToken);
+}
+
+async Task RunAgent(string apiEndpoint, string apiKey, string apiModel,bool persistent, string? toolsConfigValue, string? workingDirectoryValue, string? toolServerAddressValue, int toolServerPortValue, CancellationToken cancellationToken)
+{
     var consoleCommunication = new ConsoleCommunication();
 
     using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
-    Tool[]? tools = null;
-    var agent = CreateAgent(loggerFactory, consoleCommunication, apiModel, apiEndpoint, apiKey, apiModel, out tools, persistent, basePath: workingDirectoryValue, toolsFilePath: toolsConfigValue);
+    var agent = await CreateAgent(loggerFactory, consoleCommunication,
+        apiModel, apiEndpoint, apiKey, apiModel,
+        persistent, basePath: workingDirectoryValue,
+        toolsFilePath: toolsConfigValue, toolServerAddress: toolServerAddressValue, toolServerPort: toolServerPortValue);
 
     var optionRunTool = "Run tool";
     var optionChatMode = "Chat mode";
@@ -138,9 +164,8 @@ async Task RootCommandHandler(InvocationContext context)
             var toolParametersInput = Console.ReadLine();
             if (!string.IsNullOrEmpty(toolParametersInput))
             {
-
                 var toolParameters = JObject.Parse(toolParametersInput);
-                var toolOutput = tools[toolChoice].Function(toolParameters);
+                var toolOutput = await tools[toolChoice].Function(toolParameters);
                 Console.WriteLine(toolOutput);
             }
         }
@@ -159,12 +184,10 @@ async Task RootCommandHandler(InvocationContext context)
             }
 
             var response = await agent.llmApi.GenerateCompletion(content, cancellationToken);
-            if (string.IsNullOrEmpty(response))
+            if (!string.IsNullOrEmpty(response))
             {
-                continue;
+                await consoleCommunication.SendMessage(response);
             }
-
-            await consoleCommunication.SendMessage(response);
 
             if (persistent)
             {
@@ -276,31 +299,66 @@ async Task RootCommandHandler(InvocationContext context)
     }
 }
 
-LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, string id, string apiEndpoint, string apiKey, string model, out Tool[]? tools, bool persistent = false, string? systemPrompt = null, string? basePath = null, string? toolsFilePath = null)
+async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
+    string id, string apiEndpoint, string apiKey, string model,
+    bool persistent = false, string? systemPrompt = null, string? basePath = null,
+    string? toolsFilePath = null, string? toolServerAddress = null, int toolServerPort = 5000)
 {
     var llmApi = new LlmApiOpenAi(loggerFactory, id, apiEndpoint, apiKey, model);
 
-    var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(basePath, "todo.db"));
-
-    tools = null;
-    if (!string.IsNullOrEmpty(toolsFilePath) && System.IO.File.Exists(toolsFilePath))
+    if (!string.IsNullOrEmpty(toolServerAddress))
     {
+        try
+        {
+            var tcpClient = new TcpClient();
+            await tcpClient.ConnectAsync(IPAddress.Parse(toolServerAddress), toolServerPort);
+            var stream = tcpClient.GetStream();
+
+            var rpc = new JsonRpc(stream);
+
+            rpc.AddLocalRpcTarget(agentCommunication);
+            rpc.AddLocalRpcTarget<ILlmApiMessageProvider>(llmApi, null);
+
+            rpc.StartListening();
+
+            var jsonRpcToolService = rpc.Attach<IJsonRpcToolService>();
+
+            var toolNames = await jsonRpcToolService.GetToolNames();
+
+            var remoteTools = new RemoteTool[toolNames.Length];
+            for (int i = 0; i < remoteTools.Length; i++)
+            {
+                remoteTools[i] = new RemoteTool(toolNames[i], jsonRpcToolService);
+            }
+
+            tools = remoteTools;
+        }
+        catch
+        {
+            tools = null;
+        }
+    }
+
+    if (tools == null && !string.IsNullOrEmpty(toolsFilePath) && File.Exists(toolsFilePath))
+    {
+        var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(basePath, "todo.db"));
+
         var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
         var toolFactory = new ToolFactory(loggerFactory, toolsFile);
 
         toolFactory.Register(agentCommunication);
         toolFactory.Register(loggerFactory);
         toolFactory.Register(todoDatabase);
-        toolFactory.Register(llmApi);
+        toolFactory.Register<ILlmApiMessageProvider>(llmApi);
 
         toolFactory.AddParameter("basePath", basePath ?? Environment.CurrentDirectory);
 
         tools = toolFactory.Load();
+    }
 
-        if (tools != null)
-        {
-            llmApi.AddTool(tools);
-        }
+    if (tools != null)
+    {
+        llmApi.AddTool(tools);
     }
 
     var agent = new LlmAgent(llmApi, agentCommunication)

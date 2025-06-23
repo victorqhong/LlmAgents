@@ -201,17 +201,19 @@ Task RunAgent(AgentParameters agentParameters, CancellationToken cancellationTok
 {
     return Task.Run(async () =>
     {
-        var xmppCommunication = new XmppCommunication(
-            agentParameters.xmppParameters.xmppUsername, agentParameters.xmppParameters.xmppDomain, agentParameters.xmppParameters.xmppPassword, trustHost: agentParameters.xmppParameters.xmppTrustHost)
+        try
         {
-            TargetJid = agentParameters.xmppParameters.xmppTargetJid
-        };
+            var xmppCommunication = new XmppCommunication(
+                agentParameters.xmppParameters.xmppUsername, agentParameters.xmppParameters.xmppDomain, agentParameters.xmppParameters.xmppPassword, trustHost: agentParameters.xmppParameters.xmppTrustHost)
+            {
+                TargetJid = agentParameters.xmppParameters.xmppTargetJid
+            };
 #if DEBUG
-        xmppCommunication.Debug = true;
+            xmppCommunication.Debug = true;
 #endif
-        await xmppCommunication.Initialize();
+            await xmppCommunication.Initialize();
 
-        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
+            using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
 
         var agent = CreateAgent(loggerFactory, xmppCommunication, agentParameters.apiParameters, agentParameters.persistent,
             workingDirectory: agentParameters.workingDirectory,
@@ -219,7 +221,14 @@ Task RunAgent(AgentParameters agentParameters, CancellationToken cancellationTok
             agentDirectory: agentParameters.agentDirectory,
             systemPromptFile: agentParameters.systemPromptFile);
 
-        await agent.Run(cancellationToken);
+            await agent.Run(cancellationToken);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Error loading agent for: {agentParameters.agentDirectory}");
+            Console.WriteLine(e);
+        }
+
     }, cancellationToken);
 }
 
@@ -237,7 +246,7 @@ LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentComm
         toolFactory.Register(agentCommunication);
         toolFactory.Register(loggerFactory);
         toolFactory.Register(todoDatabase);
-        toolFactory.Register(llmApi);
+        toolFactory.Register<ILlmApiMessageProvider>(llmApi);
 
         toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
 

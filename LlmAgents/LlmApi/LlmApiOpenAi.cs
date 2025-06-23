@@ -1,5 +1,4 @@
-﻿using LlmAgents.Agents;
-using LlmAgents.LlmApi.Content;
+﻿using LlmAgents.LlmApi.Content;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
@@ -7,7 +6,7 @@ using System.Text.RegularExpressions;
 
 namespace LlmAgents.LlmApi
 {
-    public class LlmApiOpenAi
+    public class LlmApiOpenAi : ILlmApiMessageProvider
     {
         private readonly ILogger Log;
 
@@ -31,7 +30,7 @@ namespace LlmAgents.LlmApi
 
             if (messages != null)
             {
-                Messages = messages;
+                Messages.AddRange(messages);
             }
 
             if (tools != null)
@@ -250,7 +249,7 @@ namespace LlmAgents.LlmApi
 
                 Log.LogInformation("Calling tool '{name}' with arguments '{arguments}'", name, arguments);
 
-                var toolResult = tool(JObject.Parse(arguments));
+                var toolResult = await tool(JObject.Parse(arguments));
                 Messages.Add(JObject.FromObject(new
                 {
                     role = "tool",
@@ -273,7 +272,7 @@ namespace LlmAgents.LlmApi
             try
             {
                 var response = await client.PostAsync(apiEndpoint, body, cancellationToken);
-                var responseContent = await response.Content.ReadAsStringAsync();
+                var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
                 var responseMessage = JObject.Parse(responseContent);
 
                 if (response.IsSuccessStatusCode)
@@ -339,6 +338,29 @@ namespace LlmAgents.LlmApi
             }
 
             return payload.ToString(Newtonsoft.Json.Formatting.None);
+        }
+
+        public async Task<int> CountMessages()
+        {
+            return Messages.Count;
+        }
+
+        public async Task PruneContext(int numMessagesToKeep)
+        {
+            if (Messages.Count <= numMessagesToKeep)
+            {
+                return;
+            }
+
+            // keep the first message (system prompt) and last message (a tool call is needed before a tool result)
+            var pruneCount = Math.Max(Messages.Count - numMessagesToKeep, 0) - 1;
+            Messages.RemoveRange(1, pruneCount - 1);
+
+            // remove messages from the beginning to maintain a well-formatted message list
+            while (Messages.Count > 1 && (!string.Equals(Messages[0].Value<string>("role"), "user") && !string.Equals(Messages[0].Value<string>("role"), "system")))
+            {
+                Messages.RemoveAt(1);
+            }
         }
     }
 }
