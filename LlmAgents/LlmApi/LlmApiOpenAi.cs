@@ -203,63 +203,64 @@ namespace LlmAgents.LlmApi
 
         public async Task<string?> ProcessToolCalls(CancellationToken cancellationToken = default)
         {
-            if (!"tool_calls".Equals(FinishReason))
+            string? completion = null;
+            while ("tool_calls".Equals(FinishReason))
             {
-                return null;
+                var toolCalls = Messages[Messages.Count - 1].Value<JToken>("tool_calls");
+                if (toolCalls == null)
+                {
+                    return null;
+                }
+
+                foreach (var toolCall in toolCalls)
+                {
+                    var id = toolCall["id"]?.Value<string>();
+
+                    var function = toolCall["function"];
+                    if (function == null)
+                    {
+                        Log.LogError("Could not get choice[0].message.tool_calls.function");
+                        return null;
+                    }
+
+                    var name = function["name"]?.Value<string>();
+                    if (string.IsNullOrEmpty(name))
+                    {
+                        Log.LogError("Could not get choice[0].message.tool_calls.name");
+                        return null;
+                    }
+
+                    if (!ToolMap.TryGetValue(name, out Tool? value))
+                    {
+                        Log.LogError("Could not get tool");
+                        return null;
+                    }
+
+                    var tool = value.Function;
+
+                    var arguments = function["arguments"]?.Value<string>();
+                    if (arguments == null)
+                    {
+                        Log.LogError("Could not get choice[0].message.tool_calls.arguments");
+                        return null;
+                    }
+
+                    Log.LogInformation("Calling tool '{name}' with arguments '{arguments}'", name, arguments);
+
+                    var toolResult = await tool(JObject.Parse(arguments));
+                    Messages.Add(JObject.FromObject(new
+                    {
+                        role = "tool",
+                        tool_call_id = id,
+                        name,
+                        content = Newtonsoft.Json.JsonConvert.SerializeObject(toolResult)
+                    }));
+                }
+
+                completion = await GenerateCompletion(Messages, cancellationToken);
             }
 
-            var toolCalls = Messages[Messages.Count - 1].Value<JToken>("tool_calls");
-            if (toolCalls == null)
-            {
-                return null;
-            }
-
-            foreach (var toolCall in toolCalls)
-            {
-                var id = toolCall["id"]?.Value<string>();
-
-                var function = toolCall["function"];
-                if (function == null)
-                {
-                    Log.LogError("Could not get choice[0].message.tool_calls.function");
-                    return null;
-                }
-
-                var name = function["name"]?.Value<string>();
-                if (string.IsNullOrEmpty(name))
-                {
-                    Log.LogError("Could not get choice[0].message.tool_calls.name");
-                    return null;
-                }
-
-                if (!ToolMap.TryGetValue(name, out Tool? value))
-                {
-                    Log.LogError("Could not get tool");
-                    return null;
-                }
-
-                var tool = value.Function;
-
-                var arguments = function["arguments"]?.Value<string>();
-                if (arguments == null)
-                {
-                    Log.LogError("Could not get choice[0].message.tool_calls.arguments");
-                    return null;
-                }
-
-                Log.LogInformation("Calling tool '{name}' with arguments '{arguments}'", name, arguments);
-
-                var toolResult = await tool(JObject.Parse(arguments));
-                Messages.Add(JObject.FromObject(new
-                {
-                    role = "tool",
-                    tool_call_id = id,
-                    name,
-                    content = Newtonsoft.Json.JsonConvert.SerializeObject(toolResult)
-                }));
-            }
-
-            return await GenerateCompletion(Messages, cancellationToken);
+            return completion;
         }
 
         private async Task<JObject?> GetCompletion(string apiEndpoint, string apiKey, string content, int retryAttempt = 0, CancellationToken cancellationToken = default)
