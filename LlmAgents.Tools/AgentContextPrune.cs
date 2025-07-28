@@ -54,7 +54,7 @@ public class AgentContextPrune : Tool
 
         try
         {
-            await messageProvider.PruneContext(messageCount);
+            await messageProvider.PruneContext(messagesKeep.Value);
             result.Add("result", "success");
         }
         catch (Exception e)
