@@ -50,7 +50,7 @@ var workingDirectoryOption = new Option<string>(
 var toolServerAddressOption = new Option<string>(
     name: "--toolServerAddress",
     description: "The IP address of the tool server",
-    getDefaultValue: () => "127.0.0.1");
+    getDefaultValue: () => "");
 
 var toolServerPortOption = new Option<int>(
     name: "--toolServerPort",
