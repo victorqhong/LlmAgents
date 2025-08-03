@@ -203,12 +203,16 @@ namespace LlmAgents.LlmApi
 
         public async Task<string?> ProcessToolCalls(CancellationToken cancellationToken = default)
         {
-            string? completion = null;
+            if (!"tool_calls".Equals(FinishReason))
             while ("tool_calls".Equals(FinishReason))
             {
+                return null;
+            }
+
                 var toolCalls = Messages[Messages.Count - 1].Value<JToken>("tool_calls");
                 if (toolCalls == null)
                 {
+                Log.LogError("tool_calls was not found in last message");
                     return null;
                 }
 
@@ -220,20 +224,43 @@ namespace LlmAgents.LlmApi
                     if (function == null)
                     {
                         Log.LogError("Could not get choice[0].message.tool_calls.function");
-                        return null;
+                    Messages.Add(JObject.FromObject(new
+                    {
+                        role = "tool",
+                        tool_call_id = id,
+                        content = $"Invalid tool call: tool call does not contain 'function' property"
+                    }));
+
+                    continue;
                     }
 
                     var name = function["name"]?.Value<string>();
                     if (string.IsNullOrEmpty(name))
                     {
                         Log.LogError("Could not get choice[0].message.tool_calls.name");
-                        return null;
+                    Messages.Add(JObject.FromObject(new
+                    {
+                        role = "tool",
+                        tool_call_id = id,
+                        name,
+                        content = $"Invalid tool call: tool call does not contain 'name' property"
+                    }));
+
+                    continue;
                     }
 
                     if (!ToolMap.TryGetValue(name, out Tool? value))
                     {
-                        Log.LogError("Could not get tool");
-                        return null;
+                    Log.LogError($"Could not get tool: {name}");
+                    Messages.Add(JObject.FromObject(new
+                    {
+                        role = "tool",
+                        tool_call_id = id,
+                        name,
+                        content = $"Invalid tool call: tool '{name}' not found"
+                    }));
+
+                    continue;
                     }
 
                     var tool = value.Function;
@@ -242,25 +269,40 @@ namespace LlmAgents.LlmApi
                     if (arguments == null)
                     {
                         Log.LogError("Could not get choice[0].message.tool_calls.arguments");
-                        return null;
-                    }
-
-                    Log.LogInformation("Calling tool '{name}' with arguments '{arguments}'", name, arguments);
-
-                    var toolResult = await tool(JObject.Parse(arguments));
                     Messages.Add(JObject.FromObject(new
                     {
                         role = "tool",
                         tool_call_id = id,
                         name,
-                        content = Newtonsoft.Json.JsonConvert.SerializeObject(toolResult)
+                        content = $"Invalid tool call: tool call does not contain 'arguments' property"
+                    }));
+
+                    continue;
+                    }
+
+                    Log.LogInformation("Calling tool '{name}' with arguments '{arguments}'", name, arguments);
+
+                string content;
+                try
+                {
+                    var toolResult = await tool(JObject.Parse(arguments));
+                    content = Newtonsoft.Json.JsonConvert.SerializeObject(toolResult);
+                }
+                catch (Exception ex)
+                {
+                    content = $"Got exception: {ex.Message}";
+                }
+
+                    Messages.Add(JObject.FromObject(new
+                    {
+                        role = "tool",
+                        tool_call_id = id,
+                        name,
+                    content
                     }));
                 }
 
-                completion = await GenerateCompletion(Messages, cancellationToken);
-            }
-
-            return completion;
+            return await GenerateCompletion(Messages, cancellationToken);
         }
 
         private async Task<JObject?> GetCompletion(string apiEndpoint, string apiKey, string content, int retryAttempt = 0, CancellationToken cancellationToken = default)
