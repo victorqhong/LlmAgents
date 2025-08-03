@@ -1,4 +1,4 @@
-﻿using LlmAgents;
+using LlmAgents;
 using LlmAgents.Agents;
 using LlmAgents.Communication;
 using LlmAgents.LlmApi;
@@ -12,6 +12,113 @@ using System.Runtime.InteropServices;
 using System.Net.Sockets;
 using StreamJsonRpc;
 using System.Net;
+
+void EnsureConfigDirectoryExists()
+{
+    string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    string configDir = Path.Combine(home, ".llmagents");
+    if (!Directory.Exists(configDir))
+    {
+        Directory.CreateDirectory(configDir);
+    }
+}
+
+string GetProfileConfig(string file)
+{
+    string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    return Path.Combine(home, ".llmagents", file);
+}
+
+string? InteractiveApiConfigSetup()
+{
+    Console.WriteLine("Interactive API setup. Leave blank to cancel.");
+
+    Console.Write("API endpoint (e.g. https://api.openai.com/v1): ");
+    string? endpoint = Console.ReadLine();
+    if (string.IsNullOrEmpty(endpoint))
+    {
+        return null;
+    }
+
+    Console.Write("API key: ");
+    string? apiKey = Console.ReadLine();
+    if (string.IsNullOrEmpty(apiKey))
+    {
+        return null;
+    }
+
+    Console.Write("Model name (e.g. gpt-3.5-turbo): ");
+    string? model = Console.ReadLine();
+    if (string.IsNullOrEmpty(model))
+    {
+        return null;
+    }
+
+    var apiConfig = new JObject
+    {
+        ["apiEndpoint"] = endpoint,
+        ["apiKey"] = apiKey,
+        ["apiModel"] = model
+    };
+
+    EnsureConfigDirectoryExists();
+
+    string configPath = GetProfileConfig("api.json");
+    File.WriteAllText(configPath, apiConfig.ToString());
+    Console.WriteLine($"Saved API config to: {configPath}");
+
+    return configPath;
+}
+
+string? InteractiveToolsConfigSetup()
+{
+    Console.WriteLine("Interactive tools config setup. Leave blank to cancel.");
+
+    Console.Write("Path to tools assembly: ");
+    var toolsAssembly = Console.ReadLine();
+    if (string.IsNullOrEmpty (toolsAssembly))
+    {
+        return null;
+    }
+
+    var toolsConfig = ToolsConfigGenerator.GenerateToolConfig(toolsAssembly);
+    if (toolsConfig == null)
+    {
+        return null;
+    }
+
+    EnsureConfigDirectoryExists();
+
+    string configPath = GetProfileConfig("tools.json");
+    File.WriteAllText(configPath, toolsConfig.ToString());
+    Console.WriteLine($"Saved tools config to: {configPath}");
+
+    Console.WriteLine("NOTE: Remember to add any necessary parameters to the generated config file.");
+
+    return configPath;
+}
+
+string? GetConfigOptionDefaultValue(string fileName, string environmentVariableName, EnvironmentVariableTarget environmentVariableTarget)
+{
+    if (File.Exists(fileName))
+    {
+        return fileName;
+    }
+
+    var profileConfig = GetProfileConfig(fileName);
+    if (File.Exists(profileConfig))
+    {
+        return profileConfig;
+    }
+
+    var environmentVariable = Environment.GetEnvironmentVariable("LLMAGENTS_API_CONFIG", environmentVariableTarget);
+    if (File.Exists(environmentVariable))
+    {
+        return environmentVariable;
+    }
+
+    return null;
+}
 
 var environmentVariableTarget = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? EnvironmentVariableTarget.User : EnvironmentVariableTarget.Process;
 
@@ -35,12 +142,12 @@ var persistentOption = new Option<bool>(
 var apiConfigOption = new Option<string?>(
     name: "--apiConfig",
     description: "Path to a JSON file with configuration for api values",
-    getDefaultValue: () => Environment.GetEnvironmentVariable("API_CONFIG", environmentVariableTarget) ?? "api.json");
+    getDefaultValue: () => GetConfigOptionDefaultValue("api.json", "LLMAGENTS_API_CONFIG", environmentVariableTarget));
 
-var toolsConfigOption = new Option<string>(
+var toolsConfigOption = new Option<string?>(
     name: "--toolsConfig",
     description: "Path to a JSON file with configuration for tool values",
-    getDefaultValue: () => Environment.GetEnvironmentVariable("TOOLS_CONFIG", environmentVariableTarget) ?? "tools.json");
+    getDefaultValue: () => GetConfigOptionDefaultValue("tools.json", "LLMAGENTS_TOOLS_CONFIG", environmentVariableTarget));
 
 var workingDirectoryOption = new Option<string>(
     name: "--workingDirectory",
@@ -96,6 +203,19 @@ async Task RootCommandHandler(InvocationContext context)
 
     if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(apiModel))
     {
+        var apiConfigPath = InteractiveApiConfigSetup();
+        if (!string.IsNullOrEmpty(apiConfigPath))
+        {
+            var apiConfig = JObject.Parse(File.ReadAllText(apiConfigPath));
+
+            apiEndpoint = apiConfig.Value<string>("apiEndpoint");
+            apiKey = apiConfig.Value<string>("apiKey");
+            apiModel = apiConfig.Value<string>("apiModel");
+        }
+    }
+
+    if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(apiModel))
+    {
         Console.Error.WriteLine("apiEndpoint, apiKey, and/or apiModel is null or empty.");
         return;
     }
@@ -103,6 +223,11 @@ async Task RootCommandHandler(InvocationContext context)
     persistent = context.ParseResult.GetValueForOption(persistentOption);
 
     var toolsConfigValue = context.ParseResult.GetValueForOption(toolsConfigOption);
+    if (string.IsNullOrEmpty(toolsConfigValue) || !File.Exists(toolsConfigValue))
+    {
+        toolsConfigValue = InteractiveToolsConfigSetup();
+    }
+
     var workingDirectoryValue = context.ParseResult.GetValueForOption(workingDirectoryOption);
     var toolServerAddressValue = context.ParseResult.GetValueForOption(toolServerAddressOption);
     var toolServerPortValue = context.ParseResult.GetValueForOption(toolServerPortOption);
