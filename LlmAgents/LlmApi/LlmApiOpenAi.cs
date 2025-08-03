@@ -267,7 +267,7 @@ namespace LlmAgents.LlmApi
         {
             using HttpClient client = new();
             client.DefaultRequestHeaders.Add("api-key", apiKey);
-            client.Timeout = TimeSpan.FromMinutes(5);
+            client.Timeout = Timeout.InfiniteTimeSpan;
 
             var body = new StringContent(content, System.Text.Encoding.UTF8, "application/json");
             try
