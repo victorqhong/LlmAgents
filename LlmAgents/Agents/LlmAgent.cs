@@ -15,6 +15,8 @@ namespace LlmAgents.Agents
 
         public string PersistentMessagesPath { get; set; } = Environment.CurrentDirectory;
 
+        public Action? PreWaitForContent { get; set; }
+
         public LlmAgent(LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
         {
             this.llmApi = llmApi;
@@ -25,6 +27,8 @@ namespace LlmAgents.Agents
         {
             while (!cancellationToken.IsCancellationRequested)
             {
+                PreWaitForContent?.Invoke();
+
                 var messageContent = await agentCommunication.WaitForContent(cancellationToken);
                 if (cancellationToken.IsCancellationRequested || messageContent == null)
                 {

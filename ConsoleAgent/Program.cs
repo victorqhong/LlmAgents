@@ -173,40 +173,8 @@ async Task RunAgent(string apiEndpoint, string apiKey, string apiModel,bool pers
 
     async Task ChatMode()
     {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            Console.Write("> ");
-
-            var content = await consoleCommunication.WaitForContent(cancellationToken);
-            if (cancellationToken.IsCancellationRequested || content == null)
-            {
-                break;
-            }
-
-            var response = await agent.llmApi.GenerateCompletion(content, cancellationToken);
-            if (!string.IsNullOrEmpty(response))
-            {
-                await consoleCommunication.SendMessage(response);
-            }
-
-            if (persistent)
-            {
-                agent.SaveMessages();
-            }
-
-            var toolCallResponse = await agent.llmApi.ProcessToolCalls(cancellationToken);
-            if (string.IsNullOrEmpty(toolCallResponse))
-            {
-                continue;
-            }
-
-            await consoleCommunication.SendMessage(toolCallResponse);
-
-            if (persistent)
-            {
-                agent.SaveMessages();
-            }
-        }
+        agent.PreWaitForContent = () => { Console.Write("> "); };
+        await agent.Run(cancellationToken);
     }
 
     async Task RunConversation()
