@@ -39,6 +39,12 @@ public class NextcloudFileRead : Nextcloud
     {
         var result = new JObject();
 
+        if (!ValidateParameters())
+        {
+            result.Add("error", "Nextcloud username, password, or basePath not specified");
+            return result;
+        }
+
         var path = parameters["path"]?.ToString();
         if (string.IsNullOrEmpty(path))
         {

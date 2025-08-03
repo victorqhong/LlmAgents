@@ -16,10 +16,11 @@ public abstract class Nextcloud : Tool
         basePath = toolFactory.GetParameter("Nextcloud.basePath") ?? string.Empty;
         username = toolFactory.GetParameter("Nextcloud.username") ?? string.Empty;
         password = toolFactory.GetParameter("Nextcloud.password") ?? string.Empty;
+    }
 
-        ArgumentNullException.ThrowIfNullOrEmpty(basePath);
-        ArgumentNullException.ThrowIfNullOrEmpty(username);
-        ArgumentNullException.ThrowIfNullOrEmpty(password);
+    protected bool ValidateParameters()
+    {
+        return !(string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password) || string.IsNullOrEmpty(basePath));
     }
 }
 
