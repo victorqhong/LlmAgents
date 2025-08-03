@@ -204,7 +204,6 @@ namespace LlmAgents.LlmApi
         public async Task<string?> ProcessToolCalls(CancellationToken cancellationToken = default)
         {
             if (!"tool_calls".Equals(FinishReason))
-            while ("tool_calls".Equals(FinishReason))
             {
                 return null;
             }
