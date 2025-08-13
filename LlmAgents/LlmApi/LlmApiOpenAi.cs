@@ -3,226 +3,332 @@ using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.Text.RegularExpressions;
+using System.Runtime.CompilerServices;
 
-namespace LlmAgents.LlmApi
+namespace LlmAgents.LlmApi;
+
+public class LlmApiOpenAi : ILlmApiMessageProvider
 {
-    public class LlmApiOpenAi : ILlmApiMessageProvider
+    private readonly ILogger Log;
+
+    private readonly List<Tool> Tools = [];
+    private readonly List<JObject> ToolDefinitions = [];
+    private readonly Dictionary<string, Tool> ToolMap = [];
+
+    public LlmApiOpenAi(ILoggerFactory loggerFactory, string id, string apiEndpoint, string apiKey, string model, List<JObject>? messages = null, Tool[]? tools = null)
     {
-        private readonly ILogger Log;
+        ArgumentException.ThrowIfNullOrEmpty(id);
+        ArgumentException.ThrowIfNullOrEmpty(apiEndpoint);
+        ArgumentException.ThrowIfNullOrEmpty(apiKey);
+        ArgumentException.ThrowIfNullOrEmpty(model);
 
-        private readonly List<Tool> Tools = [];
-        private readonly List<JObject> ToolDefinitions = [];
-        private readonly Dictionary<string, Tool> ToolMap = [];
+        Log = loggerFactory.CreateLogger(nameof(LlmApiOpenAi));
 
-        public LlmApiOpenAi(ILoggerFactory loggerFactory, string id, string apiEndpoint, string apiKey, string model, List<JObject>? messages = null, Tool[]? tools = null)
+        Id = id;
+        ApiEndpoint = apiEndpoint;
+        ApiKey = apiKey;
+        Model = model;
+
+        if (messages != null)
         {
-            ArgumentException.ThrowIfNullOrEmpty(id);
-            ArgumentException.ThrowIfNullOrEmpty(apiEndpoint);
-            ArgumentException.ThrowIfNullOrEmpty(apiKey);
-            ArgumentException.ThrowIfNullOrEmpty(model);
-
-            Log = loggerFactory.CreateLogger(nameof(LlmApiOpenAi));
-
-            Id = id;
-            ApiEndpoint = apiEndpoint;
-            ApiKey = apiKey;
-            Model = model;
-
-            if (messages != null)
-            {
-                Messages.AddRange(messages);
-            }
-
-            if (tools != null)
-            {
-                AddTool(tools);
-            }
+            Messages.AddRange(messages);
         }
 
-        public readonly string Id;
-
-        public List<JObject> Messages { get; private set; } = [];
-
-        public string ApiEndpoint { get; private set; }
-
-        public string ApiKey { get; private set; }
-
-        public string Model { get; set; }
-
-        public int? MaxCompletionTokens { get; set; } = 8192;
-
-        public double Temperature { get; set; } = 1.0;
-
-        public string? FinishReason { get; private set; }
-
-        public void AddTool(params Tool[] tools)
+        if (tools != null)
         {
-            foreach (var tool in tools)
-            {
-                AddTool(tool);
-            }
+            AddTool(tools);
+        }
+    }
+
+    public readonly string Id;
+
+    public List<JObject> Messages { get; private set; } = [];
+
+    public string ApiEndpoint { get; private set; }
+
+    public string ApiKey { get; private set; }
+
+    public string Model { get; set; }
+
+    public int? MaxCompletionTokens { get; set; } = 8192;
+
+    public double Temperature { get; set; } = 1.0;
+
+    public string? FinishReason { get; private set; }
+
+    public void AddTool(params Tool[] tools)
+    {
+        foreach (var tool in tools)
+        {
+            AddTool(tool);
+        }
+    }
+
+    public void AddTool(Tool tool)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+
+        Tools.Add(tool);
+        ToolDefinitions.Add(tool.Schema);
+        ToolMap.Add(tool.Name, tool);
+    }
+
+    public async Task<string?> GenerateCompletion(IEnumerable<IMessageContent> messageContents, CancellationToken cancellationToken = default)
+    {
+        var completion = await GenerateStreamingCompletion(messageContents, cancellationToken);
+        if (completion == null)
+        {
+            return null;
         }
 
-        public void AddTool(Tool tool)
+        var sb = new System.Text.StringBuilder();
+        await foreach (var chunk in completion)
         {
-            ArgumentNullException.ThrowIfNull(tool);
-
-            Tools.Add(tool);
-            ToolDefinitions.Add(tool.Schema);
-            ToolMap.Add(tool.Name, tool);
+            sb.Append(chunk);
         }
 
-        public async Task<string?> GenerateCompletion(IEnumerable<IMessageContent> messageContents, CancellationToken cancellationToken = default)
+        return sb.ToString();
+    }
+
+    public async Task<IAsyncEnumerable<string>?> GenerateStreamingCompletion(IEnumerable<IMessageContent> messageContents, CancellationToken cancellationToken = default)
+    {
+        var message = GetMessage(messageContents);
+        Messages.Add(message);
+
+        return await GenerateStreamingCompletion(Messages, cancellationToken);
+    }
+
+    public async Task<IAsyncEnumerable<string>?> GenerateStreamingCompletion(List<JObject> messages, CancellationToken cancellationToken = default)
+    {
+        if (messages == null || messages.Count < 1)
         {
-            ArgumentNullException.ThrowIfNull(messageContents);
-
-            var content = new JArray();
-
-            foreach (var messageContent in messageContents)
-            {
-                if (messageContent is MessageContentText userMessage)
-                {
-                    var textContent = new JObject();
-                    textContent.Add("type", "text");
-                    textContent.Add("text", userMessage.Text);
-                    content.Add(textContent);
-
-                }
-                else if (messageContent is MessageContentImageUrl imageUrl)
-                {
-                    var url = string.Format("data:{0};base64,{1}", imageUrl.MimeType, imageUrl.DataBase64);
-
-                    var imageContent = new JObject();
-                    imageContent.Add("type", "image_url");
-                    imageContent.Add("image_url", JObject.FromObject(new { url = url }));
-                    content.Add(imageContent);
-                }
-            }
-
-            var message = new JObject();
-            message.Add("role", "user");
-            message.Add("content", content);
-
-            Messages.Add(message);
-
-            return await GenerateCompletion(Messages, cancellationToken);
+            throw new ArgumentException($"{nameof(messages)} is null or doesn't contain messages", nameof(messages));
         }
 
-        public async Task<string?> GenerateCompletion(List<JObject> messages, CancellationToken cancellationToken = default)
+        if (cancellationToken.IsCancellationRequested)
         {
-            if (messages == null || messages.Count < 1)
-            {
-                throw new ArgumentException($"{nameof(messages)} is null or doesn't contain messages", nameof(messages));
-            }
+            return null;
+        }
 
+        var payload = GetPayload(Model, messages, MaxCompletionTokens, Temperature, ToolDefinitions, "auto", true);
+
+        var completion = await GetCompletion(ApiEndpoint, ApiKey, payload, retryAttempt: 0, cancellationToken);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+
+        return completion;
+    }
+
+    private async Task<IAsyncEnumerable<string>?> GetCompletion(string apiEndpoint, string apiKey, string content, int retryAttempt = 0, CancellationToken cancellationToken = default)
+    {
+        using HttpClient client = new();
+        client.Timeout = Timeout.InfiniteTimeSpan;
+        client.DefaultRequestHeaders.Add("api-key", apiKey);
+        client.DefaultRequestHeaders.Add("Accept", "text/event-stream");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, apiEndpoint)
+        {
+            Content = new StringContent(content, System.Text.Encoding.UTF8, "application/json")
+        };
+
+        try
+        {
+            var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             if (cancellationToken.IsCancellationRequested)
             {
                 return null;
             }
-
-            var payload = GetPayload(Model, messages, MaxCompletionTokens, Temperature, ToolDefinitions, "auto");
-
-            var completion = await GetCompletion(ApiEndpoint, ApiKey, payload, retryAttempt: 0, cancellationToken);
-            if (completion == null)
+            
+            if (response.IsSuccessStatusCode)
             {
+                var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
                 if (cancellationToken.IsCancellationRequested)
                 {
                     return null;
                 }
 
-                throw new ApplicationException("Could not retrieve completion");
-            }
-
-            return await ProcessCompletion(completion, cancellationToken);
-        }
-
-        public async Task<string?> ProcessCompletion(JObject completion, CancellationToken cancellationToken = default)
-        {
-            if (cancellationToken.IsCancellationRequested)
-            {
-                Log.LogInformation("Cancellation requested");
-                return null;
-            }
-
-            var choice = completion["choices"]?[0];
-            if (choice == null)
-            {
-                Log.LogError("Could not get choice[0]");
-                return null;
-            }
-
-            var message = choice["message"];
-            if (message == null)
-            {
-                Log.LogError("Could not get choice[0].message");
-                return null;
-            }
-
-            FinishReason = choice["finish_reason"]?.ToString();
-            if (FinishReason == null)
-            {
-                Log.LogError("Could not get choice[0].finish_reason");
-                return null;
-            }
-
-            var content = message["content"]?.ToString();
-
-            if (string.Equals(FinishReason, "stop"))
-            {
-                if (string.IsNullOrEmpty(content))
-                {
-                    Log.LogWarning($"Content is null or empty");
-                }
-
-                Messages.Add(JObject.FromObject(new { role = "assistant", content }));
-
-                return content;
-            }
-            else if (string.Equals(FinishReason, "tool_calls"))
-            {
-                var toolCalls = message["tool_calls"];
-                if (toolCalls == null)
-                {
-                    Log.LogError("Could not get choice[0].message.tool_calls");
-                    return null;
-                }
-
-                Messages.Add(JObject.FromObject(new { role = "assistant", content, tool_calls = toolCalls }));
-
-                return content;
-            }
-            else if (string.Equals(FinishReason, "length"))
-            {
-                throw new ApplicationException(FinishReason);
+                return ParseCompletion(stream, cancellationToken);
             }
             else
             {
-                throw new NotImplementedException(FinishReason);
-            }
-        }
-
-        public async Task<string?> ProcessToolCalls(CancellationToken cancellationToken = default)
-        {
-            if (!"tool_calls".Equals(FinishReason))
-            {
-                return null;
-            }
-
-                var toolCalls = Messages[Messages.Count - 1].Value<JToken>("tool_calls");
-                if (toolCalls == null)
+                var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (cancellationToken.IsCancellationRequested)
                 {
-                Log.LogError("tool_calls was not found in last message");
                     return null;
                 }
 
-                foreach (var toolCall in toolCalls)
-                {
-                    var id = toolCall["id"]?.Value<string>();
+                var responseMessage = JObject.Parse(responseContent);
 
-                    var function = toolCall["function"];
-                    if (function == null)
+                var error = responseMessage.Value<JObject>("error");
+                if (error != null)
+                {
+                    var message = error.Value<string>("message");
+                    var code = error.Value<string>("code");
+                    if (string.Equals("429", code) && retryAttempt < 3)
                     {
-                        Log.LogError("Could not get choice[0].message.tool_calls.function");
+                        var seconds = 30 * (retryAttempt + 1);
+
+                        var pattern = @"retry\s+after\s+(\d+)\s+seconds";
+                        var regex = new Regex(pattern, RegexOptions.IgnoreCase);
+                        var match = regex.Match(message ?? string.Empty);
+                        if (match.Success)
+                        {
+                            seconds = int.Parse(match.Groups[1].Value) + 5;
+                        }
+
+                        Log.LogInformation("Request throttled... waiting {seconds} seconds and retrying.", seconds);
+                        Thread.Sleep(seconds * 1000);
+                        return await GetCompletion(apiEndpoint, apiKey, content, retryAttempt + 1, cancellationToken);
+                    }
+                    else
+                    {
+                        Log.LogError("Error: {message}", message);
+                    }
+                }
+                else
+                {
+                    Log.LogError("Error: {responseContent}", responseContent);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.LogError(e, "Got exception");
+        }
+
+        return null;
+    }
+
+    private async IAsyncEnumerable<string> ParseCompletion(Stream stream, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        string? finishReason = null;
+        var parsedToolCalls = new Dictionary<int, Dictionary<string, string>>();
+        var sb = new System.Text.StringBuilder();
+
+        using var reader = new StreamReader(stream);
+        while (!reader.EndOfStream)
+        {
+            var line = await reader.ReadLineAsync(cancellationToken);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                yield break;
+            }
+            else if (string.IsNullOrEmpty(line))
+            {
+                continue;
+            }
+            else if ("data: [DONE]".Equals(line))
+            {
+                break;
+            }
+
+            var data = line[6..];
+            var json = JObject.Parse(data);
+
+            var @object = json["object"];
+            if ("chat.completion.chunk".Equals(@object?.Value<string>()))
+            {
+                if (json["choices"]?[0] is not JObject choice)
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(finishReason))
+                {
+                    finishReason = choice["finish_reason"]?.Value<string>();
+                }
+
+                var delta = choice["delta"]?.Value<JObject>();
+                if (delta?["content"]?.Value<string>() is string deltaContent)
+                {
+                    yield return deltaContent;
+                    sb.Append(deltaContent);
+                }
+
+                if (delta?["tool_calls"]?.Value<JArray>() is JArray toolCalls)
+                {
+                    foreach (var element in toolCalls)
+                    {
+                        if (element is not JObject toolCall)
+                        {
+                            continue;
+                        }
+                        
+                        if (!toolCall.ContainsKey("index") || toolCall.Value<int?>("index") is not int index)
+                        {
+                            continue;
+                        }
+
+                        if (!parsedToolCalls.TryGetValue(index, out Dictionary<string, string>? toolCallData))
+                        {
+                            toolCallData = [];
+                            parsedToolCalls.Add(index, toolCallData);
+                        }
+
+                        if (toolCall.ContainsKey("id") && toolCall.Value<string>("id") is string id && !toolCallData.ContainsKey("id"))
+                        {
+                            toolCallData.Add("id", id);
+                        }
+
+                        if (toolCall.ContainsKey("type") && toolCall.Value<string>("type") is string type && !toolCallData.ContainsKey("type"))
+                        {
+                            toolCallData.Add("type", type);
+                        }
+
+                        if (toolCall.ContainsKey("function") && toolCall.Value<JObject>("function") is JObject function)
+                        {
+                            if (function.ContainsKey("name") && function.Value<string>("name") is string functionName && !toolCallData.ContainsKey("functionName"))
+                            {
+                                toolCallData.Add("functionName", functionName);
+                            }
+
+                            if (function.ContainsKey("arguments") && function.Value<string>("arguments") is string functionArguments)
+                            {
+                                if (!toolCallData.TryAdd("functionArguments", functionArguments))
+                                {
+                                    toolCallData["functionArguments"] += functionArguments;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        var content = sb.ToString();
+        FinishReason = finishReason;
+
+        if (string.Equals(FinishReason, "stop"))
+        {
+            Messages.Add(JObject.FromObject(new { role = "assistant", content }));
+        }
+        else if (string.Equals(FinishReason, "tool_calls"))
+        {
+            var toolCalls = parsedToolCalls.Select(kvp =>
+            {
+                return new
+                {
+                    id = kvp.Value["id"],
+                    type = kvp.Value["type"],
+                    function = new
+                    {
+                        name = kvp.Value["functionName"],
+                        arguments = kvp.Value["functionArguments"]
+                    }
+                };
+            });
+
+            Messages.Add(JObject.FromObject(new { role = "assistant", content, tool_calls = toolCalls }));
+
+            foreach (var toolCall in toolCalls)
+            {
+                var id = toolCall.id;
+
+                var function = toolCall.function;
+                if (function == null)
+                {
                     Messages.Add(JObject.FromObject(new
                     {
                         role = "tool",
@@ -231,12 +337,11 @@ namespace LlmAgents.LlmApi
                     }));
 
                     continue;
-                    }
+                }
 
-                    var name = function["name"]?.Value<string>();
-                    if (string.IsNullOrEmpty(name))
-                    {
-                        Log.LogError("Could not get choice[0].message.tool_calls.name");
+                var name = function.name;
+                if (string.IsNullOrEmpty(name))
+                {
                     Messages.Add(JObject.FromObject(new
                     {
                         role = "tool",
@@ -246,11 +351,11 @@ namespace LlmAgents.LlmApi
                     }));
 
                     continue;
-                    }
+                }
 
-                    if (!ToolMap.TryGetValue(name, out Tool? value))
-                    {
-                    Log.LogError($"Could not get tool: {name}");
+                if (!ToolMap.TryGetValue(name, out Tool? value))
+                {
+                    Log.LogError("Could not get tool: {name}", name);
                     Messages.Add(JObject.FromObject(new
                     {
                         role = "tool",
@@ -260,14 +365,13 @@ namespace LlmAgents.LlmApi
                     }));
 
                     continue;
-                    }
+                }
 
-                    var tool = value.Function;
+                var tool = value.Function;
 
-                    var arguments = function["arguments"]?.Value<string>();
-                    if (arguments == null)
-                    {
-                        Log.LogError("Could not get choice[0].message.tool_calls.arguments");
+                var arguments = function.arguments;
+                if (arguments == null)
+                {
                     Messages.Add(JObject.FromObject(new
                     {
                         role = "tool",
@@ -277,132 +381,124 @@ namespace LlmAgents.LlmApi
                     }));
 
                     continue;
-                    }
+                }
 
-                    Log.LogInformation("Calling tool '{name}' with arguments '{arguments}'", name, arguments);
+                Log.LogInformation("Calling tool '{name}' with arguments '{arguments}'", name, arguments);
 
-                string content;
+                string toolContent;
                 try
                 {
                     var toolResult = await tool(JObject.Parse(arguments));
-                    content = Newtonsoft.Json.JsonConvert.SerializeObject(toolResult);
+                    toolContent = Newtonsoft.Json.JsonConvert.SerializeObject(toolResult);
                 }
                 catch (Exception ex)
                 {
-                    content = $"Got exception: {ex.Message}";
+                    toolContent = $"Got exception: {ex.Message}";
                 }
 
-                    Messages.Add(JObject.FromObject(new
-                    {
-                        role = "tool",
-                        tool_call_id = id,
-                        name,
-                    content
-                    }));
-                }
-
-            return await GenerateCompletion(Messages, cancellationToken);
-        }
-
-        private async Task<JObject?> GetCompletion(string apiEndpoint, string apiKey, string content, int retryAttempt = 0, CancellationToken cancellationToken = default)
-        {
-            using HttpClient client = new();
-            client.DefaultRequestHeaders.Add("api-key", apiKey);
-            client.Timeout = Timeout.InfiniteTimeSpan;
-
-            var body = new StringContent(content, System.Text.Encoding.UTF8, "application/json");
-            try
-            {
-                var response = await client.PostAsync(apiEndpoint, body, cancellationToken);
-                var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                var responseMessage = JObject.Parse(responseContent);
-
-                if (response.IsSuccessStatusCode)
+                Messages.Add(JObject.FromObject(new
                 {
-                    return responseMessage;
-                }
-                else
+                    role = "tool",
+                    tool_call_id = id,
+                    name,
+                    content = toolContent
+                }));
+            }
+
+            var toolCompletion = await GenerateStreamingCompletion(Messages, cancellationToken);
+            if (toolCompletion != null)
+            {
+                await foreach (var chunk in toolCompletion)
                 {
-                    var error = responseMessage.Value<JObject>("error");
-                    if (error != null)
-                    {
-                        var message = error.Value<string>("message");
-                        var code = error.Value<string>("code");
-                        if (string.Equals("429", code) && retryAttempt < 3)
-                        {
-                            var seconds = 30 * (retryAttempt + 1);
-
-                            string pattern = @"retry\s+after\s+(\d+)\s+seconds";
-                            Regex regex = new Regex(pattern, RegexOptions.IgnoreCase);
-                            Match match = regex.Match(message ?? string.Empty);
-                            if (match.Success)
-                            {
-                                seconds = int.Parse(match.Groups[1].Value) + 5;
-                            }
-
-                            Log.LogInformation("Request throttled... waiting {seconds} seconds and retrying.", seconds);
-                            System.Threading.Thread.Sleep(seconds * 1000);
-                            return await GetCompletion(apiEndpoint, apiKey, content, retryAttempt + 1, cancellationToken);
-                        }
-                        else
-                        {
-                            Log.LogError("Error: {message}", message);
-                        }
-                    }
-                    else
-                    {
-                        Log.LogError("Error: {responseContent}", responseContent);
-                    }
+                    yield return chunk;
                 }
             }
-            catch (Exception e)
-            {
-                Log.LogError(e, "Got exception");
-            }
+        }
+        else if (string.Equals(FinishReason, "length"))
+        {
+            throw new ApplicationException(FinishReason);
+        }
+        else
+        {
+            throw new NotImplementedException(FinishReason);
+        }
+    }
 
-            return null;
+    public static JObject GetMessage(IEnumerable<IMessageContent> messageContents)
+    {
+        ArgumentNullException.ThrowIfNull(messageContents);
+
+        var content = new JArray();
+
+        foreach (var messageContent in messageContents)
+        {
+            if (messageContent is MessageContentText userMessage)
+            {
+                var textContent = new JObject();
+                textContent.Add("type", "text");
+                textContent.Add("text", userMessage.Text);
+                content.Add(textContent);
+
+            }
+            else if (messageContent is MessageContentImageUrl imageUrl)
+            {
+                var url = string.Format("data:{0};base64,{1}", imageUrl.MimeType, imageUrl.DataBase64);
+
+                var imageContent = new JObject();
+                imageContent.Add("type", "image_url");
+                imageContent.Add("image_url", JObject.FromObject(new { url }));
+                content.Add(imageContent);
+            }
         }
 
-        public static string GetPayload(string model, List<JObject> messages, int? maxCompletionTokens, double temperature, List<JObject>? tools = null, string toolChoice = "auto")
-        {
-            var payload = new JObject();
-            payload.Add("model", model);
-            payload.Add("messages", JArray.FromObject(messages));
-            if (maxCompletionTokens > 0)
-            {
-                payload.Add("max_completion_tokens", maxCompletionTokens);
-            }
-            payload.Add("temperature", temperature);
-            if (tools != null && tools.Count > 0)
-            {
-                payload.Add("tools", JArray.FromObject(tools));
-                payload.Add("tool_choice", toolChoice);
-            }
+        var message = new JObject();
+        message.Add("role", "user");
+        message.Add("content", content);
 
-            return payload.ToString(Newtonsoft.Json.Formatting.None);
+        return message;
+    }
+
+    public static string GetPayload(string model, List<JObject> messages, int? maxCompletionTokens, double temperature, List<JObject>? tools = null, string toolChoice = "auto", bool stream = true)
+    {
+        var payload = new JObject();
+        payload.Add("model", model);
+        payload.Add("messages", JArray.FromObject(messages));
+        if (maxCompletionTokens > 0)
+        {
+            payload.Add("max_completion_tokens", maxCompletionTokens);
+        }
+        payload.Add("temperature", temperature);
+        if (tools != null && tools.Count > 0)
+        {
+            payload.Add("tools", JArray.FromObject(tools));
+            payload.Add("tool_choice", toolChoice);
         }
 
-        public async Task<int> CountMessages()
+        payload.Add("stream", stream);
+
+        return payload.ToString(Newtonsoft.Json.Formatting.None);
+    }
+
+    public async Task<int> CountMessages()
+    {
+        return Messages.Count;
+    }
+
+    public async Task PruneContext(int numMessagesToKeep)
+    {
+        if (Messages.Count <= numMessagesToKeep)
         {
-            return Messages.Count;
+            return;
         }
 
-        public async Task PruneContext(int numMessagesToKeep)
+        // keep the first message (system prompt) and last message (a tool call is needed before a tool result)
+        var pruneCount = Math.Max(Messages.Count - numMessagesToKeep, 0) - 1;
+        Messages.RemoveRange(1, pruneCount - 1);
+
+        // remove messages from the beginning to maintain a well-formatted message list
+        while (Messages.Count > 1 && !string.Equals(Messages[0].Value<string>("role"), "user") && !string.Equals(Messages[0].Value<string>("role"), "system"))
         {
-            if (Messages.Count <= numMessagesToKeep)
-            {
-                return;
-            }
-
-            // keep the first message (system prompt) and last message (a tool call is needed before a tool result)
-            var pruneCount = Math.Max(Messages.Count - numMessagesToKeep, 0) - 1;
-            Messages.RemoveRange(1, pruneCount - 1);
-
-            // remove messages from the beginning to maintain a well-formatted message list
-            while (Messages.Count > 1 && (!string.Equals(Messages[0].Value<string>("role"), "user") && !string.Equals(Messages[0].Value<string>("role"), "system")))
-            {
-                Messages.RemoveAt(1);
-            }
+            Messages.RemoveAt(1);
         }
     }
 }
