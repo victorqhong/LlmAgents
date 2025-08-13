@@ -33,7 +33,7 @@ string? InteractiveApiConfigSetup()
 {
     Console.WriteLine("Interactive API setup. Leave blank to cancel.");
 
-    Console.Write("API endpoint (e.g. https://api.openai.com/v1): ");
+    Console.Write("API endpoint (e.g. https://api.openai.com/v1/chat/completions): ");
     string? endpoint = Console.ReadLine();
     if (string.IsNullOrEmpty(endpoint))
     {
@@ -76,7 +76,7 @@ string? InteractiveToolsConfigSetup()
 
     Console.Write("Path to tools assembly: ");
     var toolsAssembly = Console.ReadLine();
-    if (string.IsNullOrEmpty (toolsAssembly))
+    if (string.IsNullOrEmpty(toolsAssembly))
     {
         return null;
     }
@@ -164,9 +164,7 @@ var toolServerPortOption = new Option<int>(
     description: "The port of the tool server",
     getDefaultValue: () => 5000);
 
-Tool[]? tools = null;
-
-var rootCommand = new RootCommand("XmppAgent");
+var rootCommand = new RootCommand("ConsoleAgent");
 rootCommand.SetHandler(RootCommandHandler);
 rootCommand.AddOption(apiEndpointOption);
 rootCommand.AddOption(apiKeyOption);
@@ -177,6 +175,7 @@ rootCommand.AddOption(toolsConfigOption);
 rootCommand.AddOption(workingDirectoryOption);
 rootCommand.AddOption(toolServerAddressOption);
 rootCommand.AddOption(toolServerPortOption);
+return await rootCommand.InvokeAsync(args);
 
 async Task RootCommandHandler(InvocationContext context)
 {
@@ -237,7 +236,7 @@ async Task RootCommandHandler(InvocationContext context)
     await RunAgent(apiEndpoint, apiKey, apiModel, persistent, toolsConfigValue, workingDirectoryValue, toolServerAddressValue, toolServerPortValue, cancellationToken);
 }
 
-async Task RunAgent(string apiEndpoint, string apiKey, string apiModel,bool persistent, string? toolsConfigValue, string? workingDirectoryValue, string? toolServerAddressValue, int toolServerPortValue, CancellationToken cancellationToken)
+async Task RunAgent(string apiEndpoint, string apiKey, string apiModel, bool persistent, string? toolsConfigValue, string? workingDirectoryValue, string? toolServerAddressValue, int toolServerPortValue, CancellationToken cancellationToken)
 {
     var consoleCommunication = new ConsoleCommunication();
 
@@ -247,149 +246,9 @@ async Task RunAgent(string apiEndpoint, string apiKey, string apiModel,bool pers
         apiModel, apiEndpoint, apiKey, apiModel,
         persistent, basePath: workingDirectoryValue,
         toolsFilePath: toolsConfigValue, toolServerAddress: toolServerAddressValue, toolServerPort: toolServerPortValue);
-
-    var optionRunTool = "Run tool";
-    var optionChatMode = "Chat mode";
-    var optionExit = "Exit";
-
-    var options = new string[]
-    {
-        optionRunTool,
-        optionChatMode,
-    };
-
-    var optionsMap = new Dictionary<string, Func<Task>>()
-    {
-        { optionRunTool, RunTool },
-        { optionChatMode, ChatMode },
-    };
-
-    async Task RunTool()
-    {
-        if (tools == null)
-        {
-            return;
-        }
-
-        for (int i = 0; i < tools.Length; i++)
-        {
-            Console.WriteLine($"{i + 1}) {tools[i].Name}");
-        }
-
-        Console.Write("Tool choice> ");
-        var toolInput = Console.ReadLine();
-        if (!string.IsNullOrEmpty(toolInput))
-        {
-            var toolChoice = int.Parse(toolInput) - 1;
-
-            Console.WriteLine(tools[toolChoice].Schema);
-            Console.WriteLine();
-
-            Console.Write("Tool parameters (JSON)> ");
-            var toolParametersInput = Console.ReadLine();
-            if (!string.IsNullOrEmpty(toolParametersInput))
-            {
-                var toolParameters = JObject.Parse(toolParametersInput);
-                var toolOutput = await tools[toolChoice].Function(toolParameters);
-                Console.WriteLine(toolOutput);
-            }
-        }
-    }
-
-    async Task ChatMode()
-    {
-        agent.PreWaitForContent = () => { Console.Write("> "); };
-        await agent.Run(cancellationToken);
-    }
-
-    async Task RunConversation()
-    {
-        JObject CreateMessage(string role, string content)
-        {
-            return JObject.FromObject(new { role, content });
-        }
-
-        Console.Write("Turns> ");
-        var turnsInput = Console.ReadLine();
-        if (string.IsNullOrEmpty(turnsInput))
-        {
-            return;
-        }
-
-        int turns = int.Parse(turnsInput);
-
-        var systemPromptCommon = $"{Prompts.DefaultSystemPrompt}";
-        var systemPrompt1 = $"{systemPromptCommon}";
-        var systemPrompt2 = $"You are expected to guide the user.";
-        var initialMessage = "Read 'PLAN.md' and start implementing the plan.";
-
-        var messages1 = new List<JObject>()
-        {
-            CreateMessage("system", systemPrompt1),
-        };
-
-        var messages2 = new List<JObject>()
-        {
-            CreateMessage("system", systemPrompt2)
-        };
-
-        var agent1 = new LlmApiOpenAi(loggerFactory, "Agent1", apiEndpoint, apiKey, apiModel, messages1, tools);
-        var agent2 = new LlmApiOpenAi(loggerFactory, "Agent2", apiEndpoint, apiKey, apiModel, messages2, tools);
-
-        messages1.Add(CreateMessage("user", initialMessage));
-        messages2.Add(CreateMessage("assistant", initialMessage));
-
-        Console.WriteLine($"{agent2.Id}> {initialMessage}");
-        Console.WriteLine($"====================================");
-
-        var agent1Response = string.Empty;
-        var agent2Response = string.Empty;
-        for (int i = 0; i < turns; i++)
-        {
-            if (i > 0)
-            {
-                messages1.Add(CreateMessage("user", agent2Response));
-            }
-
-            agent1Response = await agent1.GenerateCompletion(messages1);
-            Console.WriteLine($"{agent1.Id}> {agent1Response}");
-            Console.WriteLine($"====================================");
-            Console.ReadLine();
-
-            messages2.Add(CreateMessage("user", agent1Response));
-            agent2Response = await agent2.GenerateCompletion(messages2);
-            Console.WriteLine($"{agent2.Id}> {agent2Response}");
-            Console.WriteLine($"====================================");
-            Console.ReadLine();
-        }
-    }
-
-    while (!cancellationToken.IsCancellationRequested)
-    {
-        for (int i = 0; i < options.Length; i++)
-        {
-            Console.WriteLine($"{i + 1}) {options[i]}");
-        }
-
-        Console.WriteLine($"0) {optionExit}");
-
-        Console.Write("Choice> ");
-        var input = Console.ReadLine();
-        if (string.IsNullOrEmpty(input))
-        {
-            break;
-        }
-
-        Console.WriteLine();
-
-        if (string.Equals(input, "0"))
-        {
-            break;
-        }
-
-        var choice = int.Parse(input) - 1;
-        await optionsMap[options[choice]]();
-    }
+    agent.StreamOutput = true;
+    agent.PreWaitForContent = () => { Console.Write("> "); };
+    await agent.Run(cancellationToken);
 }
 
 async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
@@ -398,6 +257,8 @@ async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunicati
     string? toolsFilePath = null, string? toolServerAddress = null, int toolServerPort = 5000)
 {
     var llmApi = new LlmApiOpenAi(loggerFactory, id, apiEndpoint, apiKey, model);
+
+    Tool[]? tools = null;
 
     if (!string.IsNullOrEmpty(toolServerAddress))
     {
@@ -472,5 +333,3 @@ async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunicati
 
     return agent;
 }
-
-return await rootCommand.InvokeAsync(args);
