@@ -13,6 +13,8 @@ namespace LlmAgents.Agents
 
         public bool Persistent { get; set; }
 
+        public bool StreamOutput { get; set; }
+
         public string PersistentMessagesPath { get; set; } = Environment.CurrentDirectory;
 
         public Action? PreWaitForContent { get; set; }
@@ -35,18 +37,32 @@ namespace LlmAgents.Agents
                     break;
                 }
 
-                var response = await llmApi.GenerateStreamingCompletion(messageContent, cancellationToken);
-                if (response == null)
+                if (StreamOutput)
                 {
-                    continue;
-                }
+                    var response = await llmApi.GenerateStreamingCompletion(messageContent, cancellationToken);
+                    if (response == null)
+                    {
+                        continue;
+                    }
 
-                await foreach (var chunk in response)
+                    await foreach (var chunk in response)
+                    {
+                        await agentCommunication.SendMessage(chunk, false);
+                    }
+
+                    await agentCommunication.SendMessage(string.Empty, true);
+
+                }
+                else
                 {
-                    await agentCommunication.SendMessage(chunk, false);
-                }
+                    var response = await llmApi.GenerateCompletion(messageContent, cancellationToken);
+                    if (response == null)
+                    {
+                        continue;
+                    }
 
-                await agentCommunication.SendMessage(string.Empty, true);
+                    await agentCommunication.SendMessage(response, true);
+                }
 
                 if (Persistent)
                 {

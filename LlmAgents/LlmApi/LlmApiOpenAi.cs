@@ -11,7 +11,6 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 {
     private readonly ILogger Log;
 
-    private readonly List<Tool> Tools = [];
     private readonly List<JObject> ToolDefinitions = [];
     private readonly Dictionary<string, Tool> ToolMap = [];
 
@@ -68,7 +67,6 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
     {
         ArgumentNullException.ThrowIfNull(tool);
 
-        Tools.Add(tool);
         ToolDefinitions.Add(tool.Schema);
         ToolMap.Add(tool.Name, tool);
     }
@@ -112,13 +110,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 
         var payload = GetPayload(Model, messages, MaxCompletionTokens, Temperature, ToolDefinitions, "auto", true);
 
-        var completion = await GetCompletion(ApiEndpoint, ApiKey, payload, retryAttempt: 0, cancellationToken);
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return null;
-        }
-
-        return completion;
+        return await GetCompletion(ApiEndpoint, ApiKey, payload, retryAttempt: 0, cancellationToken);
     }
 
     private async Task<IAsyncEnumerable<string>?> GetCompletion(string apiEndpoint, string apiKey, string content, int retryAttempt = 0, CancellationToken cancellationToken = default)
@@ -170,12 +162,15 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                     {
                         var seconds = 30 * (retryAttempt + 1);
 
-                        var pattern = @"retry\s+after\s+(\d+)\s+seconds";
-                        var regex = new Regex(pattern, RegexOptions.IgnoreCase);
-                        var match = regex.Match(message ?? string.Empty);
-                        if (match.Success)
+                        if (!string.IsNullOrEmpty(message))
                         {
-                            seconds = int.Parse(match.Groups[1].Value) + 5;
+                            var pattern = @"retry\s+after\s+(\d+)\s+seconds";
+                            var regex = new Regex(pattern, RegexOptions.IgnoreCase);
+                            var match = regex.Match(message);
+                            if (match.Success)
+                            {
+                                seconds = int.Parse(match.Groups[1].Value) + 5;
+                            }
                         }
 
                         Log.LogInformation("Request throttled... waiting {seconds} seconds and retrying.", seconds);
@@ -228,68 +223,70 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
             var json = JObject.Parse(data);
 
             var @object = json["object"];
-            if ("chat.completion.chunk".Equals(@object?.Value<string>()))
+            if (!"chat.completion.chunk".Equals(@object?.Value<string>()))
             {
-                if (json["choices"]?[0] is not JObject choice)
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                if (string.IsNullOrEmpty(finishReason))
-                {
-                    finishReason = choice["finish_reason"]?.Value<string>();
-                }
+            if (json["choices"]?[0] is not JObject choice)
+            {
+                continue;
+            }
 
-                var delta = choice["delta"]?.Value<JObject>();
-                if (delta?["content"]?.Value<string>() is string deltaContent)
-                {
-                    yield return deltaContent;
-                    sb.Append(deltaContent);
-                }
+            if (string.IsNullOrEmpty(finishReason))
+            {
+                finishReason = choice.Value<string>("finish_reason");
+            }
 
-                if (delta?["tool_calls"]?.Value<JArray>() is JArray toolCalls)
+            var delta = choice["delta"]?.Value<JObject>();
+            if (delta?["content"]?.Value<string>() is string deltaContent)
+            {
+                yield return deltaContent;
+                sb.Append(deltaContent);
+            }
+
+            if (delta?["tool_calls"]?.Value<JArray>() is JArray toolCalls)
+            {
+                foreach (var element in toolCalls)
                 {
-                    foreach (var element in toolCalls)
+                    if (element is not JObject toolCall)
                     {
-                        if (element is not JObject toolCall)
+                        continue;
+                    }
+
+                    if (!toolCall.ContainsKey("index") || toolCall.Value<int?>("index") is not int index)
+                    {
+                        continue;
+                    }
+
+                    if (!parsedToolCalls.TryGetValue(index, out Dictionary<string, string>? toolCallData))
+                    {
+                        toolCallData = [];
+                        parsedToolCalls.Add(index, toolCallData);
+                    }
+
+                    if (toolCall.ContainsKey("id") && toolCall.Value<string>("id") is string id && !toolCallData.ContainsKey("id"))
+                    {
+                        toolCallData.Add("id", id);
+                    }
+
+                    if (toolCall.ContainsKey("type") && toolCall.Value<string>("type") is string type && !toolCallData.ContainsKey("type"))
+                    {
+                        toolCallData.Add("type", type);
+                    }
+
+                    if (toolCall.ContainsKey("function") && toolCall.Value<JObject>("function") is JObject function)
+                    {
+                        if (function.ContainsKey("name") && function.Value<string>("name") is string functionName && !toolCallData.ContainsKey("functionName"))
                         {
-                            continue;
-                        }
-                        
-                        if (!toolCall.ContainsKey("index") || toolCall.Value<int?>("index") is not int index)
-                        {
-                            continue;
+                            toolCallData.Add("functionName", functionName);
                         }
 
-                        if (!parsedToolCalls.TryGetValue(index, out Dictionary<string, string>? toolCallData))
+                        if (function.ContainsKey("arguments") && function.Value<string>("arguments") is string functionArguments)
                         {
-                            toolCallData = [];
-                            parsedToolCalls.Add(index, toolCallData);
-                        }
-
-                        if (toolCall.ContainsKey("id") && toolCall.Value<string>("id") is string id && !toolCallData.ContainsKey("id"))
-                        {
-                            toolCallData.Add("id", id);
-                        }
-
-                        if (toolCall.ContainsKey("type") && toolCall.Value<string>("type") is string type && !toolCallData.ContainsKey("type"))
-                        {
-                            toolCallData.Add("type", type);
-                        }
-
-                        if (toolCall.ContainsKey("function") && toolCall.Value<JObject>("function") is JObject function)
-                        {
-                            if (function.ContainsKey("name") && function.Value<string>("name") is string functionName && !toolCallData.ContainsKey("functionName"))
+                            if (!toolCallData.TryAdd("functionArguments", functionArguments))
                             {
-                                toolCallData.Add("functionName", functionName);
-                            }
-
-                            if (function.ContainsKey("arguments") && function.Value<string>("arguments") is string functionArguments)
-                            {
-                                if (!toolCallData.TryAdd("functionArguments", functionArguments))
-                                {
-                                    toolCallData["functionArguments"] += functionArguments;
-                                }
+                                toolCallData["functionArguments"] += functionArguments;
                             }
                         }
                     }
