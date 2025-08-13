@@ -24,13 +24,5 @@ jobs:
       run: dotnet build --no-restore --configuration Release
 
     - name: Test
-      run: dotnet test --no-restore --verbosity normal --configuration Release --collect "XPlat Code Coverage"
-
-    - name: Upload coverage report
-      if: success()
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
+      run: dotnet test --no-restore --configuration Release --verbosity normal
 
