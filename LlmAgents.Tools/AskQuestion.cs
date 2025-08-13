@@ -55,7 +55,7 @@ public class AskQuestion : Tool
             {
                 var answer = string.Empty;
 
-                await agentCommunication.SendMessage(question);
+                await agentCommunication.SendMessage(question, true);
                 while (string.IsNullOrEmpty(answer))
                 {
                     foreach (var content in await agentCommunication.WaitForContent())
