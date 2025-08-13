@@ -11,6 +11,8 @@ namespace LlmAgents.Agents
 
         public readonly IAgentCommunication agentCommunication;
 
+        public readonly string Id;
+
         public bool Persistent { get; set; }
 
         public bool StreamOutput { get; set; }
@@ -19,8 +21,9 @@ namespace LlmAgents.Agents
 
         public Action? PreWaitForContent { get; set; }
 
-        public LlmAgent(LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
+        public LlmAgent(string id, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
         {
+            Id = id;
             this.llmApi = llmApi;
             this.agentCommunication = agentCommunication;
         }
@@ -73,7 +76,7 @@ namespace LlmAgents.Agents
 
         public void LoadMessages()
         {
-            var messagesFileName = GetMessagesFilename(llmApi.Id);
+            var messagesFileName = GetMessagesFilename(Id);
             var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
 
             if (!File.Exists(messagesFilePath))
@@ -93,7 +96,7 @@ namespace LlmAgents.Agents
 
         public void SaveMessages()
         {
-            var messagesFileName = GetMessagesFilename(llmApi.Id);
+            var messagesFileName = GetMessagesFilename(Id);
             var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
 
             File.WriteAllText(messagesFilePath, JsonConvert.SerializeObject(llmApi.Messages));

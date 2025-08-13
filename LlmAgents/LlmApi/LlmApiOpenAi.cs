@@ -14,16 +14,14 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
     private readonly List<JObject> ToolDefinitions = [];
     private readonly Dictionary<string, Tool> ToolMap = [];
 
-    public LlmApiOpenAi(ILoggerFactory loggerFactory, string id, string apiEndpoint, string apiKey, string model, List<JObject>? messages = null, Tool[]? tools = null)
+    public LlmApiOpenAi(ILoggerFactory loggerFactory, string apiEndpoint, string apiKey, string model, List<JObject>? messages = null, Tool[]? tools = null)
     {
-        ArgumentException.ThrowIfNullOrEmpty(id);
         ArgumentException.ThrowIfNullOrEmpty(apiEndpoint);
         ArgumentException.ThrowIfNullOrEmpty(apiKey);
         ArgumentException.ThrowIfNullOrEmpty(model);
 
         Log = loggerFactory.CreateLogger(nameof(LlmApiOpenAi));
 
-        Id = id;
         ApiEndpoint = apiEndpoint;
         ApiKey = apiKey;
         Model = model;
@@ -39,8 +37,6 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         }
     }
 
-    public readonly string Id;
-
     public List<JObject> Messages { get; private set; } = [];
 
     public string ApiEndpoint { get; private set; }
@@ -51,7 +47,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 
     public int? MaxCompletionTokens { get; set; } = 8192;
 
-    public double Temperature { get; set; } = 1.0;
+    public double Temperature { get; set; } = 0.7;
 
     public string? FinishReason { get; private set; }
 
