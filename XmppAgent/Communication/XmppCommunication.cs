@@ -155,7 +155,7 @@ public class XmppCommunication : IAgentCommunication
         return content;
     }
 
-    public async Task SendMessage(string message)
+    public async Task SendMessage(string message, bool newLine)
     {
         if (!Connected)
         {

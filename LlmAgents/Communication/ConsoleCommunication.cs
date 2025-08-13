@@ -15,8 +15,15 @@ public class ConsoleCommunication : IAgentCommunication
         return new[] { new MessageContentText { Text = line } };
     }
 
-    public async Task SendMessage(string message)
+    public async Task SendMessage(string message, bool newLine = true)
     {
-        Console.WriteLine(message);
+        if (newLine)
+        {
+            Console.WriteLine(message);
+        }
+        else
+        {
+            Console.Write(message);
+        }
     }
 }

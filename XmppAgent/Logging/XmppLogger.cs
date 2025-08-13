@@ -31,10 +31,10 @@ namespace XmppAgent.Logging
             {
                 Task.Run(async () =>
                 {
-                    await xmppCommunication.SendMessage(message);
+                    await xmppCommunication.SendMessage(message, true);
                     if (exception != null)
                     {
-                        await xmppCommunication.SendMessage(exception.Message);
+                        await xmppCommunication.SendMessage(exception.Message, true);
                     }
                 }).ConfigureAwait(false).GetAwaiter().GetResult();
             }
