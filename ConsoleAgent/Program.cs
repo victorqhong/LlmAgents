@@ -111,7 +111,7 @@ string? GetConfigOptionDefaultValue(string fileName, string environmentVariableN
         return profileConfig;
     }
 
-    var environmentVariable = Environment.GetEnvironmentVariable("LLMAGENTS_API_CONFIG", environmentVariableTarget);
+    var environmentVariable = Environment.GetEnvironmentVariable(environmentVariableName, environmentVariableTarget);
     if (File.Exists(environmentVariable))
     {
         return environmentVariable;
@@ -121,6 +121,10 @@ string? GetConfigOptionDefaultValue(string fileName, string environmentVariableN
 }
 
 var environmentVariableTarget = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? EnvironmentVariableTarget.User : EnvironmentVariableTarget.Process;
+
+var agentIdOption = new Option<string>(
+    name: "--agentId",
+    description: "Value used to identify the agent");
 
 var apiEndpointOption = new Option<string>(
     name: "--apiEndpoint",
@@ -134,25 +138,30 @@ var apiModelOption = new Option<string>(
     name: "--apiModel",
     description: "Name of the model to include in requests");
 
-var persistentOption = new Option<bool>(
-    name: "--persistent",
-    description: "Whether messages are saved",
-    getDefaultValue: () => false);
-
 var apiConfigOption = new Option<string?>(
     name: "--apiConfig",
     description: "Path to a JSON file with configuration for api values",
     getDefaultValue: () => GetConfigOptionDefaultValue("api.json", "LLMAGENTS_API_CONFIG", environmentVariableTarget));
 
-var toolsConfigOption = new Option<string?>(
-    name: "--toolsConfig",
-    description: "Path to a JSON file with configuration for tool values",
-    getDefaultValue: () => GetConfigOptionDefaultValue("tools.json", "LLMAGENTS_TOOLS_CONFIG", environmentVariableTarget));
+var persistentOption = new Option<bool>(
+    name: "--persistent",
+    description: "Whether messages are saved",
+    getDefaultValue: () => false);
+
+var systemPromptFileOption = new Option<string>(
+    name: "--systemPromptFile",
+    description: "The path to a file containing the system prompt text",
+    getDefaultValue: () => "");
 
 var workingDirectoryOption = new Option<string>(
     name: "--workingDirectory",
     description: "",
     getDefaultValue: () => Environment.CurrentDirectory);
+
+var toolsConfigOption = new Option<string?>(
+    name: "--toolsConfig",
+    description: "Path to a JSON file with configuration for tool values",
+    getDefaultValue: () => GetConfigOptionDefaultValue("tools.json", "LLMAGENTS_TOOLS_CONFIG", environmentVariableTarget));
 
 var toolServerAddressOption = new Option<string>(
     name: "--toolServerAddress",
@@ -166,13 +175,15 @@ var toolServerPortOption = new Option<int>(
 
 var rootCommand = new RootCommand("ConsoleAgent");
 rootCommand.SetHandler(RootCommandHandler);
+rootCommand.AddOption(agentIdOption);
 rootCommand.AddOption(apiEndpointOption);
 rootCommand.AddOption(apiKeyOption);
 rootCommand.AddOption(apiModelOption);
 rootCommand.AddOption(apiConfigOption);
 rootCommand.AddOption(persistentOption);
-rootCommand.AddOption(toolsConfigOption);
+rootCommand.AddOption(systemPromptFileOption);
 rootCommand.AddOption(workingDirectoryOption);
+rootCommand.AddOption(toolsConfigOption);
 rootCommand.AddOption(toolServerAddressOption);
 rootCommand.AddOption(toolServerPortOption);
 return await rootCommand.InvokeAsync(args);
@@ -182,7 +193,6 @@ async Task RootCommandHandler(InvocationContext context)
     var apiEndpoint = string.Empty;
     var apiKey = string.Empty;
     var apiModel = string.Empty;
-    var persistent = false;
 
     var apiConfigValue = context.ParseResult.GetValueForOption(apiConfigOption);
     if (!string.IsNullOrEmpty(apiConfigValue) && File.Exists(apiConfigValue))
@@ -219,44 +229,50 @@ async Task RootCommandHandler(InvocationContext context)
         return;
     }
 
-    persistent = context.ParseResult.GetValueForOption(persistentOption);
-
     var toolsConfigValue = context.ParseResult.GetValueForOption(toolsConfigOption);
     if (string.IsNullOrEmpty(toolsConfigValue) || !File.Exists(toolsConfigValue))
     {
         toolsConfigValue = InteractiveToolsConfigSetup();
     }
 
-    var workingDirectoryValue = context.ParseResult.GetValueForOption(workingDirectoryOption);
     var toolServerAddressValue = context.ParseResult.GetValueForOption(toolServerAddressOption);
     var toolServerPortValue = context.ParseResult.GetValueForOption(toolServerPortOption);
 
+    var persistent = context.ParseResult.GetValueForOption(persistentOption);
+    var workingDirectoryValue = context.ParseResult.GetValueForOption(workingDirectoryOption);
+
+    string? systemPrompt = Prompts.DefaultSystemPrompt;
+    var systemPromptFileValue = context.ParseResult.GetValueForOption(systemPromptFileOption);
+    if (!string.IsNullOrEmpty(systemPromptFileValue) && File.Exists(systemPromptFileValue))
+    {
+        systemPrompt = File.ReadAllText(systemPromptFileValue);
+    }
+
+    string agentId = context.ParseResult.GetValueForOption(agentIdOption) ?? apiModel;
+
     var cancellationToken = context.GetCancellationToken();
 
-    await RunAgent(apiEndpoint, apiKey, apiModel, persistent, toolsConfigValue, workingDirectoryValue, toolServerAddressValue, toolServerPortValue, cancellationToken);
-}
-
-async Task RunAgent(string apiEndpoint, string apiKey, string apiModel, bool persistent, string? toolsConfigValue, string? workingDirectoryValue, string? toolServerAddressValue, int toolServerPortValue, CancellationToken cancellationToken)
-{
     var consoleCommunication = new ConsoleCommunication();
 
     using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
     var agent = await CreateAgent(loggerFactory, consoleCommunication,
-        apiModel, apiEndpoint, apiKey, apiModel,
-        persistent, basePath: workingDirectoryValue,
+        agentId, apiEndpoint, apiKey, apiModel,
+        persistent, systemPrompt, workingDirectoryValue,
         toolsFilePath: toolsConfigValue, toolServerAddress: toolServerAddressValue, toolServerPort: toolServerPortValue);
+
     agent.StreamOutput = true;
     agent.PreWaitForContent = () => { Console.Write("> "); };
+
     await agent.Run(cancellationToken);
 }
 
 async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
-    string id, string apiEndpoint, string apiKey, string model,
+    string agentId, string apiEndpoint, string apiKey, string model,
     bool persistent = false, string? systemPrompt = null, string? basePath = null,
     string? toolsFilePath = null, string? toolServerAddress = null, int toolServerPort = 5000)
 {
-    var llmApi = new LlmApiOpenAi(loggerFactory, id, apiEndpoint, apiKey, model);
+    var llmApi = new LlmApiOpenAi(loggerFactory, apiEndpoint, apiKey, model);
 
     Tool[]? tools = null;
 
@@ -315,7 +331,7 @@ async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunicati
         llmApi.AddTool(tools);
     }
 
-    var agent = new LlmAgent(llmApi, agentCommunication)
+    var agent = new LlmAgent(agentId, llmApi, agentCommunication)
     {
         Persistent = persistent,
         PersistentMessagesPath = basePath ?? Environment.CurrentDirectory
@@ -326,9 +342,9 @@ async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunicati
         agent.LoadMessages();
     }
 
-    if (agent.llmApi.Messages.Count == 0)
+    if (agent.llmApi.Messages.Count == 0 && !string.IsNullOrEmpty(systemPrompt))
     {
-        agent.llmApi.Messages.Add(JObject.FromObject(new { role = "system", content = systemPrompt ?? Prompts.DefaultSystemPrompt }));
+        agent.llmApi.Messages.Add(JObject.FromObject(new { role = "system", content = systemPrompt }));
     }
 
     return agent;
