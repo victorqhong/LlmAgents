@@ -35,29 +35,22 @@ namespace LlmAgents.Agents
                     break;
                 }
 
-                var response = await llmApi.GenerateCompletion(messageContent, cancellationToken);
-                if (!string.IsNullOrEmpty(response))
+                var response = await llmApi.GenerateStreamingCompletion(messageContent, cancellationToken);
+                if (response == null)
                 {
-                    if (Persistent)
-                    {
-                        SaveMessages();
-                    }
-
-                    await agentCommunication.SendMessage(response);
+                    continue;
                 }
 
-                while ("tool_calls".Equals(llmApi.FinishReason))
+                await foreach (var chunk in response)
                 {
-                    var toolCallResponse = await llmApi.ProcessToolCalls(cancellationToken);
-                    if (Persistent)
-                    {
-                        SaveMessages();
-                    }
+                    await agentCommunication.SendMessage(chunk, false);
+                }
 
-                    if (!string.IsNullOrEmpty(toolCallResponse))
-                    {
-                        await agentCommunication.SendMessage(toolCallResponse);
-                    }
+                await agentCommunication.SendMessage(string.Empty, true);
+
+                if (Persistent)
+                {
+                    SaveMessages();
                 }
             }
         }
