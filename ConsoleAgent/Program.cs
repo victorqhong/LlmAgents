@@ -150,13 +150,18 @@ var persistentOption = new Option<bool>(
 
 var systemPromptFileOption = new Option<string>(
     name: "--systemPromptFile",
-    description: "The path to a file containing the system prompt text",
+    description: "The path to a file containing the system prompt text. Option has no effect if messages are loaded from a previous persistent session.",
     getDefaultValue: () => "");
 
 var workingDirectoryOption = new Option<string>(
     name: "--workingDirectory",
-    description: "",
-    getDefaultValue: () => Environment.CurrentDirectory);
+    description: "Directory which agent has access to by default",
+    getDefaultValue: () => Path.Combine(Environment.CurrentDirectory, "work"));
+
+var storageDirectoryOption = new Option<string>(
+    name: "--storageDirectory",
+    description: "Directory used to store agent related data",
+    getDefaultValue: () => Path.Combine(Environment.CurrentDirectory, "storage"));
 
 var toolsConfigOption = new Option<string?>(
     name: "--toolsConfig",
@@ -183,6 +188,7 @@ rootCommand.AddOption(apiConfigOption);
 rootCommand.AddOption(persistentOption);
 rootCommand.AddOption(systemPromptFileOption);
 rootCommand.AddOption(workingDirectoryOption);
+rootCommand.AddOption(storageDirectoryOption);
 rootCommand.AddOption(toolsConfigOption);
 rootCommand.AddOption(toolServerAddressOption);
 rootCommand.AddOption(toolServerPortOption);
@@ -239,7 +245,8 @@ async Task RootCommandHandler(InvocationContext context)
     var toolServerPortValue = context.ParseResult.GetValueForOption(toolServerPortOption);
 
     var persistent = context.ParseResult.GetValueForOption(persistentOption);
-    var workingDirectoryValue = context.ParseResult.GetValueForOption(workingDirectoryOption);
+    string workingDirectoryValue = context.ParseResult.GetValueForOption(workingDirectoryOption) ?? Path.Combine(Environment.CurrentDirectory, "work");
+    string storageDirectoryValue = context.ParseResult.GetValueForOption(storageDirectoryOption) ?? Path.Combine(Environment.CurrentDirectory, "storage");
 
     string? systemPrompt = Prompts.DefaultSystemPrompt;
     var systemPromptFileValue = context.ParseResult.GetValueForOption(systemPromptFileOption);
@@ -248,31 +255,31 @@ async Task RootCommandHandler(InvocationContext context)
         systemPrompt = File.ReadAllText(systemPromptFileValue);
     }
 
-    string agentId = context.ParseResult.GetValueForOption(agentIdOption) ?? apiModel;
-
-    var cancellationToken = context.GetCancellationToken();
-
-    var consoleCommunication = new ConsoleCommunication();
+    var agentId = context.ParseResult.GetValueForOption(agentIdOption) ?? apiModel;
 
     using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+    var consoleCommunication = new ConsoleCommunication();
 
     var agent = await CreateAgent(loggerFactory, consoleCommunication,
-        agentId, apiEndpoint, apiKey, apiModel,
-        persistent, systemPrompt, workingDirectoryValue,
+        apiEndpoint, apiKey, apiModel,
+        agentId, workingDirectoryValue, storageDirectoryValue, persistent, systemPrompt,
         toolsFilePath: toolsConfigValue, toolServerAddress: toolServerAddressValue, toolServerPort: toolServerPortValue);
 
     agent.StreamOutput = true;
     agent.PreWaitForContent = () => { Console.Write("> "); };
 
+    var cancellationToken = context.GetCancellationToken();
+
     await agent.Run(cancellationToken);
 }
 
-async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
-    string agentId, string apiEndpoint, string apiKey, string model,
-    bool persistent = false, string? systemPrompt = null, string? basePath = null,
+async Task<LlmAgent> CreateAgent(
+    ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
+    string apiEndpoint, string apiKey, string apiModel,
+    string agentId, string workingDirectory, string storageDirectory, bool persistent = false, string? systemPrompt = null,
     string? toolsFilePath = null, string? toolServerAddress = null, int toolServerPort = 5000)
 {
-    var llmApi = new LlmApiOpenAi(loggerFactory, apiEndpoint, apiKey, model);
+    var llmApi = new LlmApiOpenAi(loggerFactory, apiEndpoint, apiKey, apiModel);
 
     Tool[]? tools = null;
 
@@ -311,7 +318,7 @@ async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunicati
 
     if (tools == null && !string.IsNullOrEmpty(toolsFilePath) && File.Exists(toolsFilePath))
     {
-        var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(basePath, "todo.db"));
+        var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(storageDirectory, "todo.db"));
 
         var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
         var toolFactory = new ToolFactory(loggerFactory, toolsFile);
@@ -321,7 +328,7 @@ async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunicati
         toolFactory.Register(todoDatabase);
         toolFactory.Register<ILlmApiMessageProvider>(llmApi);
 
-        toolFactory.AddParameter("basePath", basePath ?? Environment.CurrentDirectory);
+        toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
 
         tools = toolFactory.Load();
     }
@@ -334,7 +341,7 @@ async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunicati
     var agent = new LlmAgent(agentId, llmApi, agentCommunication)
     {
         Persistent = persistent,
-        PersistentMessagesPath = basePath ?? Environment.CurrentDirectory
+        PersistentMessagesPath = storageDirectory
     };
 
     if (persistent)
