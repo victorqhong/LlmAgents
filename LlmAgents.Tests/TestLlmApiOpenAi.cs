@@ -76,7 +76,7 @@ public sealed class TestLlmApiOpenAi
     public void TestParseStreamingResponse()
     {
         var response = System.IO.File.ReadAllText("Responses/response_stream.txt");
-        var lines = response.Split(System.Environment.NewLine);
+        var lines = response.Split('\n');
 
         string? finishReason = null;
         System.Text.StringBuilder content = new();
@@ -128,7 +128,7 @@ public sealed class TestLlmApiOpenAi
     public void TestParseToolCallStreamingResponse()
     {
         var response = System.IO.File.ReadAllText("Responses/response_toolcall_stream.txt");
-        var lines = response.Split(System.Environment.NewLine);
+        var lines = response.Split('\n');
 
         string? finishReason = null;
         Dictionary<int, Dictionary<string, string>> parsedToolCalls = new();
