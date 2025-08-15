@@ -44,7 +44,7 @@ public class SqliteFileRun : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -52,14 +52,14 @@ public class SqliteFileRun : Tool
         if (string.IsNullOrEmpty(file))
         {
             result.Add("error", "file parameter is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         var db = parameters["db"]?.ToString();
         if (string.IsNullOrEmpty(db))
         {
             result.Add("error", "db parameter is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         try
@@ -76,7 +76,7 @@ public class SqliteFileRun : Tool
             if (restrictToBasePath && !file.StartsWith(basePath))
             {
                 result.Add("error", $"files outside {basePath} can not be read");
-                return result;
+                return Task.FromResult<JToken>(result);
             }
 
             var process = new System.Diagnostics.Process();
@@ -99,6 +99,6 @@ public class SqliteFileRun : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }

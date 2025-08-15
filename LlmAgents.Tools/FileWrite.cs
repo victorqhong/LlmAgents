@@ -44,7 +44,7 @@ public class FileWrite : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -52,14 +52,14 @@ public class FileWrite : Tool
         if (string.IsNullOrEmpty(contents))
         {
             result.Add("error", "contents is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         var path = parameters["path"]?.ToString();
         if (string.IsNullOrEmpty(path))
         {
             result.Add("error", "path is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         try
@@ -76,7 +76,7 @@ public class FileWrite : Tool
             if (restrictToBasePath && !path.StartsWith(basePath))
             {
                 result.Add("error", $"cannot write to files outside {basePath}");
-                return result;
+                return Task.FromResult<JToken>(result);
             }
 
             File.WriteAllText(path, contents.Replace("\n", Environment.NewLine).Replace("\r\n", Environment.NewLine));
@@ -87,6 +87,6 @@ public class FileWrite : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }

@@ -42,7 +42,7 @@ public class TodoGroupCreate : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -50,7 +50,7 @@ public class TodoGroupCreate : Tool
         if (string.IsNullOrEmpty(name))
         {
             result.Add("error", "name is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         var description = parameters["description"]?.ToString();
@@ -65,6 +65,6 @@ public class TodoGroupCreate : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }

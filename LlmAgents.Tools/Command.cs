@@ -16,7 +16,7 @@ public abstract class Command : Tool
 
     public required Func<JObject, string?> Arguments { get; set; }
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -24,7 +24,7 @@ public abstract class Command : Tool
         if (arguments == null)
         {
             result.Add("error", "arguments is null");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         try
@@ -47,6 +47,6 @@ public abstract class Command : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }

@@ -46,7 +46,7 @@ public class ApplyDiff : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -57,12 +57,12 @@ public class ApplyDiff : Tool
         if (string.IsNullOrEmpty(path))
         {
             result.Add("error", "Path is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
         if (string.IsNullOrEmpty(diffContent))
         {
             result.Add("error", "Diff content is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         try
@@ -73,14 +73,14 @@ public class ApplyDiff : Tool
             if (restrictToBasePath && !resolvedPath.StartsWith(basePath))
             {
                 result.Add("error", $"File outside {basePath} cannot be modified");
-                return result;
+                return Task.FromResult<JToken>(result);
             }
 
             // Check if the file exists
             if (!File.Exists(resolvedPath))
             {
                 result.Add("error", $"File not found: {resolvedPath}");
-                return result;
+                return Task.FromResult<JToken>(result);
             }
 
             // Read the original file
@@ -100,7 +100,7 @@ public class ApplyDiff : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 
     private string ResolvePath(string path)

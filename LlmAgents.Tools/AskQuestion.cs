@@ -51,27 +51,30 @@ public class AskQuestion : Tool
 
         try
         {
-            Task.Run(async () =>
+            var answer = string.Empty;
+
+            await agentCommunication.SendMessage(question, true);
+            while (string.IsNullOrEmpty(answer))
             {
-                var answer = string.Empty;
-
-                await agentCommunication.SendMessage(question, true);
-                while (string.IsNullOrEmpty(answer))
+                var content = await agentCommunication.WaitForContent();
+                if (content == null)
                 {
-                    foreach (var content in await agentCommunication.WaitForContent())
-                    {
-                        if (content is not MessageContentText textContent)
-                        {
-                            Thread.Sleep(1000);
-                            continue;
-                        }
+                    break;
+                }
 
+                foreach (var message in content)
+                {
+                    if (message is MessageContentText textContent)
+                    {
                         answer = textContent.Text;
+                        break;
                     }
                 }
 
-                result.Add("answer", answer);
-            }).ConfigureAwait(false).GetAwaiter().GetResult();
+                Thread.Sleep(1000);
+            }
+
+            result.Add("answer", answer);
         }
         catch (Exception e)
         {

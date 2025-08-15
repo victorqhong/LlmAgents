@@ -55,21 +55,21 @@ public class WebSearch : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
         if (string.IsNullOrEmpty(apiKey))
         {
             result.Add("error", "apiKey is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         var query = parameters["query"]?.ToString();
         if (string.IsNullOrEmpty(query))
         {
             result.Add("error", "query is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         var count = parameters["count"]?.Value<int>() ?? 5;
@@ -91,7 +91,7 @@ public class WebSearch : Tool
                 if (string.IsNullOrEmpty(content))
                 {
                     result.Add("error", "response is null or empty");
-                    return result;
+                    return Task.FromResult<JToken>(result);
                 }
 
                 response = JObject.Parse(content);
@@ -101,7 +101,7 @@ public class WebSearch : Tool
             if (webPages == null)
             {
                 result.Add("error", "could not parse search results");
-                return result;
+                return Task.FromResult<JToken>(result);
             }
 
             var searchResults = new JArray();
@@ -119,13 +119,13 @@ public class WebSearch : Tool
                 searchResults.Add(JObject.FromObject(new { name, url, snippet }));
             }
 
-            return searchResults;
+            return Task.FromResult<JToken>(searchResults);
         }
         catch (Exception e)
         {
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }

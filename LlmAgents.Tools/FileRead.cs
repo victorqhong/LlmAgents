@@ -39,7 +39,7 @@ public class FileRead : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -47,7 +47,7 @@ public class FileRead : Tool
         if (string.IsNullOrEmpty(path))
         {
             result.Add("error", "path is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         try
@@ -64,7 +64,7 @@ public class FileRead : Tool
             if (restrictToBasePath && !path.StartsWith(basePath))
             {
                 result.Add("error", $"files outside {basePath} can not be read");
-                return result;
+                return Task.FromResult<JToken>(result);
             }
 
             var text = File.ReadAllText(path);
@@ -75,6 +75,6 @@ public class FileRead : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }

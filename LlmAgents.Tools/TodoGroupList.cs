@@ -29,7 +29,7 @@ public class TodoGroupList : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -42,7 +42,7 @@ public class TodoGroupList : Tool
             }
             else
             {
-                return JArray.FromObject(todoContainers);
+                return Task.FromResult<JToken>(JArray.FromObject(todoContainers));
             }
         }
         catch (Exception e)
@@ -50,6 +50,6 @@ public class TodoGroupList : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }

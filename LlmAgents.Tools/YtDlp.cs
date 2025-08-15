@@ -35,7 +35,7 @@ public class YtDlp : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -43,7 +43,7 @@ public class YtDlp : Tool
         if (string.IsNullOrEmpty(videoUrl))
         {
             result.Add("error", "videoUrl parameter is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         try
@@ -75,6 +75,6 @@ public class YtDlp : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }
