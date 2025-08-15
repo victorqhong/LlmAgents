@@ -42,7 +42,7 @@ public class TodoDelete : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -50,14 +50,14 @@ public class TodoDelete : Tool
         if (string.IsNullOrEmpty(name))
         {
             result.Add("error", "name is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         var group = parameters["group"]?.ToString();
         if (string.IsNullOrEmpty(group))
         {
             result.Add("error", "group is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         try
@@ -70,6 +70,6 @@ public class TodoDelete : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }

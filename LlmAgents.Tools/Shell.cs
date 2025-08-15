@@ -117,7 +117,7 @@ public class Shell : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -125,7 +125,7 @@ public class Shell : Tool
         if (string.IsNullOrEmpty(command))
         {
             result.Add("error", "command is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         try
@@ -174,6 +174,6 @@ public class Shell : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }

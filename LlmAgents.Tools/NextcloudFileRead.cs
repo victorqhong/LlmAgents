@@ -35,21 +35,21 @@ public class NextcloudFileRead : Nextcloud
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
         if (!ValidateParameters())
         {
             result.Add("error", "Nextcloud username, password, or basePath not specified");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         var path = parameters["path"]?.ToString();
         if (string.IsNullOrEmpty(path))
         {
             result.Add("error", "path is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         var url = string.Format("{0}/{1}/{2}", basePath, username, path);
@@ -74,7 +74,7 @@ public class NextcloudFileRead : Nextcloud
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }
 

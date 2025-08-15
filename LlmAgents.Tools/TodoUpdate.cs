@@ -67,7 +67,7 @@ public class TodoUpdate : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -75,14 +75,14 @@ public class TodoUpdate : Tool
         if (string.IsNullOrEmpty(title))
         {
             result.Add("error", $"{nameof(title)} is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         var group = parameters["group"]?.ToString();
         if (string.IsNullOrEmpty(group))
         {
             result.Add("error", $"{nameof(group)} is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         try
@@ -101,7 +101,7 @@ public class TodoUpdate : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }
 

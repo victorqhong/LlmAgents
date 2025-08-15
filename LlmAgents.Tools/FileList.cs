@@ -56,7 +56,7 @@ public class FileList : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -64,7 +64,7 @@ public class FileList : Tool
         if (string.IsNullOrEmpty(path))
         {
             result.Add("error", "path is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         var recursive = parameters["recursive"]?.Value<bool>() ?? false;
@@ -83,7 +83,7 @@ public class FileList : Tool
             if (restrictToBasePath && !path.StartsWith(basePath))
             {
                 result.Add("error", $"cannot list files outside {basePath}");
-                return result;
+                return Task.FromResult<JToken>(result);
             }
 
             var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
@@ -102,14 +102,14 @@ public class FileList : Tool
                 }
             }
 
-            return JArray.FromObject(listResults);
+            return Task.FromResult<JToken>(JArray.FromObject(listResults));
         }
         catch (Exception e)
         {
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 
     private class GitIgnoreFilter

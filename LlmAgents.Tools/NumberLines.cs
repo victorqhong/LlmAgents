@@ -41,7 +41,7 @@ public class NumberLines : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -51,7 +51,7 @@ public class NumberLines : Tool
         if (string.IsNullOrEmpty(path))
         {
             result.Add("error", "Path is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         try
@@ -62,14 +62,14 @@ public class NumberLines : Tool
             if (restrictToBasePath && !resolvedPath.StartsWith(basePath))
             {
                 result.Add("error", $"File outside {basePath} cannot be read");
-                return result;
+                return Task.FromResult<JToken>(result);
             }
 
             // Check if the file exists
             if (!File.Exists(resolvedPath))
             {
                 result.Add("error", $"File not found: {resolvedPath}");
-                return result;
+                return Task.FromResult<JToken>(result);
             }
 
             // Read the file and prepend line numbers
@@ -89,7 +89,7 @@ public class NumberLines : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 
     private string ResolvePath(string path)

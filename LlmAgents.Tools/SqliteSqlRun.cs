@@ -38,7 +38,7 @@ public class SqliteSqlRun : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -46,14 +46,14 @@ public class SqliteSqlRun : Tool
         if (string.IsNullOrEmpty(sql))
         {
             result.Add("error", "sql parameter is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         var db = parameters["db"]?.ToString();
         if (string.IsNullOrEmpty(db))
         {
             result.Add("error", "db parameter is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         try
@@ -76,6 +76,6 @@ public class SqliteSqlRun : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }

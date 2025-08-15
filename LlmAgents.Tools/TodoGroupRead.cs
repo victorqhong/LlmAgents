@@ -38,7 +38,7 @@ public class TodoGroupRead : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
 
@@ -46,7 +46,7 @@ public class TodoGroupRead : Tool
         if (string.IsNullOrEmpty(name))
         {
             result.Add("error", "name is null or empty");
-            return result;
+            return Task.FromResult<JToken>(result);
         }
 
         try
@@ -66,6 +66,6 @@ public class TodoGroupRead : Tool
             result.Add("exception", e.Message);
         }
 
-        return result;
+        return Task.FromResult<JToken>(result);
     }
 }
