@@ -67,16 +67,20 @@ public class FileRead : Tool
         {
             if (restrictToBasePath && !Path.IsPathRooted(path))
             {
-                path = Path.Combine(basePath, path);
+                path = Path.Combine(currentDirectory, path);
             }
-            else
-            { 
-                path = Path.GetFullPath(path);
-            }
+
+            path = Path.GetFullPath(path);
 
             if (restrictToBasePath && !path.StartsWith(basePath))
             {
                 result.Add("error", $"files outside {basePath} can not be read");
+                return Task.FromResult<JToken>(result);
+            }
+
+            if (!File.Exists(path))
+            {
+                result.Add("error", $"file at {path} does not exist or cannot be read");
                 return Task.FromResult<JToken>(result);
             }
 
