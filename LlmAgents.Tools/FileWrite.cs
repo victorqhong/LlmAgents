@@ -79,12 +79,10 @@ public class FileWrite : Tool
         {
             if (restrictToBasePath && !Path.IsPathRooted(path))
             {
-                path = Path.Combine(basePath, path);
+                path = Path.Combine(currentDirectory, path);
             }
-            else
-            {
-                path = Path.GetFullPath(path);
-            }
+
+            path = Path.GetFullPath(path);
 
             if (restrictToBasePath && !path.StartsWith(basePath))
             {
