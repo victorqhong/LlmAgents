@@ -1,12 +1,17 @@
-﻿using LlmAgents.Communication;
+﻿namespace LlmAgents.Agents;
+
+using LlmAgents.Communication;
 using LlmAgents.LlmApi;
+using LlmAgents.Tools;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace LlmAgents.Agents
-{
     public class LlmAgent
     {
+    private readonly List<JObject> ToolDefinitions = [];
+
+    private readonly Dictionary<string, Tool> ToolMap = [];
+
         public readonly LlmApiOpenAi llmApi;
 
         public readonly IAgentCommunication agentCommunication;
@@ -26,7 +31,43 @@ namespace LlmAgents.Agents
             Id = id;
             this.llmApi = llmApi;
             this.agentCommunication = agentCommunication;
+
+        this.llmApi.Agent = this;
+    }
+
+    public void AddTool(params Tool[] tools)
+    {
+        foreach (var tool in tools)
+        {
+            AddTool(tool);
         }
+    }
+
+    public void AddTool(Tool tool)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+
+        ToolDefinitions.Add(tool.Schema);
+        ToolMap.Add(tool.Name, tool);
+    }
+
+    public async Task<JToken?> CallTool(string toolName, JObject arguments)
+    {
+        if (!ToolMap.TryGetValue(toolName, out var tool))
+        {
+            return null;
+        }
+
+        var result = await tool.Function(arguments);
+        ToolEventBus?.PostToolEvent(tool, arguments, result);
+
+        return result;
+        }
+
+    public IReadOnlyList<JObject> GetToolDefinitions()
+    {
+        return ToolDefinitions;
+    }
 
         public async Task Run(CancellationToken cancellationToken = default)
         {
@@ -107,4 +148,3 @@ namespace LlmAgents.Agents
             return $"messages-{agentId}.json";
         }
     }
-}

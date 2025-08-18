@@ -1,9 +1,9 @@
 ﻿using LlmAgents.LlmApi.Content;
-using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
+using LlmAgents.Agents;
 
 namespace LlmAgents.LlmApi;
 
@@ -11,10 +11,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 {
     private readonly ILogger Log;
 
-    private readonly List<JObject> ToolDefinitions = [];
-    private readonly Dictionary<string, Tool> ToolMap = [];
-
-    public LlmApiOpenAi(ILoggerFactory loggerFactory, string apiEndpoint, string apiKey, string model, List<JObject>? messages = null, Tool[]? tools = null)
+    public LlmApiOpenAi(ILoggerFactory loggerFactory, string apiEndpoint, string apiKey, string model, List<JObject>? messages = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(apiEndpoint);
         ArgumentException.ThrowIfNullOrEmpty(apiKey);
@@ -30,12 +27,9 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         {
             Messages.AddRange(messages);
         }
-
-        if (tools != null)
-        {
-            AddTool(tools);
         }
-    }
+
+    public LlmAgent? Agent { get; set; }
 
     public List<JObject> Messages { get; private set; } = [];
 
@@ -50,22 +44,6 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
     public double Temperature { get; set; } = 0.7;
 
     public string? FinishReason { get; private set; }
-
-    public void AddTool(params Tool[] tools)
-    {
-        foreach (var tool in tools)
-        {
-            AddTool(tool);
-        }
-    }
-
-    public void AddTool(Tool tool)
-    {
-        ArgumentNullException.ThrowIfNull(tool);
-
-        ToolDefinitions.Add(tool.Schema);
-        ToolMap.Add(tool.Name, tool);
-    }
 
     public async Task<string?> GenerateCompletion(IEnumerable<IMessageContent> messageContents, CancellationToken cancellationToken = default)
     {
@@ -104,7 +82,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
             return null;
         }
 
-        var payload = GetPayload(Model, messages, MaxCompletionTokens, Temperature, ToolDefinitions, "auto", true);
+        var payload = GetPayload(Model, messages, MaxCompletionTokens, Temperature, Agent?.GetToolDefinitions(), "auto", true);
 
         return await GetCompletion(ApiEndpoint, ApiKey, payload, retryAttempt: 0, cancellationToken);
     }
@@ -319,6 +297,18 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
             {
                 var id = toolCall.id;
 
+                if (Agent == null)
+                {
+                    Messages.Add(JObject.FromObject(new
+                    {
+                        role = "tool",
+                        tool_call_id = id,
+                        content = $"Invalid tool call: tools are not available"
+                    }));
+
+                    continue;
+                }
+
                 var function = toolCall.function;
                 if (function == null)
                 {
@@ -346,22 +336,6 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                     continue;
                 }
 
-                if (!ToolMap.TryGetValue(name, out Tool? value))
-                {
-                    Log.LogError("Could not get tool: {name}", name);
-                    Messages.Add(JObject.FromObject(new
-                    {
-                        role = "tool",
-                        tool_call_id = id,
-                        name,
-                        content = $"Invalid tool call: tool '{name}' not found"
-                    }));
-
-                    continue;
-                }
-
-                var tool = value.Function;
-
                 var arguments = function.arguments;
                 if (arguments == null)
                 {
@@ -381,7 +355,18 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 string toolContent;
                 try
                 {
-                    var toolResult = await tool(JObject.Parse(arguments));
+                    var toolResult = await Agent.CallTool(name, JObject.Parse(arguments));
+                    if (toolResult == null)
+                    {
+                        Messages.Add(JObject.FromObject(new
+                        {
+                            role = "tool",
+                            tool_call_id = id,
+                            name,
+                            content = $"Invalid tool call: tool {name} could not be found"
+                        }));
+                    }
+
                     toolContent = Newtonsoft.Json.JsonConvert.SerializeObject(toolResult);
                 }
                 catch (Exception ex)
@@ -451,7 +436,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         return message;
     }
 
-    public static string GetPayload(string model, List<JObject> messages, int? maxCompletionTokens, double temperature, List<JObject>? tools = null, string toolChoice = "auto", bool stream = true)
+    public static string GetPayload(string model, List<JObject> messages, int? maxCompletionTokens, double temperature, IReadOnlyList<JObject>? tools = null, string toolChoice = "auto", bool stream = true)
     {
         var payload = new JObject();
         payload.Add("model", model);
