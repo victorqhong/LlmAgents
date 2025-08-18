@@ -124,6 +124,12 @@ internal class DefaultCommand : RootCommand
     {
         var llmApi = new LlmApiOpenAi(loggerFactory, apiEndpoint, apiKey, apiModel);
 
+        var agent = new LlmAgent(agentId, llmApi, agentCommunication)
+        {
+            Persistent = persistent,
+            PersistentMessagesPath = storageDirectory
+        };
+
         Tool[]? tools = null;
 
         if (!string.IsNullOrEmpty(toolServerAddress))
@@ -163,6 +169,7 @@ internal class DefaultCommand : RootCommand
         {
             var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(storageDirectory, "todo.db"));
 
+            var toolEventBus = new ToolEventBus();
             var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
             var toolFactory = new ToolFactory(loggerFactory, toolsFile);
 
@@ -170,22 +177,19 @@ internal class DefaultCommand : RootCommand
             toolFactory.Register(loggerFactory);
             toolFactory.Register(todoDatabase);
             toolFactory.Register<ILlmApiMessageProvider>(llmApi);
+            toolFactory.Register<IToolEventBus>(toolEventBus);
 
             toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
 
             tools = toolFactory.Load();
+
+            agent.ToolEventBus = toolEventBus;
         }
 
         if (tools != null)
         {
-            llmApi.AddTool(tools);
+            agent.AddTool(tools);
         }
-
-        var agent = new LlmAgent(agentId, llmApi, agentCommunication)
-        {
-            Persistent = persistent,
-            PersistentMessagesPath = storageDirectory
-        };
 
         if (persistent)
         {
