@@ -8,5 +8,21 @@ public class Session
     public DateTime StartTime { get; set; } = DateTime.UtcNow;
     public DateTime LastActive { get; set; } = DateTime.UtcNow;
     public required string Status { get; set; }
-    public string? Metadata { get; set; }
+    public string Metadata { get; set; } = string.Empty;
+
+    public static Session New()
+    {
+        return new Session
+        {
+            SessionId = Guid.NewGuid().ToString(),
+            Status = SessionStatus.New.ToString()
+        };
+    }
+}
+
+public enum SessionStatus
+{
+    New,
+    Active,
+    Stopped
 }
