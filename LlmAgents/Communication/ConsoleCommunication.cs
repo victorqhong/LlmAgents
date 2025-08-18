@@ -4,18 +4,18 @@ namespace LlmAgents.Communication;
 
 public class ConsoleCommunication : IAgentCommunication
 {
-    public async Task<IEnumerable<IMessageContent>?> WaitForContent(CancellationToken cancellationToken = default)
+    public Task<IEnumerable<IMessageContent>?> WaitForContent(CancellationToken cancellationToken = default)
     {
         var line = Console.ReadLine();
         if (line == null)
         {
-            return null;
+            return Task.FromResult<IEnumerable<IMessageContent>?>(null);
         }
 
-        return new[] { new MessageContentText { Text = line } };
+        return Task.FromResult<IEnumerable<IMessageContent>?>(new[] { new MessageContentText { Text = line } });
     }
 
-    public async Task SendMessage(string message, bool newLine = true)
+    public Task SendMessage(string message, bool newLine = true)
     {
         if (newLine)
         {
@@ -25,5 +25,7 @@ public class ConsoleCommunication : IAgentCommunication
         {
             Console.Write(message);
         }
+
+        return Task.CompletedTask;
     }
 }

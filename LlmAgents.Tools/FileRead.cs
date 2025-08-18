@@ -9,11 +9,24 @@ public class FileRead : Tool
     private readonly string basePath;
     private readonly bool restrictToBasePath;
 
+    private string currentDirectory;
+
     public FileRead(ToolFactory toolFactory)
         : base(toolFactory)
     {
         basePath = Path.GetFullPath(toolFactory.GetParameter(nameof(basePath)) ?? Environment.CurrentDirectory);
         restrictToBasePath = bool.TryParse(toolFactory.GetParameter(nameof(restrictToBasePath)), out restrictToBasePath) ? restrictToBasePath : true;
+
+        currentDirectory = basePath;
+
+        var toolEventBus = toolFactory.Resolve<IToolEventBus>();
+        toolEventBus.SubscribeToolEvent<ChangeDirectory>(OnChangeDirectory);
+    }
+
+    private Task OnChangeDirectory(ToolEvent e)
+    {
+        currentDirectory = e.Result.Value<string>("currentDirectory") ?? currentDirectory;
+        return Task.CompletedTask;
     }
 
     public override JObject Schema { get; protected set; } = JObject.FromObject(new

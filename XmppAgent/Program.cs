@@ -248,10 +248,16 @@ LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentComm
 {
     var llmApi = new LlmApiOpenAi(loggerFactory, apiParameters.apiEndpoint, apiParameters.apiKey, apiParameters.apiModel);
 
+    var agent = new LlmAgent(agentId, llmApi, agentCommunication)
+    {
+        Persistent = persistent,
+        PersistentMessagesPath = agentDirectory ?? Environment.CurrentDirectory
+    };
+
     if (!string.IsNullOrEmpty(toolsFilePath))
     {
         var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(agentDirectory, "todo.db"));
-
+        var toolEventBus = new ToolEventBus();
         var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
         var toolFactory = new ToolFactory(loggerFactory, toolsFile);
 
@@ -259,21 +265,16 @@ LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentComm
         toolFactory.Register(loggerFactory);
         toolFactory.Register(todoDatabase);
         toolFactory.Register<ILlmApiMessageProvider>(llmApi);
+        toolFactory.Register<IToolEventBus>(toolEventBus);
 
         toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
 
         var tools = toolFactory.Load();
         if (tools != null)
         {
-            llmApi.AddTool(tools);
+            agent.AddTool(tools);
         }
     }
-
-    var agent = new LlmAgent(agentId, llmApi, agentCommunication)
-    {
-        Persistent = persistent,
-        PersistentMessagesPath = agentDirectory ?? Environment.CurrentDirectory
-    };
 
     if (persistent)
     {

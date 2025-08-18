@@ -21,6 +21,8 @@ public class Shell : Tool
     private string? commandId;
     private bool receivedOutput = false;
 
+    private string currentDirectory;
+
     public Shell(ToolFactory toolFactory)
         : base(toolFactory)
     {
@@ -28,7 +30,7 @@ public class Shell : Tool
 
         waitTimeMs = int.TryParse(toolFactory.GetParameter($"{nameof(Shell)}.{nameof(waitTimeMs)}"), out waitTimeMs) ? waitTimeMs : 180000;
 
-        var workingDirectory = toolFactory.GetParameter("basePath") ?? Environment.CurrentDirectory;
+        currentDirectory = toolFactory.GetParameter("basePath") ?? Environment.CurrentDirectory;
 
         Process = new Process();
 
@@ -36,7 +38,7 @@ public class Shell : Tool
         Process.StartInfo.ArgumentList.Add("-NoLogo");
         Process.StartInfo.ArgumentList.Add("-NonInteractive");
 
-        Process.StartInfo.WorkingDirectory = Path.IsPathFullyQualified(workingDirectory) ? workingDirectory : Path.Combine(Environment.CurrentDirectory, workingDirectory);
+        Process.StartInfo.WorkingDirectory = Path.IsPathFullyQualified(currentDirectory) ? currentDirectory : Path.Combine(Environment.CurrentDirectory, currentDirectory);
 
         Process.StartInfo.UseShellExecute = false;
         Process.StartInfo.RedirectStandardOutput = true;
@@ -88,6 +90,9 @@ public class Shell : Tool
 
         receivedOutput = true;
         Process.StandardInput.WriteLine("$PSStyle.OutputRendering='Plain'");
+
+        var toolEventBus = toolFactory.Resolve<IToolEventBus>();
+        toolEventBus.SubscribeToolEvent<ChangeDirectory>(OnChangeDirectory);
     }
 
     public Process Process { get; private set; }
@@ -175,5 +180,12 @@ public class Shell : Tool
         }
 
         return Task.FromResult<JToken>(result);
+    }
+
+    private Task OnChangeDirectory(ToolEvent e)
+    {
+        currentDirectory = e.Result.Value<string>("currentDirectory") ?? currentDirectory;
+        Process.StandardInput.WriteLine($"cd {currentDirectory}");
+        return Task.CompletedTask;
     }
 }

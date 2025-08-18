@@ -5,8 +5,11 @@ using System;
 
 public abstract class Tool
 {
+    protected readonly ToolFactory toolFactory;
+
     public Tool(ToolFactory toolFactory)
     {
+        this.toolFactory = toolFactory;
     }
 
     public abstract JObject Schema { get; protected set; }

@@ -59,6 +59,8 @@ public sealed class TestLlmApiOpenAi
         var loggerFactory = LoggerFactory.Create(builder => { });
         var toolFactory = new ToolFactory(loggerFactory);
         toolFactory.Register(loggerFactory);
+        var toolEventBus = new ToolEventBus();
+        toolFactory.Register<IToolEventBus>(toolEventBus);
         var shellTool = new Shell(toolFactory);
 
         var model = "gpt-4o";
