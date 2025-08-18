@@ -365,6 +365,8 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                             name,
                             content = $"Invalid tool call: tool {name} could not be found"
                         }));
+
+                        continue;
                     }
 
                     toolContent = Newtonsoft.Json.JsonConvert.SerializeObject(toolResult);
