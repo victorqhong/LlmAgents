@@ -27,7 +27,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         {
             Messages.AddRange(messages);
         }
-        }
+    }
 
     public LlmAgent? Agent { get; set; }
 
@@ -457,16 +457,16 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         return payload.ToString(Newtonsoft.Json.Formatting.None);
     }
 
-    public async Task<int> CountMessages()
+    public Task<int> CountMessages()
     {
-        return Messages.Count;
+        return Task.FromResult(Messages.Count);
     }
 
-    public async Task PruneContext(int numMessagesToKeep)
+    public Task PruneContext(int numMessagesToKeep)
     {
         if (Messages.Count <= numMessagesToKeep)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         // keep the first message (system prompt) and last message (a tool call is needed before a tool result)
@@ -478,5 +478,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         {
             Messages.RemoveAt(1);
         }
+
+        return Task.CompletedTask;
     }
 }

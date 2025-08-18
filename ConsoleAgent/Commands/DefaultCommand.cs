@@ -116,7 +116,7 @@ internal class DefaultCommand : RootCommand
         await agent.Run(cancellationToken);
     }
 
-    private async Task<LlmAgent> CreateAgent(
+    private static async Task<LlmAgent> CreateAgent(
         ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
         string apiEndpoint, string apiKey, string apiModel,
         string agentId, string workingDirectory, string storageDirectory, bool persistent = false, string? systemPrompt = null,
