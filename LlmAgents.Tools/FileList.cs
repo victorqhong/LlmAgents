@@ -5,6 +5,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 public class FileList : Tool
 {
@@ -17,7 +19,7 @@ public class FileList : Tool
         : base(toolFactory)
     {
         basePath = Path.GetFullPath(toolFactory.GetParameter(nameof(basePath)) ?? Environment.CurrentDirectory);
-        restrictToBasePath = bool.TryParse(toolFactory.GetParameter(nameof(restrictToBasePath)), out restrictToBasePath) ? restrictToBasePath : true;
+        restrictToBasePath = bool.TryParse(toolFactory.GetParameter(nameof(restrictToBasePath)), out var restrict) ? restrict : true;
 
         currentDirectory = basePath;
 
@@ -107,12 +109,8 @@ public class FileList : Tool
 
             if (useGitIgnore)
             {
-                var gitIgnoreFile = Path.Combine(path, ".gitignore");
-                if (File.Exists(gitIgnoreFile))
-                {
-                    var filter = new GitIgnoreFilter(gitIgnoreFile, ".git/");
-                    listResults = filter.FilterPaths(listResults);
-                }
+                var multiLevelFilter = new MultiLevelGitIgnoreFilter(path, basePath);
+                listResults = multiLevelFilter.FilterPaths(listResults);
             }
 
             return Task.FromResult<JToken>(JArray.FromObject(listResults));
@@ -123,6 +121,61 @@ public class FileList : Tool
         }
 
         return Task.FromResult<JToken>(result);
+    }
+
+    private class MultiLevelGitIgnoreFilter
+    {
+        private readonly List<(string directory, GitIgnoreFilter filter)> filters = new();
+
+        public MultiLevelGitIgnoreFilter(string startDirectory, string basePath)
+        {
+            var currentDir = Path.GetFullPath(startDirectory);
+            basePath = Path.GetFullPath(basePath);
+
+            while (currentDir.StartsWith(basePath, StringComparison.OrdinalIgnoreCase))
+            {
+                var gitIgnoreFile = Path.Combine(currentDir, ".gitignore");
+                if (File.Exists(gitIgnoreFile))
+                {
+                    filters.Add((currentDir, new GitIgnoreFilter(gitIgnoreFile)));
+                }
+
+                if (string.Equals(currentDir, basePath, StringComparison.OrdinalIgnoreCase))
+                    break;
+
+                var parentDir = Path.GetDirectoryName(currentDir);
+                if (string.IsNullOrEmpty(parentDir))
+                    break;
+
+                currentDir = parentDir;
+            }
+        }
+
+        public List<string> FilterPaths(IEnumerable<string> paths)
+        {
+            return paths.Where(path => !IsIgnored(path)).ToList();
+        }
+
+        private bool IsIgnored(string path)
+        {
+            path = Path.GetFullPath(path).Replace("\\", "/");
+
+            foreach (var (directory, filter) in filters)
+            {
+                var dirFullPath = Path.GetFullPath(directory).Replace("\\", "/");
+
+                if (path.StartsWith(dirFullPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    var relativePath = path.Substring(dirFullPath.Length).TrimStart('/');
+
+                    if (filter.IsIgnored(relativePath))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
     }
 
     private class GitIgnoreFilter
@@ -165,24 +218,18 @@ public class FileList : Tool
 
         private string ConvertGitIgnorePatternToRegex(string pattern)
         {
-            // Normalize pattern: remove trailing spaces, handle directory slashes
             string cleanedPattern = pattern.TrimEnd();
             bool isDirectoryOnly = cleanedPattern.EndsWith("/");
             if (isDirectoryOnly)
                 cleanedPattern = cleanedPattern.Substring(0, cleanedPattern.Length - 1);
 
-            // Escape special regex characters
             string escaped = Regex.Escape(cleanedPattern);
 
-            // Replace .gitignore wildcards with regex equivalents
             escaped = escaped
-                .Replace("\\*\\*", ".*")        // ** matches any sequence, including /
-                .Replace("\\*", "[^/]*")       // * matches any sequence except /
-                .Replace("\\?", ".");          // ? matches any single character
+                .Replace("\\*\\*", ".*")
+                .Replace("\\*", "[^/]*")
+                .Replace("\\?", ".");
 
-            // Handle anchoring:
-            // - If pattern starts with '/', anchor to root
-            // - Otherwise, allow match anywhere in path (but still respect directory boundaries)
             string regexPattern;
             if (pattern.StartsWith("/"))
             {
@@ -190,11 +237,9 @@ public class FileList : Tool
             }
             else
             {
-                // Allow match at start or after a slash
                 regexPattern = "(^|/)" + escaped;
             }
 
-            // If directory-only, ensure it matches a slash and anything after
             if (isDirectoryOnly)
             {
                 regexPattern += "(?:/.*|$)";
@@ -203,22 +248,15 @@ public class FileList : Tool
             return regexPattern;
         }
 
-        public List<string> FilterPaths(IEnumerable<string> paths)
+        public bool IsIgnored(string relativePath)
         {
-            return paths.Where(path => !IsIgnored(path)).ToList();
-        }
-
-        private bool IsIgnored(string path)
-        {
-            path = path.Replace("\\", "/");
+            relativePath = relativePath.Replace("\\", "/");
             foreach (var pattern in ignorePatterns)
             {
-                if (pattern.IsMatch(path))
+                if (pattern.IsMatch(relativePath))
                     return true;
             }
             return false;
         }
     }
-
 }
-
