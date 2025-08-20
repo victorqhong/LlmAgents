@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using LlmAgents.State;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.Reflection;
 
@@ -114,7 +115,7 @@ public class ToolFactory
         return tool;
     }
 
-    public Tool[]? Load()
+    public Tool[]? Load(string? sessionId = null, StateDatabase? stateDatabase = null)
     {
         if (toolDefinitions == null)
         {
@@ -187,6 +188,11 @@ public class ToolFactory
             {
                 log.LogError("Could not create tool");
                 continue;
+            }
+
+            if (!string.IsNullOrEmpty(sessionId) && stateDatabase != null)
+            {
+                tool.Deserialize(sessionId, stateDatabase);
             }
 
             tools.Add(tool);

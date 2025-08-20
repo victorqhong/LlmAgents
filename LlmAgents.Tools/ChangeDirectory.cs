@@ -87,5 +87,17 @@ public class ChangeDirectory : Tool
 
         return Task.FromResult<JToken>(result);
     }
+
+    public override void Serialize(string sessionId, State.StateDatabase stateDatabase)
+    {
+        Console.WriteLine("Serializing ChangeDirectory");
+        stateDatabase.SetState(sessionId, $"{nameof(CurrentDirectory)}:{nameof(CurrentDirectory)}", CurrentDirectory);
+    }
+
+    public override void Deserialize(string sessionId, State.StateDatabase stateDatabase)
+    {
+        Console.WriteLine("deserializing changedirectory");
+        CurrentDirectory = stateDatabase.GetSessionState(sessionId, $"{nameof(ChangeDirectory)}:{nameof(CurrentDirectory)}") ?? CurrentDirectory;
+    }
 }
 

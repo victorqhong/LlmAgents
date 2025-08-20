@@ -130,7 +130,7 @@ public class StateDatabase : IDisposable
             lock (writeLock)
             {
                 using var command = writeConnection.CreateCommand();
-                command.CommandText = "INSERT INTO state (key, value, session_id, update_at) VALUES ($key, $value, $sessionId, $updatedAt)";
+                command.CommandText = "INSERT OR REPLACE INTO state (key, value, session_id, updated_at) VALUES ($key, $value, $sessionId, $updatedAt)";
                 command.Parameters.AddWithValue("$key", key);
                 command.Parameters.AddWithValue("$value", value);
                 command.Parameters.AddWithValue("$sessionId", sessionId);

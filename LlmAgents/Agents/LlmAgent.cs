@@ -2,6 +2,7 @@
 
 using LlmAgents.Communication;
 using LlmAgents.LlmApi;
+using LlmAgents.State;
 using LlmAgents.Tools;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -27,6 +28,10 @@ public class LlmAgent
     public Action? PreWaitForContent { get; set; }
 
     public IToolEventBus? ToolEventBus { get; set; }
+
+    public string? SessionId { get; set; }
+
+    public StateDatabase? StateDatabase { get; set; }
 
     public LlmAgent(string id, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
     {
@@ -62,6 +67,11 @@ public class LlmAgent
 
         var result = await tool.Function(arguments);
         ToolEventBus?.PostToolEvent(tool, arguments, result);
+
+        if (!string.IsNullOrEmpty(SessionId) && StateDatabase != null)
+        {
+            tool.Serialize(SessionId, StateDatabase);
+        }
 
         return result;
     }

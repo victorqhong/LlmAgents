@@ -2,6 +2,7 @@
 using LlmAgents.Agents;
 using LlmAgents.Communication;
 using LlmAgents.LlmApi;
+using LlmAgents.State;
 using LlmAgents.Todo;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
@@ -33,6 +34,7 @@ internal class DefaultCommand : RootCommand
         AddOption(ConsoleAgent.Options.SystemPromptFile);
         AddOption(ConsoleAgent.Options.WorkingDirectory);
         AddOption(ConsoleAgent.Options.StorageDirectory);
+        AddOption(ConsoleAgent.Options.SessionId);
         AddOption(ConsoleAgent.Options.ToolsConfig);
         AddOption(ConsoleAgent.Options.ToolServerAddress);
         AddOption(ConsoleAgent.Options.ToolServerPort);
@@ -100,12 +102,13 @@ internal class DefaultCommand : RootCommand
         }
 
         var agentId = context.ParseResult.GetValueForOption(ConsoleAgent.Options.AgentId) ?? apiModel;
+        var sessionId = context.ParseResult.GetValueForOption(ConsoleAgent.Options.SessionId);
 
         var consoleCommunication = new ConsoleCommunication();
 
         var agent = await CreateAgent(loggerFactory, consoleCommunication,
             apiEndpoint, apiKey, apiModel,
-            agentId, workingDirectoryValue, storageDirectoryValue, persistent, systemPrompt,
+            agentId, workingDirectoryValue, storageDirectoryValue, persistent, systemPrompt, sessionId,
             toolsFilePath: toolsConfigValue, toolServerAddress: toolServerAddressValue, toolServerPort: toolServerPortValue);
 
         agent.StreamOutput = true;
@@ -119,7 +122,7 @@ internal class DefaultCommand : RootCommand
     private static async Task<LlmAgent> CreateAgent(
         ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
         string apiEndpoint, string apiKey, string apiModel,
-        string agentId, string workingDirectory, string storageDirectory, bool persistent = false, string? systemPrompt = null,
+        string agentId, string workingDirectory, string storageDirectory, bool persistent = false, string? systemPrompt = null, string? sessionId = null,
         string? toolsFilePath = null, string? toolServerAddress = null, int toolServerPort = 5000)
     {
         var llmApi = new LlmApiOpenAi(loggerFactory, apiEndpoint, apiKey, apiModel);
@@ -127,8 +130,24 @@ internal class DefaultCommand : RootCommand
         var agent = new LlmAgent(agentId, llmApi, agentCommunication)
         {
             Persistent = persistent,
-            PersistentMessagesPath = storageDirectory
+            PersistentMessagesPath = storageDirectory,
+            SessionId = sessionId
         };
+
+        var stateDatabase = new StateDatabase(loggerFactory, Path.Join(storageDirectory, $"{agentId}.db"));
+        if (!string.IsNullOrEmpty(sessionId))
+        {
+            agent.StateDatabase = stateDatabase;
+            var session = stateDatabase.GetSession(sessionId);
+            if (session == null)
+            {
+                stateDatabase.CreateSession(new Session
+                {
+                    SessionId = sessionId,
+                    Status = "New"
+                });
+            }
+        }
 
         Tool[]? tools = null;
 
@@ -181,7 +200,7 @@ internal class DefaultCommand : RootCommand
 
             toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
 
-            tools = toolFactory.Load();
+            tools = toolFactory.Load(sessionId, stateDatabase);
 
             agent.ToolEventBus = toolEventBus;
         }
