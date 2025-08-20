@@ -39,11 +39,19 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 
     public string Model { get; set; }
 
-    public int? MaxCompletionTokens { get; set; } = 8192;
+    public int MaxCompletionTokens { get; set; } = -1;
+
+    public int TargetContextSize { get; set; } = 51200;
 
     public double Temperature { get; set; } = 0.7;
 
     public string? FinishReason { get; private set; }
+
+    public int UsageCompletionTokens { get; private set; }
+
+    public int UsagePromptTokens { get; private set; }
+
+    public int UsageTotalTokens { get; private set; }
 
     public async Task<string?> GenerateCompletion(IEnumerable<IMessageContent> messageContents, CancellationToken cancellationToken = default)
     {
@@ -170,7 +178,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         return null;
     }
 
-    private async IAsyncEnumerable<string> ParseCompletion(Stream stream, [EnumeratorCancellation] CancellationToken cancellationToken)
+    private async IAsyncEnumerable<string> ParseCompletion(Stream stream, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         string? finishReason = null;
         var parsedToolCalls = new Dictionary<int, Dictionary<string, string>>();
@@ -205,6 +213,13 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
             if (json["choices"]?[0] is not JObject choice)
             {
                 continue;
+            }
+
+            if (json.ContainsKey("usage") && json.Value<JObject>("usage") is JObject usage)
+            {
+                UsageCompletionTokens = usage.Value<int>("completion_tokens");
+                UsagePromptTokens = usage.Value<int>("prompt_tokens");
+                UsageTotalTokens = usage.Value<int>("total_tokens");
             }
 
             if (string.IsNullOrEmpty(finishReason))
@@ -443,10 +458,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         var payload = new JObject();
         payload.Add("model", model);
         payload.Add("messages", JArray.FromObject(messages));
-        if (maxCompletionTokens > 0)
-        {
-            payload.Add("max_completion_tokens", maxCompletionTokens);
-        }
+        payload.Add("max_completion_tokens", maxCompletionTokens);
         payload.Add("temperature", temperature);
         if (tools != null && tools.Count > 0)
         {
