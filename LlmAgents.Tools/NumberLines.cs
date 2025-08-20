@@ -11,11 +11,24 @@ public class NumberLines : Tool
     private readonly string basePath;
     private readonly bool restrictToBasePath;
 
+    private string currentDirectory;
+
     public NumberLines(ToolFactory toolFactory)
         : base(toolFactory)
     {
         basePath = Path.GetFullPath(toolFactory.GetParameter(nameof(basePath)) ?? Environment.CurrentDirectory);
         restrictToBasePath = bool.TryParse(toolFactory.GetParameter(nameof(restrictToBasePath)), out bool restrict) ? restrict : true;
+
+        currentDirectory = basePath;
+
+        var toolEventBus = toolFactory.Resolve<IToolEventBus>();
+        toolEventBus.SubscribeToolEvent<ChangeDirectory>(OnChangeDirectory);
+    }
+
+    private Task OnChangeDirectory(ToolEvent e)
+    {
+        currentDirectory = e.Result.Value<string>("currentDirectory") ?? currentDirectory;
+        return Task.CompletedTask;
     }
 
     public override JObject Schema { get; protected set; } = JObject.FromObject(new
@@ -56,24 +69,28 @@ public class NumberLines : Tool
 
         try
         {
-            // Resolve and validate file path
-            string resolvedPath = ResolvePath(path);
+            if (restrictToBasePath && !Path.IsPathRooted(path))
+            {
+                path = Path.Combine(currentDirectory, path);
+            }
 
-            if (restrictToBasePath && !resolvedPath.StartsWith(basePath))
+            path = Path.GetFullPath(path);
+
+            if (restrictToBasePath && !path.StartsWith(basePath))
             {
                 result.Add("error", $"File outside {basePath} cannot be read");
                 return Task.FromResult<JToken>(result);
             }
 
             // Check if the file exists
-            if (!File.Exists(resolvedPath))
+            if (!File.Exists(path))
             {
-                result.Add("error", $"File not found: {resolvedPath}");
+                result.Add("error", $"File not found: {path}");
                 return Task.FromResult<JToken>(result);
             }
 
             // Read the file and prepend line numbers
-            List<string> lines = File.ReadAllLines(resolvedPath).ToList();
+            List<string> lines = File.ReadAllLines(path).ToList();
             List<string> numberedLines = new List<string>();
             for (int i = 0; i < lines.Count; i++)
             {
@@ -90,14 +107,5 @@ public class NumberLines : Tool
         }
 
         return Task.FromResult<JToken>(result);
-    }
-
-    private string ResolvePath(string path)
-    {
-        if (restrictToBasePath && !Path.IsPathRooted(path))
-        {
-            return Path.GetFullPath(Path.Combine(basePath, path));
-        }
-        return Path.GetFullPath(path);
     }
 }
