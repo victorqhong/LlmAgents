@@ -66,11 +66,11 @@ public class LlmAgent
         }
 
         var result = await tool.Function(arguments);
-        ToolEventBus?.PostToolEvent(tool, arguments, result);
+        ToolEventBus?.PostCallToolEvent(tool, arguments, result);
 
         if (!string.IsNullOrEmpty(SessionId) && StateDatabase != null)
         {
-            tool.Serialize(SessionId, StateDatabase);
+            tool.Save(SessionId, StateDatabase);
         }
 
         return result;

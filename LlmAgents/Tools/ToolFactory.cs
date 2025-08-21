@@ -190,12 +190,16 @@ public class ToolFactory
                 continue;
             }
 
-            if (!string.IsNullOrEmpty(sessionId) && stateDatabase != null)
-            {
-                tool.Deserialize(sessionId, stateDatabase);
-            }
-
             tools.Add(tool);
+        }
+
+        if (!string.IsNullOrEmpty(sessionId) && stateDatabase != null)
+        {
+            foreach (var tool in tools)
+            {
+                tool.Load(sessionId, stateDatabase);
+                log.LogInformation("Loaded tool: {tool}", tool.GetType().Name);
+            }
         }
 
         return tools.ToArray();

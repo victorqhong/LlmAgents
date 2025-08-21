@@ -135,9 +135,10 @@ internal class DefaultCommand : RootCommand
         };
 
         var stateDatabase = new StateDatabase(loggerFactory, Path.Join(storageDirectory, $"{agentId}.db"));
+        agent.StateDatabase = stateDatabase;
+
         if (!string.IsNullOrEmpty(sessionId))
         {
-            agent.StateDatabase = stateDatabase;
             var session = stateDatabase.GetSession(sessionId);
             if (session == null)
             {

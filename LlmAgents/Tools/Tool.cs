@@ -31,7 +31,7 @@ public abstract class Tool
 
     public abstract Task<JToken> Function(JObject parameters);
 
-    public virtual void Serialize(string sessionId, StateDatabase stateDatabase) { }
+    public virtual void Save(string sessionId, StateDatabase stateDatabase) { }
 
-    public virtual void Deserialize(string sessionId, StateDatabase stateDatabase) { }
+    public virtual void Load(string sessionId, StateDatabase stateDatabase) { }
 }

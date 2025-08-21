@@ -182,23 +182,19 @@ public class Shell : Tool
         return Task.FromResult<JToken>(result);
     }
 
-    public override void Serialize(string sessionId, State.StateDatabase stateDatabase)
-    {
-        Console.WriteLine("Serializing shell");
-        stateDatabase.SetState(sessionId, $"{nameof(Shell)}:{nameof(currentDirectory)}", currentDirectory);
-    }
-
-    public override void Deserialize(string sessionId, State.StateDatabase stateDatabase)
-    {
-        Console.WriteLine("deserializing shell");
-        currentDirectory = stateDatabase.GetSessionState(sessionId, $"{nameof(Shell)}:{nameof(currentDirectory)}") ?? currentDirectory;
-        Process.StandardInput.WriteLine($"cd {currentDirectory}");
-    }
-
     private Task OnChangeDirectory(ToolEvent e)
     {
-        currentDirectory = e.Result.Value<string>("currentDirectory") ?? currentDirectory;
+        if (e is ToolCallEvent tce)
+        {
+            currentDirectory = tce.Result.Value<string>("currentDirectory") ?? currentDirectory;
+        }
+        else if (e is Events.ChangeDirectoryEvent cde)
+        {
+            currentDirectory = cde.Directory;
+        }
+
         Process.StandardInput.WriteLine($"cd {currentDirectory}");
+
         return Task.CompletedTask;
     }
 }

@@ -6,12 +6,16 @@ using System.IO;
 
 public class ChangeDirectory : Tool
 {
+    private readonly IToolEventBus toolEventBus;
+
     private readonly string basePath;
     private readonly bool restrictToBasePath;
 
     public ChangeDirectory(ToolFactory toolFactory)
         : base(toolFactory)
     {
+        toolEventBus = toolFactory.Resolve<IToolEventBus>();
+
         basePath = Path.GetFullPath(toolFactory.GetParameter(nameof(basePath)) ?? Environment.CurrentDirectory);
         restrictToBasePath = bool.TryParse(toolFactory.GetParameter(nameof(restrictToBasePath)), out restrictToBasePath) ? restrictToBasePath : true;
 
@@ -88,16 +92,15 @@ public class ChangeDirectory : Tool
         return Task.FromResult<JToken>(result);
     }
 
-    public override void Serialize(string sessionId, State.StateDatabase stateDatabase)
+    public override void Save(string sessionId, State.StateDatabase stateDatabase)
     {
-        Console.WriteLine("Serializing ChangeDirectory");
-        stateDatabase.SetState(sessionId, $"{nameof(CurrentDirectory)}:{nameof(CurrentDirectory)}", CurrentDirectory);
+        stateDatabase.SetState(sessionId, $"{nameof(ChangeDirectory)}:{nameof(CurrentDirectory)}", CurrentDirectory);
     }
 
-    public override void Deserialize(string sessionId, State.StateDatabase stateDatabase)
+    public override void Load(string sessionId, State.StateDatabase stateDatabase)
     {
-        Console.WriteLine("deserializing changedirectory");
         CurrentDirectory = stateDatabase.GetSessionState(sessionId, $"{nameof(ChangeDirectory)}:{nameof(CurrentDirectory)}") ?? CurrentDirectory;
+        toolEventBus.PostToolEvent<ChangeDirectory>(new Events.ChangeDirectoryEvent { Sender = this, Directory = CurrentDirectory });
     }
 }
 
