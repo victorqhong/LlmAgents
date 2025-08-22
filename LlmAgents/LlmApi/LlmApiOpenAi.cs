@@ -453,7 +453,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         return message;
     }
 
-    public static string GetPayload(string model, List<JObject> messages, int? maxCompletionTokens, double temperature, IReadOnlyList<JObject>? tools = null, string toolChoice = "auto", bool stream = true)
+    public static string GetPayload(string model, List<JObject> messages, int maxCompletionTokens, double temperature, IReadOnlyList<JObject>? tools = null, string toolChoice = "auto", bool stream = true)
     {
         var payload = new JObject();
         payload.Add("model", model);
