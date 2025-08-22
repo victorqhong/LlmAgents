@@ -5,6 +5,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 public class FileList : Tool
 {
@@ -17,7 +19,7 @@ public class FileList : Tool
         : base(toolFactory)
     {
         basePath = Path.GetFullPath(toolFactory.GetParameter(nameof(basePath)) ?? Environment.CurrentDirectory);
-        restrictToBasePath = bool.TryParse(toolFactory.GetParameter(nameof(restrictToBasePath)), out restrictToBasePath) ? restrictToBasePath : true;
+        restrictToBasePath = bool.TryParse(toolFactory.GetParameter(nameof(restrictToBasePath)), out var restrict) ? restrict : true;
 
         currentDirectory = basePath;
 
@@ -51,17 +53,17 @@ public class FileList : Tool
                     recursive = new
                     {
                         type = "boolean",
-                        description = "Whether to recursively list files in all subdirectories"
+                        description = "Whether to recursively list files in all subdirectories (default is false)"
                     },
                     searchPattern = new
                     {
                         type = "string",
                         description = "The search string to match against the names of files in path (default *.*). This parameter can contain a combination of valid literal path and wildcard (* and ?) characters, but it doesn't support regular expressions."
                     },
-                    useGitIgnore = new
+                    useIgnoreFile = new
                     {
                         type = "boolean",
-                        description = "Whether to use a .gitignore file to filter results (default is true)"
+                        description = "Whether to use .gitignore and .llmignore files to filter results (default is true)"
                     }
                 },
                 required = new[] { "path" }
@@ -82,7 +84,7 @@ public class FileList : Tool
 
         var recursive = parameters["recursive"]?.Value<bool>() ?? false;
         var searchPattern = parameters["searchPattern"]?.Value<string>() ?? "*.*";
-        var useGitIgnore = parameters["useGitIgnore"]?.Value<bool>() ?? true;
+        var useIgnoreFile = parameters["useIgnoreFile"]?.Value<bool>() ?? true;
 
         try
         {
@@ -103,19 +105,15 @@ public class FileList : Tool
             var files = Directory.GetFiles(path, searchPattern, searchOption);
             var directories = Directory.GetDirectories(path, searchPattern, searchOption);
 
-            var listResults = directories.Concat(files);
+            var directoryContents = directories.Concat(files);
 
-            if (useGitIgnore)
+            if (useIgnoreFile)
             {
-                var gitIgnoreFile = Path.Combine(path, ".gitignore");
-                if (File.Exists(gitIgnoreFile))
-                {
-                    var filter = new GitIgnoreFilter(gitIgnoreFile, ".git/");
-                    listResults = filter.FilterPaths(listResults);
-                }
+                var filter = new MultiLevelGitIgnoreFilter(basePath);
+                directoryContents = directoryContents.Where(filter.IsNotIgnored).ToArray();
             }
 
-            return Task.FromResult<JToken>(JArray.FromObject(listResults));
+            return Task.FromResult<JToken>(JArray.FromObject(directoryContents));
         }
         catch (Exception e)
         {
@@ -123,6 +121,58 @@ public class FileList : Tool
         }
 
         return Task.FromResult<JToken>(result);
+    }
+
+    private class MultiLevelGitIgnoreFilter
+    {
+        private readonly List<(string directory, GitIgnoreFilter filter)> filters = new();
+
+        public MultiLevelGitIgnoreFilter(string basePath)
+        {
+            var gitIgnoreFiles = Directory.GetFiles(basePath, ".gitignore", SearchOption.AllDirectories);
+            foreach (var file in gitIgnoreFiles)
+            {
+                var directory = new DirectoryInfo(file);
+                if (directory.Parent == null)
+                {
+                    continue;
+                }
+
+                var filter = new GitIgnoreFilter(file);
+                filters.Add((directory.Parent.FullName, filter));
+            }
+
+            var llmIgnoreFiles = Directory.GetFiles(basePath, ".llmignore", SearchOption.AllDirectories);
+            foreach (var file in llmIgnoreFiles)
+            {
+                var directory = new DirectoryInfo(file);
+                if (directory.Parent == null)
+                {
+                    continue;
+                }
+
+                var filter = new GitIgnoreFilter(file);
+                filters.Add((directory.Parent.FullName, filter));
+            }
+        }
+
+        public bool IsNotIgnored(string path)
+        {
+            var isIgnored = false;
+            foreach (var filter in filters)
+            {
+                if (path.StartsWith(filter.Item1))
+                {
+                    isIgnored = filter.Item2.IsIgnored(Path.GetRelativePath(filter.Item1, path));
+                    if (isIgnored)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            return !isIgnored;
+        }
     }
 
     private class GitIgnoreFilter
@@ -165,24 +215,18 @@ public class FileList : Tool
 
         private string ConvertGitIgnorePatternToRegex(string pattern)
         {
-            // Normalize pattern: remove trailing spaces, handle directory slashes
             string cleanedPattern = pattern.TrimEnd();
             bool isDirectoryOnly = cleanedPattern.EndsWith("/");
             if (isDirectoryOnly)
                 cleanedPattern = cleanedPattern.Substring(0, cleanedPattern.Length - 1);
 
-            // Escape special regex characters
             string escaped = Regex.Escape(cleanedPattern);
 
-            // Replace .gitignore wildcards with regex equivalents
             escaped = escaped
-                .Replace("\\*\\*", ".*")        // ** matches any sequence, including /
-                .Replace("\\*", "[^/]*")       // * matches any sequence except /
-                .Replace("\\?", ".");          // ? matches any single character
+                .Replace("\\*\\*", ".*")
+                .Replace("\\*", "[^/]*")
+                .Replace("\\?", ".");
 
-            // Handle anchoring:
-            // - If pattern starts with '/', anchor to root
-            // - Otherwise, allow match anywhere in path (but still respect directory boundaries)
             string regexPattern;
             if (pattern.StartsWith("/"))
             {
@@ -190,11 +234,9 @@ public class FileList : Tool
             }
             else
             {
-                // Allow match at start or after a slash
                 regexPattern = "(^|/)" + escaped;
             }
 
-            // If directory-only, ensure it matches a slash and anything after
             if (isDirectoryOnly)
             {
                 regexPattern += "(?:/.*|$)";
@@ -203,22 +245,15 @@ public class FileList : Tool
             return regexPattern;
         }
 
-        public List<string> FilterPaths(IEnumerable<string> paths)
+        public bool IsIgnored(string relativePath)
         {
-            return paths.Where(path => !IsIgnored(path)).ToList();
-        }
-
-        private bool IsIgnored(string path)
-        {
-            path = path.Replace("\\", "/");
+            relativePath = relativePath.Replace("\\", "/");
             foreach (var pattern in ignorePatterns)
             {
-                if (pattern.IsMatch(path))
+                if (pattern.IsMatch(relativePath))
                     return true;
             }
             return false;
         }
     }
-
 }
-
