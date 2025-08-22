@@ -53,17 +53,17 @@ public class FileList : Tool
                     recursive = new
                     {
                         type = "boolean",
-                        description = "Whether to recursively list files in all subdirectories"
+                        description = "Whether to recursively list files in all subdirectories (default is false)"
                     },
                     searchPattern = new
                     {
                         type = "string",
                         description = "The search string to match against the names of files in path (default *.*). This parameter can contain a combination of valid literal path and wildcard (* and ?) characters, but it doesn't support regular expressions."
                     },
-                    useGitIgnore = new
+                    useIgnoreFile = new
                     {
                         type = "boolean",
-                        description = "Whether to use a .gitignore file to filter results (default is true)"
+                        description = "Whether to use .gitignore and .llmignore files to filter results (default is true)"
                     }
                 },
                 required = new[] { "path" }
@@ -84,7 +84,7 @@ public class FileList : Tool
 
         var recursive = parameters["recursive"]?.Value<bool>() ?? false;
         var searchPattern = parameters["searchPattern"]?.Value<string>() ?? "*.*";
-        var useGitIgnore = parameters["useGitIgnore"]?.Value<bool>() ?? true;
+        var useIgnoreFile = parameters["useIgnoreFile"]?.Value<bool>() ?? true;
 
         try
         {
@@ -105,15 +105,15 @@ public class FileList : Tool
             var files = Directory.GetFiles(path, searchPattern, searchOption);
             var directories = Directory.GetDirectories(path, searchPattern, searchOption);
 
-            var listResults = directories.Concat(files);
+            var directoryContents = directories.Concat(files);
 
-            if (useGitIgnore)
+            if (useIgnoreFile)
             {
-                var multiLevelFilter = new MultiLevelGitIgnoreFilter(path, basePath);
-                listResults = multiLevelFilter.FilterPaths(listResults);
+                var filter = new MultiLevelGitIgnoreFilter(basePath);
+                directoryContents = directoryContents.Where(filter.IsNotIgnored).ToArray();
             }
 
-            return Task.FromResult<JToken>(JArray.FromObject(listResults));
+            return Task.FromResult<JToken>(JArray.FromObject(directoryContents));
         }
         catch (Exception e)
         {
@@ -127,54 +127,51 @@ public class FileList : Tool
     {
         private readonly List<(string directory, GitIgnoreFilter filter)> filters = new();
 
-        public MultiLevelGitIgnoreFilter(string startDirectory, string basePath)
+        public MultiLevelGitIgnoreFilter(string basePath)
         {
-            var currentDir = Path.GetFullPath(startDirectory);
-            basePath = Path.GetFullPath(basePath);
-
-            while (currentDir.StartsWith(basePath, StringComparison.OrdinalIgnoreCase))
+            var gitIgnoreFiles = Directory.GetFiles(basePath, ".gitignore", SearchOption.AllDirectories);
+            foreach (var file in gitIgnoreFiles)
             {
-                var gitIgnoreFile = Path.Combine(currentDir, ".gitignore");
-                if (File.Exists(gitIgnoreFile))
+                var directory = new DirectoryInfo(file);
+                if (directory.Parent == null)
                 {
-                    filters.Add((currentDir, new GitIgnoreFilter(gitIgnoreFile)));
+                    continue;
                 }
 
-                if (string.Equals(currentDir, basePath, StringComparison.OrdinalIgnoreCase))
-                    break;
+                var filter = new GitIgnoreFilter(file);
+                filters.Add((directory.Parent.FullName, filter));
+            }
 
-                var parentDir = Path.GetDirectoryName(currentDir);
-                if (string.IsNullOrEmpty(parentDir))
-                    break;
+            var llmIgnoreFiles = Directory.GetFiles(basePath, ".llmignore", SearchOption.AllDirectories);
+            foreach (var file in llmIgnoreFiles)
+            {
+                var directory = new DirectoryInfo(file);
+                if (directory.Parent == null)
+                {
+                    continue;
+                }
 
-                currentDir = parentDir;
+                var filter = new GitIgnoreFilter(file);
+                filters.Add((directory.Parent.FullName, filter));
             }
         }
 
-        public List<string> FilterPaths(IEnumerable<string> paths)
+        public bool IsNotIgnored(string path)
         {
-            return paths.Where(path => !IsIgnored(path)).ToList();
-        }
-
-        private bool IsIgnored(string path)
-        {
-            path = Path.GetFullPath(path).Replace("\\", "/");
-
-            foreach (var (directory, filter) in filters)
+            var isIgnored = false;
+            foreach (var filter in filters)
             {
-                var dirFullPath = Path.GetFullPath(directory).Replace("\\", "/");
-
-                if (path.StartsWith(dirFullPath, StringComparison.OrdinalIgnoreCase))
+                if (path.StartsWith(filter.Item1))
                 {
-                    var relativePath = path.Substring(dirFullPath.Length).TrimStart('/');
-
-                    if (filter.IsIgnored(relativePath))
+                    isIgnored = filter.Item2.IsIgnored(Path.GetRelativePath(filter.Item1, path));
+                    if (isIgnored)
                     {
-                        return true;
+                        break;
                     }
                 }
             }
-            return false;
+
+            return !isIgnored;
         }
     }
 
