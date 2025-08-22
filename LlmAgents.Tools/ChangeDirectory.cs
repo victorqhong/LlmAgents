@@ -100,7 +100,7 @@ public class ChangeDirectory : Tool
     public override void Load(string sessionId, State.StateDatabase stateDatabase)
     {
         CurrentDirectory = stateDatabase.GetSessionState(sessionId, $"{nameof(ChangeDirectory)}:{nameof(CurrentDirectory)}") ?? CurrentDirectory;
-        toolEventBus.PostToolEvent<ChangeDirectory>(new Events.ChangeDirectoryEvent { Sender = this, Directory = CurrentDirectory });
+        toolEventBus.PostToolEvent(new Events.ChangeDirectoryEvent { Sender = this, Directory = CurrentDirectory });
     }
 }
 

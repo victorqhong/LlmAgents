@@ -4,11 +4,11 @@ public class ToolEventBus : IToolEventBus
 {
     private readonly Dictionary<Type, List<Func<ToolEvent, Task>>> toolEventHandlers = [];
 
-    public void PostToolEvent<T>(ToolEvent @event) where T : Tool
+    public void PostToolEvent(ToolEvent @event)
     {
         Task.Run(async () =>
         {
-            var type = typeof(T);
+            var type = @event.Sender.GetType();
             if (!toolEventHandlers.TryGetValue(type, out List<Func<ToolEvent, Task>>? handlers))
             {
                 return;
