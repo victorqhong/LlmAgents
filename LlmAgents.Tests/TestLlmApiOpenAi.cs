@@ -35,8 +35,8 @@ public sealed class TestLlmApiOpenAi
         var model = "gpt-4o";
         var messages = new List<JObject>();
 
-        var payload = LlmApiOpenAi.GetPayload(model, messages, null, 1);
-        var expected = "{\"model\":\"gpt-4o\",\"messages\":[],\"temperature\":1.0,\"stream\":true}";
+        var payload = LlmApiOpenAi.GetPayload(model, messages, 100, 1);
+        var expected = "{\"model\":\"gpt-4o\",\"messages\":[],\"max_completion_tokens\":100,\"temperature\":1.0,\"stream\":true}";
         Assert.AreEqual(expected, payload);
     }
 
