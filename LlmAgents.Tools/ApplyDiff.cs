@@ -11,11 +11,24 @@ public class ApplyDiff : Tool
     private readonly string basePath;
     private readonly bool restrictToBasePath;
 
+    private string currentDirectory;
+
     public ApplyDiff(ToolFactory toolFactory)
         : base(toolFactory)
     {
         basePath = Path.GetFullPath(toolFactory.GetParameter(nameof(basePath)) ?? Environment.CurrentDirectory);
         restrictToBasePath = bool.TryParse(toolFactory.GetParameter(nameof(restrictToBasePath)), out bool restrict) ? restrict : true;
+
+        currentDirectory = basePath;
+
+        var toolEventBus = toolFactory.Resolve<IToolEventBus>();
+        toolEventBus.SubscribeToolEvent<ChangeDirectory>(OnChangeDirectory);
+    }
+
+    private Task OnChangeDirectory(ToolEvent e)
+    {
+        currentDirectory = e.Result.Value<string>("currentDirectory") ?? currentDirectory;
+        return Task.CompletedTask;
     }
 
     public override JObject Schema { get; protected set; } = JObject.FromObject(new
@@ -67,24 +80,28 @@ public class ApplyDiff : Tool
 
         try
         {
-            // Resolve and validate file path
-            string resolvedPath = ResolvePath(path);
+            if (restrictToBasePath && !Path.IsPathRooted(path))
+            {
+                path = Path.Combine(currentDirectory, path);
+            }
 
-            if (restrictToBasePath && !resolvedPath.StartsWith(basePath))
+            path = Path.GetFullPath(path);
+
+            if (restrictToBasePath && !path.StartsWith(basePath))
             {
                 result.Add("error", $"File outside {basePath} cannot be modified");
                 return Task.FromResult<JToken>(result);
             }
 
             // Check if the file exists
-            if (!File.Exists(resolvedPath))
+            if (!File.Exists(path))
             {
-                result.Add("error", $"File not found: {resolvedPath}");
+                result.Add("error", $"File not found: {path}");
                 return Task.FromResult<JToken>(result);
             }
 
             // Read the original file
-            List<string> originalLines = File.ReadAllLines(resolvedPath).ToList();
+            List<string> originalLines = File.ReadAllLines(path).ToList();
             // Split diff content into lines
             List<string> diffLines = diffContent.Split(new[] { "\n", "\r\n" }, StringSplitOptions.None).ToList();
 
@@ -92,8 +109,8 @@ public class ApplyDiff : Tool
             List<string> modifiedLines = Apply(originalLines, diffLines);
 
             // Write the result back to the same file (in-place)
-            File.WriteAllLines(resolvedPath, modifiedLines);
-            result.Add("success", $"Diff applied successfully! File modified in-place at {resolvedPath}");
+            File.WriteAllLines(path, modifiedLines);
+            result.Add("success", $"Diff applied successfully! File modified in-place at {path}");
         }
         catch (Exception e)
         {
@@ -101,15 +118,6 @@ public class ApplyDiff : Tool
         }
 
         return Task.FromResult<JToken>(result);
-    }
-
-    private string ResolvePath(string path)
-    {
-        if (restrictToBasePath && !Path.IsPathRooted(path))
-        {
-            return Path.GetFullPath(Path.Combine(basePath, path));
-        }
-        return Path.GetFullPath(path);
     }
 
     private List<string> Apply(List<string> original, List<string> diff)
