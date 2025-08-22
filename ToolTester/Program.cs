@@ -68,7 +68,7 @@ async Task RootCommandHandler(InvocationContext context)
     using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
     var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(workingDirectoryValue, "todo.db"));
-
+    var toolEventBus = new ToolEventBus();
     var toolsFile = JObject.Parse(File.ReadAllText(toolsConfigValue));
     var toolFactory = new ToolFactory(loggerFactory, toolsFile);
 
@@ -76,6 +76,7 @@ async Task RootCommandHandler(InvocationContext context)
     toolFactory.Register(loggerFactory);
     toolFactory.Register(todoDatabase);
     toolFactory.Register<ILlmApiMessageProvider>(new MockLlmApiMessageProvider());
+    toolFactory.Register<IToolEventBus>(toolEventBus);
 
     toolFactory.AddParameter("basePath", workingDirectoryValue);
 
