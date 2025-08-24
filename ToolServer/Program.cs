@@ -1,6 +1,5 @@
 ﻿using LlmAgents.Communication;
 using LlmAgents.LlmApi;
-using LlmAgents.Todo;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
@@ -113,11 +112,8 @@ public class JsonRpcToolService : IJsonRpcToolService
         var toolsFile = JObject.Parse(File.ReadAllText(toolsConfigPath));
         var toolFactory = new ToolFactory(loggerFactory, toolsFile);
 
-        var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(basePath, "todo.db"));
-
         toolFactory.Register(agentCommunication);
         toolFactory.Register(loggerFactory);
-        toolFactory.Register(todoDatabase);
         toolFactory.Register(messageProvider);
 
         toolFactory.AddParameter("basePath", basePath);
