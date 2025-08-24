@@ -27,6 +27,8 @@ public class LlmAgent
 
     public Action? PreWaitForContent { get; set; }
 
+    public Action? PostSendMessage { get; set; }
+
     public IToolEventBus? ToolEventBus { get; set; }
 
     public string? SessionId { get; set; }
@@ -107,7 +109,6 @@ public class LlmAgent
                 }
 
                 await agentCommunication.SendMessage(string.Empty, true);
-
             }
             else
             {
@@ -119,6 +120,8 @@ public class LlmAgent
 
                 await agentCommunication.SendMessage(response, true);
             }
+
+            PostSendMessage?.Invoke();
 
             if (Persistent)
             {

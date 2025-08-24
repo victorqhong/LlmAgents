@@ -111,8 +111,11 @@ internal class DefaultCommand : RootCommand
             agentId, workingDirectoryValue, storageDirectoryValue, persistent, systemPrompt, sessionId,
             toolsFilePath: toolsConfigValue, toolServerAddress: toolServerAddressValue, toolServerPort: toolServerPortValue);
 
+        var logger = loggerFactory.CreateLogger(nameof(ConsoleAgent));
+
         agent.StreamOutput = true;
         agent.PreWaitForContent = () => { Console.Write("> "); };
+        agent.PostSendMessage = () => { logger.LogInformation("PromptTokens: {PromptTokens}, CompletionTokens: {UsageCompletionTokens}, TotalTokens: {UsageTotalTokens}, Context Used: {ContextUsedPercent}", agent.llmApi.UsagePromptTokens, agent.llmApi.UsageCompletionTokens, agent.llmApi.UsageTotalTokens, ((double)agent.llmApi.UsageTotalTokens / agent.llmApi.TargetContextSize).ToString("P")); };
 
         var cancellationToken = context.GetCancellationToken();
 
