@@ -6,12 +6,16 @@ using System.IO;
 
 public class ChangeDirectory : Tool
 {
+    private readonly IToolEventBus toolEventBus;
+
     private readonly string basePath;
     private readonly bool restrictToBasePath;
 
     public ChangeDirectory(ToolFactory toolFactory)
         : base(toolFactory)
     {
+        toolEventBus = toolFactory.Resolve<IToolEventBus>();
+
         basePath = Path.GetFullPath(toolFactory.GetParameter(nameof(basePath)) ?? Environment.CurrentDirectory);
         restrictToBasePath = bool.TryParse(toolFactory.GetParameter(nameof(restrictToBasePath)), out restrictToBasePath) ? restrictToBasePath : true;
 
@@ -86,6 +90,17 @@ public class ChangeDirectory : Tool
         }
 
         return Task.FromResult<JToken>(result);
+    }
+
+    public override void Save(string sessionId, State.StateDatabase stateDatabase)
+    {
+        stateDatabase.SetState(sessionId, $"{nameof(ChangeDirectory)}:{nameof(CurrentDirectory)}", CurrentDirectory);
+    }
+
+    public override void Load(string sessionId, State.StateDatabase stateDatabase)
+    {
+        CurrentDirectory = stateDatabase.GetSessionState(sessionId, $"{nameof(ChangeDirectory)}:{nameof(CurrentDirectory)}") ?? CurrentDirectory;
+        toolEventBus.PostToolEvent(new Events.ChangeDirectoryEvent { Sender = this, Directory = CurrentDirectory });
     }
 }
 

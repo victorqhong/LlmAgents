@@ -45,6 +45,11 @@ internal static class Options
         description: "Directory used to store agent related data",
         getDefaultValue: () => Path.Combine(Environment.CurrentDirectory, "storage"));
 
+    public readonly static Option<string> SessionId = new Option<string>(
+        name: "--sessionId",
+        description: "Session id used to load state",
+        getDefaultValue: () => Config.GetConfigOptionDefaultValue(".llmagents-session", "LLMAGENTS_SESSION"));
+
     public readonly static Option<string> ToolsConfig = new Option<string>(
         name: "--toolsConfig",
         description: "Path to a JSON file with configuration for tool values",

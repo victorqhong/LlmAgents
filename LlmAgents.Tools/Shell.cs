@@ -184,8 +184,17 @@ public class Shell : Tool
 
     private Task OnChangeDirectory(ToolEvent e)
     {
-        currentDirectory = e.Result.Value<string>("currentDirectory") ?? currentDirectory;
+        if (e is ToolCallEvent tce)
+        {
+            currentDirectory = tce.Result.Value<string>("currentDirectory") ?? currentDirectory;
+        }
+        else if (e is Events.ChangeDirectoryEvent cde)
+        {
+            currentDirectory = cde.Directory;
+        }
+
         Process.StandardInput.WriteLine($"cd {currentDirectory}");
+
         return Task.CompletedTask;
     }
 }

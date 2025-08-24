@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using LlmAgents.State;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.Reflection;
 
@@ -114,7 +115,7 @@ public class ToolFactory
         return tool;
     }
 
-    public Tool[]? Load()
+    public Tool[]? Load(string? sessionId = null, StateDatabase? stateDatabase = null)
     {
         if (toolDefinitions == null)
         {
@@ -190,6 +191,15 @@ public class ToolFactory
             }
 
             tools.Add(tool);
+        }
+
+        if (!string.IsNullOrEmpty(sessionId) && stateDatabase != null)
+        {
+            foreach (var tool in tools)
+            {
+                tool.Load(sessionId, stateDatabase);
+                log.LogInformation("Loaded tool: {tool}", tool.GetType().Name);
+            }
         }
 
         return tools.ToArray();
