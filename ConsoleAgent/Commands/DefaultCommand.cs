@@ -134,6 +134,16 @@ internal class DefaultCommand : RootCommand
             SessionId = sessionId
         };
 
+        if (!Path.Exists(workingDirectory))
+        {
+            Directory.CreateDirectory(workingDirectory);
+        }
+
+        if (!Path.Exists(storageDirectory))
+        {
+            Directory.CreateDirectory(storageDirectory);
+        }
+
         var stateDatabase = new StateDatabase(loggerFactory, Path.Join(storageDirectory, $"{agentId}.db"));
         agent.StateDatabase = stateDatabase;
 

@@ -7,7 +7,7 @@ namespace LlmAgents
 
         public static string ToolsPrompt = "Summarize the tools available and their parameters";
 
-        public static string QuestionairePrompt = "Write a questionaire to gather requirements for a new software project minimum viable product. Save the file to MVP.md";
+        public static string QuestionnairePrompt = "Write a questionnaire to gather requirements for a new software project minimum viable product. Save the file to MVP.md";
 
         public static string PlanPrompt = "Read the file 'MVP.md' and generate an implementation plan, and save the file to PLAN.md";
 
