@@ -1,7 +1,7 @@
 namespace LlmAgents.Tools;
 
 using Newtonsoft.Json.Linq;
-using LlmAgents.Todo;
+using LlmAgents.Tools.Todo;
 using System;
 
 public class TodoRead : Tool
