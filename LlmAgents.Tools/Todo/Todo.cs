@@ -1,4 +1,4 @@
-namespace LlmAgents.Todo;
+namespace LlmAgents.Tools.Todo;
 
 public class Todo
 {

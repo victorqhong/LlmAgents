@@ -1,6 +1,5 @@
 ﻿using LlmAgents.Communication;
 using LlmAgents.LlmApi;
-using LlmAgents.Todo;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
@@ -67,14 +66,12 @@ async Task RootCommandHandler(InvocationContext context)
 
     using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
-    var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(workingDirectoryValue, "todo.db"));
     var toolEventBus = new ToolEventBus();
     var toolsFile = JObject.Parse(File.ReadAllText(toolsConfigValue));
     var toolFactory = new ToolFactory(loggerFactory, toolsFile);
 
     toolFactory.Register<IAgentCommunication>(new ConsoleCommunication());
     toolFactory.Register(loggerFactory);
-    toolFactory.Register(todoDatabase);
     toolFactory.Register<ILlmApiMessageProvider>(new MockLlmApiMessageProvider());
     toolFactory.Register<IToolEventBus>(toolEventBus);
 

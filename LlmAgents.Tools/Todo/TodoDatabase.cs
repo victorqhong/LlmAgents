@@ -1,4 +1,4 @@
-namespace LlmAgents.Todo;
+namespace LlmAgents.Tools.Todo;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;

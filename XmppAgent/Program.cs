@@ -2,7 +2,6 @@
 using LlmAgents.Agents;
 using LlmAgents.Communication;
 using LlmAgents.LlmApi;
-using LlmAgents.Todo;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
@@ -256,14 +255,12 @@ LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentComm
 
     if (!string.IsNullOrEmpty(toolsFilePath))
     {
-        var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(agentDirectory, "todo.db"));
         var toolEventBus = new ToolEventBus();
         var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
         var toolFactory = new ToolFactory(loggerFactory, toolsFile);
 
         toolFactory.Register(agentCommunication);
         toolFactory.Register(loggerFactory);
-        toolFactory.Register(todoDatabase);
         toolFactory.Register<ILlmApiMessageProvider>(llmApi);
         toolFactory.Register<IToolEventBus>(toolEventBus);
 
