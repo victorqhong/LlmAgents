@@ -77,24 +77,20 @@ public class ToolFactory
 
     public void AddParameter(string key, string value)
     {
-        if (parameters.ContainsKey(key))
+        if (!parameters.TryAdd(key, value))
         {
             parameters[key] = value;
-        }
-        else
-        {
-            parameters.Add(key, value);
         }
     }
 
     public string? GetParameter(string key)
     {
-        if (!parameters.ContainsKey(key))
+        if (!parameters.TryGetValue(key, out string? value))
         {
             return null;
         }
 
-        return parameters[key];
+        return value;
     }
 
     public Tool? Create(Type toolType)
@@ -167,6 +163,14 @@ public class ToolFactory
                         continue;
                     }
 
+                    var toolAssemblyInitType = assembly.GetTypes().FirstOrDefault(t => t.GetCustomAttribute<ToolAssemblyInitAttribute>() != null && typeof(IToolAssemblyInitializer).IsAssignableFrom(t));
+                    if (toolAssemblyInitType != null)
+                    {
+                        var toolAssemblyInit = Activator.CreateInstance(toolAssemblyInitType);
+                        var methodInfo = typeof(IToolAssemblyInitializer).GetMethod(nameof(IToolAssemblyInitializer.Initialize));
+                        methodInfo?.Invoke(toolAssemblyInit, [this]);
+                    }
+
                     assemblies[assemblyName] = assembly;
                 }
                 catch (Exception e)
@@ -179,14 +183,14 @@ public class ToolFactory
             var toolType = assemblies[assemblyName].GetType(typeName);
             if (toolType == null)
             {
-                log.LogError("Could not load type from assembly");
+                log.LogError("Could not load type from assembly: {typeName}", typeName);
                 continue;
             }
 
             var tool = Create(toolType);
             if (tool == null)
             {
-                log.LogError("Could not create tool");
+                log.LogError("Could not create tool: {toolType}", toolType.FullName);
                 continue;
             }
 

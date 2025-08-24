@@ -3,7 +3,6 @@ using LlmAgents.Agents;
 using LlmAgents.Communication;
 using LlmAgents.LlmApi;
 using LlmAgents.State;
-using LlmAgents.Todo;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
@@ -187,19 +186,17 @@ internal class DefaultCommand : RootCommand
 
         if (tools == null && !string.IsNullOrEmpty(toolsFilePath) && File.Exists(toolsFilePath))
         {
-            var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(storageDirectory, "todo.db"));
-
             var toolEventBus = new ToolEventBus();
             var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
             var toolFactory = new ToolFactory(loggerFactory, toolsFile);
 
             toolFactory.Register(agentCommunication);
             toolFactory.Register(loggerFactory);
-            toolFactory.Register(todoDatabase);
             toolFactory.Register<ILlmApiMessageProvider>(llmApi);
             toolFactory.Register<IToolEventBus>(toolEventBus);
 
-            toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
+            toolFactory.AddParameter("basePath", workingDirectory);
+            toolFactory.AddParameter("storageDirectory", storageDirectory);
 
             tools = toolFactory.Load(sessionId, stateDatabase);
 
