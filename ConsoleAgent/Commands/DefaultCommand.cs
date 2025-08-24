@@ -198,6 +198,7 @@ internal class DefaultCommand : RootCommand
             toolFactory.Register(todoDatabase);
             toolFactory.Register<ILlmApiMessageProvider>(llmApi);
             toolFactory.Register<IToolEventBus>(toolEventBus);
+            toolFactory.Register(new LlmApiOpenAi(loggerFactory, apiEndpoint, apiKey, apiModel));
 
             toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
 
