@@ -39,7 +39,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 
     public string Model { get; set; }
 
-    public int MaxCompletionTokens { get; set; } = -1;
+    public int MaxCompletionTokens { get; set; } = 2048;
 
     public int TargetContextSize { get; set; } = 51200;
 
