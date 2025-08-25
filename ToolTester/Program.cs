@@ -131,12 +131,13 @@ class MockLlmApiMessageProvider : ILlmApiMessageProvider
 {
     public int MessageCount { get; set; }
 
-    public async Task<int> CountMessages()
+    public Task<int> CountMessages()
     {
-        return MessageCount;
+        return Task.FromResult(MessageCount);
     }
 
-    public async Task PruneContext(int numMessagesToKeep)
+    public Task PruneContext(int numMessagesToKeep)
     {
+        return Task.CompletedTask;
     }
 }
