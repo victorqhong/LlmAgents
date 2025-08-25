@@ -1,5 +1,6 @@
 namespace LlmAgents.Tools.Todo;
 
+using LlmAgents.State;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using System;
@@ -9,49 +10,38 @@ public class TodoDatabase
 {
     private readonly ILogger Log;
 
-    public readonly string Database;
+    private readonly StateDatabase stateDatabase;
 
-    private readonly SqliteConnection readConnection;
-
-    private readonly SqliteConnection writeConnection;
-
-    public TodoDatabase(ILoggerFactory LoggerFactory, string database)
+    public TodoDatabase(ILoggerFactory LoggerFactory, StateDatabase stateDatabase)
     {
-        Database = database;
-
         Log = LoggerFactory.CreateLogger(nameof(TodoDatabase));
 
-        readConnection = CreateConnection();
-        writeConnection = CreateConnection();
-
-        if (readConnection == null || writeConnection == null)
-        {
-            throw new ApplicationException("Could not initialize database connections");
-        }
+        this.stateDatabase = stateDatabase;
 
         Initialize();
     }
 
-    public bool CreateTodo(string name, string group, string? description = null, int priority = 10)
+    public bool CreateTodo(Session session, string name, string group, string? description = null, int priority = 10)
     {
         try
         {
-            var todoGroup = GetGroup(group);
+            var todoGroup = GetGroup(session, group);
             if (todoGroup == null)
             {
                 return false;
             }
 
-            using (var command = writeConnection.CreateCommand())
+            stateDatabase.Write(command =>
             {
-                command.CommandText = "INSERT INTO todo_items (title, description, group_id, due_date, priority) VALUES ($title, $description, $group_id, $due_date, $priority);";
+                command.CommandText = "INSERT INTO todo_items (title, description, group_id, due_date, priority, session_id) VALUES ($title, $description, $group_id, $due_date, $priority, $sessionId);";
                 command.Parameters.AddWithValue("$title", name);
                 command.Parameters.AddWithValue("$description", description ?? string.Empty);
                 command.Parameters.AddWithValue("$group_id", todoGroup.id);
                 command.Parameters.AddWithValue("$due_date", string.Empty);
                 command.Parameters.AddWithValue("$priority", priority);
+                command.Parameters.AddWithValue("$sessionId", session.SessionId);
                 command.ExecuteNonQuery();
-            }
+            });
 
             return true;
         }
@@ -62,48 +52,47 @@ public class TodoDatabase
         }
     }
 
-    public Todo? GetTodo(string title, string group)
+    public Todo? GetTodo(Session session, string title, string group)
     {
         try
         {
-            var todoGroup = GetGroup(group);
+            var todoGroup = GetGroup(session, group);
             if (todoGroup == null)
             {
                 return null;
             }
 
             Todo? todo = null;
-            using (var command = writeConnection.CreateCommand())
+            stateDatabase.Write(command =>
             {
-                command.CommandText = "SELECT * FROM todo_items WHERE title = $title AND group_id = $group_id;";
+                command.CommandText = "SELECT * FROM todo_items WHERE title = $title AND group_id = $groupId AND session_id = $sessionId;";
                 command.Parameters.AddWithValue("$title", title);
-                command.Parameters.AddWithValue("$group_id", todoGroup.id);
+                command.Parameters.AddWithValue("$groupId", todoGroup.id);
+                command.Parameters.AddWithValue("$sessionId", session.SessionId);
 
-                using (var reader = command.ExecuteReader())
+                using var reader = command.ExecuteReader();
+                if (!reader.Read())
                 {
-                    if (!reader.Read())
-                    {
-                        Log.LogInformation("Could not find todo: title={title}, group={group}", title, group);
-                        return null;
-                    }
-
-                    todo = new Todo
-                    {
-                        id = reader.GetInt32(0),
-                        groupId = reader.GetInt32(1),
-                        title = reader.GetString(2),
-                        description = reader.GetString(3),
-                        dueDate = reader.GetString(4),
-                        completed = reader.GetBoolean(5),
-                    };
-
-                    if (reader.Read())
-                    {
-                        Log.LogInformation("Found more than one todo: title={title}, group={group}", title, group);
-                        return null;
-                    }
+                    Log.LogInformation("Could not find todo: title={title}, group={group}", title, group);
+                    return;
                 }
-            }
+
+                todo = new Todo
+                {
+                    id = reader.GetInt32(0),
+                    groupId = reader.GetInt32(1),
+                    title = reader.GetString(2),
+                    description = reader.GetString(3),
+                    dueDate = reader.GetString(4),
+                    completed = reader.GetBoolean(5),
+                };
+
+                if (reader.Read())
+                {
+                    Log.LogInformation("Found more than one todo: title={title}, group={group}", title, group);
+                    return;
+                }
+            });
 
             return todo;
         }
@@ -114,7 +103,7 @@ public class TodoDatabase
         }
     }
 
-    public bool UpdateTodo(string title, string group, string? newTitle = null, string? newGroup = null, string? newDescription = null, string? newDueDate = null, bool? newCompleted = null)
+    public bool UpdateTodo(Session session, string title, string group, string? newTitle = null, string? newGroup = null, string? newDescription = null, string? newDueDate = null, bool? newCompleted = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(title);
         ArgumentException.ThrowIfNullOrEmpty(group);
@@ -127,7 +116,7 @@ public class TodoDatabase
 
         try
         {
-            var todoGroup = GetGroup(group);
+            var todoGroup = GetGroup(session, group);
             if (todoGroup == null)
             {
                 return false;
@@ -144,7 +133,7 @@ public class TodoDatabase
             }
             else
             {
-                newTodoGroup = GetGroup(newGroup);
+                newTodoGroup = GetGroup(session, newGroup);
             }
 
             if (newTodoGroup == null)
@@ -152,23 +141,24 @@ public class TodoDatabase
                 return false;
             }
 
-            var todo = GetTodo(title, group);
+            var todo = GetTodo(session, title, group);
             if (todo == null)
             {
                 Log.LogInformation("Could not find todo: title={title}, group={group}", title, group);
                 return false;
             }
 
-            using (var command = readConnection.CreateCommand())
+            stateDatabase.Write(command =>
             {
-                command.CommandText = "UPDATE todo_items SET title = $newTitle, description = $newDescription, due_date = $newDueDate, completed = $newCompleted WHERE title = $title;";
+                command.CommandText = "UPDATE todo_items SET title = $newTitle, description = $newDescription, due_date = $newDueDate, completed = $newCompleted WHERE title = $title AND session_id = $sessionId;";
                 command.Parameters.AddWithValue("$title", title);
                 command.Parameters.AddWithValue("$newTitle", newTitle ?? todo.title);
                 command.Parameters.AddWithValue("$newDescription", newDescription ?? todo.description);
                 command.Parameters.AddWithValue("$newDueDate", newDueDate ?? todo.dueDate);
                 command.Parameters.AddWithValue("$newCompleted", newCompleted ?? todo.completed);
+                command.Parameters.AddWithValue("$sessionId", session.SessionId);
                 command.ExecuteNonQuery();
-            }
+            });
 
             return true;
         }
@@ -179,23 +169,24 @@ public class TodoDatabase
         }
     }
 
-    public bool DeleteTodo(string title, string group)
+    public bool DeleteTodo(Session session, string title, string group)
     {
         try
         {
-            var todoGroup = GetGroup(group);
+            var todoGroup = GetGroup(session, group);
             if (todoGroup == null)
             {
                 return false;
             }
 
-            using (var command = readConnection.CreateCommand())
+            stateDatabase.Write(command =>
             {
-                command.CommandText = "DELETE FROM todo_items WHERE title = $title AND group_id = $group_id;";
+                command.CommandText = "DELETE FROM todo_items WHERE title = $title AND group_id = $groupId AND session_id = $sessionId;";
                 command.Parameters.AddWithValue("$title", title);
-                command.Parameters.AddWithValue("$group_id", todoGroup.id);
+                command.Parameters.AddWithValue("$groupId", todoGroup.id);
+                command.Parameters.AddWithValue("$sessionId", session.SessionId);
                 command.ExecuteNonQuery();
-            }
+            });
 
             return true;
         }
@@ -206,17 +197,18 @@ public class TodoDatabase
         }
     }
 
-    public bool CreateGroup(string name, string? description = null)
+    public bool CreateGroup(Session session, string name, string? description = null)
     {
         try
         {
-            using (var command = writeConnection.CreateCommand())
+            stateDatabase.Write(command =>
             {
-                command.CommandText = "INSERT INTO todo_groups (name, description) VALUES ($name, $description);";
+                command.CommandText = "INSERT INTO todo_groups (name, description, session_id) VALUES ($name, $description, $sessionId);";
                 command.Parameters.AddWithValue("$name", name);
                 command.Parameters.AddWithValue("$description", description ?? string.Empty);
+                command.Parameters.AddWithValue("$sessionId", session.SessionId);
                 command.ExecuteNonQuery();
-            }
+            });
 
             return true;
         }
@@ -227,60 +219,63 @@ public class TodoDatabase
         }
     }
 
-    public TodoGroup? GetGroup(string name, bool getTodos = false)
+    public TodoGroup? GetGroup(Session session, string name, bool getTodos = false)
     {
         try
         {
             int groupId = -1;
             string? groupName = null;
             string? groupDescription = null;
-            using (var command = readConnection.CreateCommand())
+            stateDatabase.Read(command =>
             {
-                command.CommandText = "SELECT * FROM todo_groups WHERE name = $name;";
+                command.CommandText = "SELECT * FROM todo_groups WHERE name = $name AND session_id = $sessionId;";
                 command.Parameters.AddWithValue("$name", name);
+                command.Parameters.AddWithValue("$sessionId", session.SessionId);
 
-                using (var reader = command.ExecuteReader())
+                using var reader = command.ExecuteReader();
+                if (!reader.Read())
                 {
-                    if (!reader.Read())
-                    {
-                        Log.LogInformation("Could not find group: {name}", name);
-                        return null;
-                    }
-
-                    groupId = reader.GetInt32(0);
-                    groupName = reader.GetString(1);
-                    groupDescription = reader.GetString(2);
-
-                    if (reader.Read())
-                    {
-                        Log.LogInformation("More than one group found: {name}", name);
-                        return null;
-                    }
+                    Log.LogInformation("Could not find group: {name}", name);
+                    return;
                 }
+
+                groupId = reader.GetInt32(0);
+                groupName = reader.GetString(1);
+                groupDescription = reader.GetString(2);
+
+                if (reader.Read())
+                {
+                    Log.LogInformation("More than one group found: {name}", name);
+                    return;
+                }
+            });
+
+            if (groupId == -1 || groupName == null || groupDescription == null)
+            {
+                return null;
             }
 
             List<Todo> groupTodos = [];
-            using (var command = readConnection.CreateCommand())
+            stateDatabase.Read(command =>
             {
-                command.CommandText = "SELECT * FROM todo_items WHERE group_id = $group_id";
-                command.Parameters.AddWithValue("$group_id", groupId);
+                command.CommandText = "SELECT * FROM todo_items WHERE group_id = $groupId AND session_id = $sessionId";
+                command.Parameters.AddWithValue("$groupId", groupId);
+                command.Parameters.AddWithValue("$sessionId", session.SessionId);
 
-                using (var reader = command.ExecuteReader())
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
                 {
-                    while (reader.Read())
+                    groupTodos.Add(new Todo
                     {
-                        groupTodos.Add(new Todo
-                        {
-                            id = reader.GetInt32(0),
-                            groupId = reader.GetInt32(1),
-                            title = reader.GetString(2),
-                            description = reader.GetString(3),
-                            dueDate = reader.GetString(4),
-                            completed = reader.GetBoolean(5),
-                        });
-                    }
+                        id = reader.GetInt32(0),
+                        groupId = reader.GetInt32(1),
+                        title = reader.GetString(2),
+                        description = reader.GetString(3),
+                        dueDate = reader.GetString(4),
+                        completed = reader.GetBoolean(5),
+                    });
                 }
-            }
+            });
 
             return new TodoGroup
             {
@@ -297,18 +292,19 @@ public class TodoDatabase
         }
     }
 
-    public bool UpdateGroup(string name, string? newName, string? newDescription)
+    public bool UpdateGroup(Session session, string name, string? newName, string? newDescription)
     {
         try
         {
-            using (var command = readConnection.CreateCommand())
+            stateDatabase.Write(command =>
             {
-                command.CommandText = "UPDATE todo_groups SET name = $newName, description = $newDescription WHERE name = $name;";
+                command.CommandText = "UPDATE todo_groups SET name = $newName, description = $newDescription WHERE name = $name AND session_id = $sessionId;";
                 command.Parameters.AddWithValue("$name", name);
                 command.Parameters.AddWithValue("$newName", newName);
                 command.Parameters.AddWithValue("$newDescription", newDescription ?? string.Empty);
+                command.Parameters.AddWithValue("$sessionId", session.SessionId); 
                 command.ExecuteNonQuery();
-            }
+            });
 
             return true;
         }
@@ -319,16 +315,17 @@ public class TodoDatabase
         }
     }
 
-    public bool DeleteGroup(string name)
+    public bool DeleteGroup(Session session, string name)
     {
         try
         {
-            using (var command = readConnection.CreateCommand())
+            stateDatabase.Write(command =>
             {
-                command.CommandText = "DELETE FROM todo_groups WHERE name = $name;";
+                command.CommandText = "DELETE FROM todo_groups WHERE name = $name AND session_id = $sessionId;";
                 command.Parameters.AddWithValue("$name", name);
+                command.Parameters.AddWithValue("$sessionId", session.SessionId);
                 command.ExecuteNonQuery();
-            }
+            });
 
             return true;
         }
@@ -339,16 +336,18 @@ public class TodoDatabase
         }
     }
 
-    public TodoGroup[]? ListGroups(bool getTodos = false)
+    public TodoGroup[]? ListGroups(Session session, bool getTodos = false)
     {
         try
         {
             if (getTodos)
             {
                 Dictionary<int, List<Todo>> groupTodos = [];
-                using (var command = readConnection.CreateCommand())
+                stateDatabase.Read(command =>
                 {
-                    command.CommandText = "SELECT * FROM todo_items;";
+                    command.CommandText = "SELECT * FROM todo_items WHERE session_id = $sessionId;";
+                    command.Parameters.AddWithValue("$sessionId", session.SessionId);
+
                     using var reader = command.ExecuteReader();
                     while (reader.Read())
                     {
@@ -360,12 +359,13 @@ public class TodoDatabase
                         var todoCompleted = reader.GetBoolean(5);
                         var todoPriority = reader.GetInt32(6);
 
-                        if (!groupTodos.ContainsKey(todoGroup))
+                        if (!groupTodos.TryGetValue(todoGroup, out List<Todo>? value))
                         {
-                            groupTodos.Add(todoGroup, []);
+                            value = [];
+                            groupTodos.Add(todoGroup, value);
                         }
 
-                        groupTodos[todoGroup].Add(new Todo
+                        value.Add(new Todo
                         {
                             id = todoId,
                             groupId = todoGroup,
@@ -375,22 +375,23 @@ public class TodoDatabase
                             completed = todoCompleted,
                         });
                     }
-                }
+                });
 
                 List<TodoGroup> groups = [];
                 foreach (var kvp in groupTodos)
                 {
-                    using (var command = readConnection.CreateCommand())
+                    stateDatabase.Read(command =>
                     {
-                        command.CommandText = "SELECT * FROM todo_groups WHERE id = $id;";
+                        command.CommandText = "SELECT * FROM todo_groups WHERE id = $id AND session_id = $sessionId;";
                         command.Parameters.AddWithValue("$id", kvp.Key);
+                        command.Parameters.AddWithValue("$sessionId", session.SessionId);
 
                         using var reader = command.ExecuteReader();
 
                         if (!reader.Read())
                         {
                             Log.LogInformation("Could not find group with id: {id}", kvp.Key);
-                            continue;
+                            return;
                         }
 
                         var group = new TodoGroup
@@ -404,11 +405,11 @@ public class TodoDatabase
                         if (reader.Read())
                         {
                             Log.LogInformation("More than one result found for id: {id}", kvp.Key);
-                            continue;
+                            return;
                         }
 
                         groups.Add(group);
-                    }
+                    });
                 }
 
                 return groups.ToArray();
@@ -416,9 +417,11 @@ public class TodoDatabase
             else
             {
                 List<TodoGroup> groups = [];
-                using (var command = readConnection.CreateCommand())
+                stateDatabase.Read(command =>
                 {
-                    command.CommandText = "SELECT * FROM todo_groups;";
+                    command.CommandText = "SELECT * FROM todo_groups WHERE session_id = $sessionId;";
+                    command.Parameters.AddWithValue("$sessionId", session.SessionId);
+
                     using var reader = command.ExecuteReader();
                     while (reader.Read())
                     {
@@ -427,10 +430,10 @@ public class TodoDatabase
                             id = reader.GetInt32(0),
                             name = reader.GetString(1),
                             description = reader.GetString(2),
-                            todos = new Todo[0]
+                            todos = []
                         });
                     }
-                }
+                });
 
                 return groups.ToArray();
             }
@@ -444,29 +447,23 @@ public class TodoDatabase
 
     private bool TableExists(string table)
     {
+        var exists = false;
         try
         {
-            using (var command = readConnection.CreateCommand())
+            stateDatabase.Read(command =>
             {
                 command.CommandText = "SELECT 1 FROM sqlite_master where type = 'table' AND name = $table;";
-                command.Parameters.AddWithValue("$table", "todo_groups");
+                command.Parameters.AddWithValue("$table", table);
                 var result = command.ExecuteScalar();
-                return result != null;
-            }
+                exists = result != null;
+            });
         }
         catch (Exception e)
         {
             Log.LogError(e, "Could not determine if table exists: {table}", table);
         }
 
-        return false;
-    }
-
-    public void Close()
-    {
-        readConnection.Close();
-        writeConnection.Close();
-        SqliteConnection.ClearAllPools();
+        return exists;
     }
 
     private void Initialize()
@@ -477,13 +474,15 @@ public class TodoDatabase
             return;
         }
 
-        using (var command = writeConnection.CreateCommand())
+        stateDatabase.Write(command =>
         {
             var schema =
 @"CREATE TABLE todo_groups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
-    description TEXT
+    description TEXT,
+    session_id TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions (session_id) ON DELETE CASCADE
 );
 
 CREATE TABLE todo_items (
@@ -494,28 +493,15 @@ CREATE TABLE todo_items (
     due_date DATETIME,
     completed BOOLEAN DEFAULT 0,
     priority INTEGER,
-    FOREIGN KEY (group_id) REFERENCES todo_groups (id) ON DELETE CASCADE
+    session_id TEXT NOT NULL,
+    FOREIGN KEY (group_id) REFERENCES todo_groups (id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES sessions (session_id) ON DELETE CASCADE,
     UNIQUE (group_id, title)
 );
 ";
 
             command.CommandText = schema;
             command.ExecuteNonQuery();
-        }
-    }
-
-    private SqliteConnection CreateConnection()
-    {
-        var builder = new SqliteConnectionStringBuilder()
-        {
-            DataSource = Database,
-            ForeignKeys = true,
-            Cache = SqliteCacheMode.Shared,
-            Mode = Database.Equals(":memory:") ? SqliteOpenMode.Memory : SqliteOpenMode.ReadWriteCreate
-        };
-
-        var connection = new SqliteConnection(builder.ToString());
-        connection.Open();
-        return connection;
+        });
     }
 }

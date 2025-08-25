@@ -35,6 +35,35 @@ public class StateDatabase : IDisposable
         Initialize();
     }
 
+    public void Write(Action<SqliteCommand> writeStatement)
+    {
+        try
+        {
+            lock (writeLock)
+            {
+                using var command = writeConnection.CreateCommand();
+                writeStatement(command);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.LogError(e, "Exception while writing data");
+        }
+    }
+
+    public void Read(Action<SqliteCommand> readQuery)
+    {
+        try
+        {
+            using var command = readConnection.CreateCommand();
+            readQuery(command);
+        }
+        catch (Exception e)
+        {
+            Log.LogError(e, "Exception while reading data");
+        }
+    }
+
     public void CreateSession(Session session)
     {
         try
@@ -74,7 +103,7 @@ public class StateDatabase : IDisposable
                     StartTime = reader.GetDateTime(1),
                     LastActive = reader.GetDateTime(2),
                     Status = reader.GetString(3),
-                    Metadata = reader.IsDBNull(4) ? null : reader.GetString(4)
+                    Metadata = reader.IsDBNull(4) ? string.Empty : reader.GetString(4)
                 };
             }
         }
@@ -109,7 +138,7 @@ public class StateDatabase : IDisposable
                     StartTime = reader.GetDateTime(1),
                     LastActive = reader.GetDateTime(2),
                     Status = reader.GetString(3),
-                    Metadata = reader.IsDBNull(4) ? null : reader.GetString(4)
+                    Metadata = reader.IsDBNull(4) ? string.Empty : reader.GetString(4)
                 });
             } while (reader.Read());
 
@@ -210,13 +239,11 @@ public class StateDatabase : IDisposable
     {
         try
         {
-            using (var command = readConnection.CreateCommand())
-            {
-                command.CommandText = "SELECT 1 FROM sqlite_master where type = 'table' AND name = $table;";
-                command.Parameters.AddWithValue("$table", table);
-                var result = command.ExecuteScalar();
-                return result != null;
-            }
+            using var command = readConnection.CreateCommand();
+            command.CommandText = "SELECT 1 FROM sqlite_master where type = 'table' AND name = $table;";
+            command.Parameters.AddWithValue("$table", table);
+            var result = command.ExecuteScalar();
+            return result != null;
         }
         catch (Exception e)
         {
@@ -233,6 +260,8 @@ public class StateDatabase : IDisposable
 
         readConnection?.Close();
         readConnection?.Dispose();
+
+        GC.SuppressFinalize(this);
     }
 
     private void Initialize()

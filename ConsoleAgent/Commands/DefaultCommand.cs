@@ -90,8 +90,8 @@ internal class DefaultCommand : RootCommand
         var toolServerPortValue = context.ParseResult.GetValueForOption(ConsoleAgent.Options.ToolServerPort);
 
         var persistent = context.ParseResult.GetValueForOption(ConsoleAgent.Options.Persistent);
-        string workingDirectoryValue = context.ParseResult.GetValueForOption(ConsoleAgent.Options.WorkingDirectory) ?? Path.Combine(Environment.CurrentDirectory, "work");
-        string storageDirectoryValue = context.ParseResult.GetValueForOption(ConsoleAgent.Options.StorageDirectory) ?? Path.Combine(Environment.CurrentDirectory, "storage");
+        string workingDirectoryValue = context.ParseResult.GetValueForOption(ConsoleAgent.Options.WorkingDirectory) ?? Environment.CurrentDirectory;
+        string storageDirectoryValue = context.ParseResult.GetValueForOption(ConsoleAgent.Options.StorageDirectory) ?? Environment.CurrentDirectory;
 
         string? systemPrompt = Prompts.DefaultSystemPrompt;
         var systemPromptFileValue = context.ParseResult.GetValueForOption(ConsoleAgent.Options.SystemPromptFile);
@@ -149,16 +149,19 @@ internal class DefaultCommand : RootCommand
         var stateDatabase = new StateDatabase(loggerFactory, Path.Join(storageDirectory, $"{agentId}.db"));
         agent.StateDatabase = stateDatabase;
 
+        Session? session = null;
         if (!string.IsNullOrEmpty(sessionId))
         {
-            var session = stateDatabase.GetSession(sessionId);
+            session = stateDatabase.GetSession(sessionId);
             if (session == null)
             {
-                stateDatabase.CreateSession(new Session
+                session = new Session
                 {
                     SessionId = sessionId,
                     Status = "New"
-                });
+                };
+
+                stateDatabase.CreateSession(session);
             }
         }
 
@@ -207,11 +210,12 @@ internal class DefaultCommand : RootCommand
             toolFactory.Register(loggerFactory);
             toolFactory.Register<ILlmApiMessageProvider>(llmApi);
             toolFactory.Register<IToolEventBus>(toolEventBus);
+            toolFactory.Register(stateDatabase);
 
             toolFactory.AddParameter("basePath", workingDirectory);
             toolFactory.AddParameter("storageDirectory", storageDirectory);
 
-            tools = toolFactory.Load(sessionId, stateDatabase);
+            tools = toolFactory.Load(session, stateDatabase);
 
             agent.ToolEventBus = toolEventBus;
         }

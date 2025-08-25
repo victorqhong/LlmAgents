@@ -38,12 +38,12 @@ internal static class Options
     public readonly static Option<string> WorkingDirectory = new Option<string>(
         name: "--workingDirectory",
         description: "Directory which agent has access to by default",
-        getDefaultValue: () => Path.Combine(Environment.CurrentDirectory, "work"));
+        getDefaultValue: () => Environment.CurrentDirectory);
 
     public readonly static Option<string> StorageDirectory = new Option<string>(
         name: "--storageDirectory",
         description: "Directory used to store agent related data",
-        getDefaultValue: () => Path.Combine(Environment.CurrentDirectory, "storage"));
+        getDefaultValue: () => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LlmAgents"));
 
     public readonly static Option<string> SessionId = new Option<string>(
         name: "--sessionId",

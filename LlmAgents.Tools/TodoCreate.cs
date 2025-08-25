@@ -69,7 +69,7 @@ public class TodoCreate : Tool
 
         try
         {
-            var todoResult = todoDatabase.CreateTodo(name, group, description);
+            var todoResult = todoDatabase.CreateTodo(toolFactory.Session, name, group, description);
             result.Add("result", todoResult);
         }
         catch (Exception e)
