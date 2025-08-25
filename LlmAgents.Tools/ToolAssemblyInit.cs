@@ -1,3 +1,4 @@
+using LlmAgents.State;
 using LlmAgents.Tools.Todo;
 using Microsoft.Extensions.Logging;
 
@@ -9,8 +10,8 @@ public class ToolAssemblyInitializer : IToolAssemblyInitializer
     public void Initialize(ToolFactory toolFactory)
     {
         var loggerFactory = toolFactory.Resolve<ILoggerFactory>();
-        var storageDirectory = toolFactory.GetParameter("storageDirectory");
-        var todoDatabase = new TodoDatabase(loggerFactory, Path.Join(storageDirectory, "todo.db"));
+        var stateDatabase = toolFactory.Resolve<StateDatabase>();
+        var todoDatabase = new TodoDatabase(loggerFactory, stateDatabase);
         toolFactory.Register(todoDatabase);
     }
 }

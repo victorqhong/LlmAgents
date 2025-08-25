@@ -9,4 +9,13 @@ public class Session
     public DateTime LastActive { get; set; } = DateTime.UtcNow;
     public required string Status { get; set; }
     public string Metadata { get; set; } = string.Empty;
+
+    public static Session New()
+    {
+        return new Session
+        {
+            SessionId = Guid.NewGuid().ToString(),
+            Status = "New"
+        };
+    }
 }
