@@ -57,7 +57,7 @@ public class TodoGroupCreate : Tool
 
         try
         {
-            var todoResult = todoDatabase.CreateGroup(name, description);
+            var todoResult = todoDatabase.CreateGroup(toolFactory.Session, name, description);
             result.Add("result", todoResult);
         }
         catch (Exception e)

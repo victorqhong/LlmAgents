@@ -62,7 +62,7 @@ public class TodoDelete : Tool
 
         try
         {
-            var todoResult = todoDatabase.DeleteTodo(name, group);
+            var todoResult = todoDatabase.DeleteTodo(toolFactory.Session, name, group);
             result.Add("result", todoResult);
         }
         catch (Exception e)

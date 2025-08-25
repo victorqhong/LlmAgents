@@ -35,7 +35,7 @@ public class TodoGroupList : Tool
 
         try
         {
-            var todoContainers = todoDatabase.ListGroups(true);
+            var todoContainers = todoDatabase.ListGroups(toolFactory.Session, true);
             if (todoContainers == null)
             {
                 result.Add("error", "could not list groups");

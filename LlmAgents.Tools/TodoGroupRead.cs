@@ -51,7 +51,7 @@ public class TodoGroupRead : Tool
 
         try
         {
-            var todoContainer = todoDatabase.GetGroup(name);
+            var todoContainer = todoDatabase.GetGroup(toolFactory.Session, name);
             if (todoContainer == null)
             {
                 result.Add("error", "could not find group");

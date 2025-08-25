@@ -93,7 +93,7 @@ public class TodoUpdate : Tool
             string? newDueDate = parameters.Value<string>("newDueDate");
             bool? newCompleted = parameters.Value<bool>("newCompleted");
 
-            var success = todoDatabase.UpdateTodo(title, group, newTitle, newGroup, newDescription, newDueDate, newCompleted);
+            var success = todoDatabase.UpdateTodo(toolFactory.Session, title, group, newTitle, newGroup, newDescription, newDueDate, newCompleted);
             result.Add("success", success);
         }
         catch (Exception e)
