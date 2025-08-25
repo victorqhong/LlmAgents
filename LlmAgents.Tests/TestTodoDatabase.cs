@@ -1,3 +1,4 @@
+using LlmAgents.State;
 using LlmAgents.Tools.Todo;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -7,86 +8,97 @@ namespace Simulation.Tests;
 [TestClass]
 public sealed class TestTodoDatabase
 {
-    private TodoDatabase? db;
+    private readonly ILoggerFactory loggerFactory;
 
-    [TestInitialize]
-    public void CreateDatabase()
+    private readonly Session session;
+
+    private readonly StateDatabase stateDb;
+
+    private TodoDatabase db;
+
+    public TestTodoDatabase()
     {
-        var loggerFactory = LoggerFactory.Create(builder => { });
-        db = new TodoDatabase(loggerFactory, ":memory:");
+        loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+        session = Session.New();
+
+        stateDb = new StateDatabase(loggerFactory, ":memory:");
+        stateDb.CreateSession(session);
+
+        db = CreateDatabase();
     }
 
-    [TestMethod]
-    public void TestInitialize()
+    private TodoDatabase CreateDatabase()
     {
-        Assert.IsNotNull(db);
-        db.Close();
+        return new TodoDatabase(loggerFactory, stateDb);
+    }
+
+    [TestInitialize]
+    public void NewDatabase()
+    {
+        db = CreateDatabase();
+    }
+
+    [TestCleanup]
+    public void CloseDatabase()
+    {
+        stateDb.Dispose();
     }
 
     [TestMethod]
     public void TestCreateGroup()
     {
-        var result = db.CreateGroup("test");
+        var result = db.CreateGroup(session, "test");
         Assert.IsTrue(result);
-        db.Close();
     }
 
     [TestMethod]
     public void TestGetGroup()
     {
-        db.CreateGroup("test");
+        db.CreateGroup(session, "test");
 
-        var group = db.GetGroup("test");
+        var group = db.GetGroup(session, "test");
 
         Assert.IsNotNull(group);
         Assert.AreEqual("test", group.name);
-
-        db.Close();
     }
 
     [TestMethod]
     public void TestGetGroup_WithTodos()
     {
-        db.CreateGroup("test");
-        db.CreateTodo("testtodo", "test");
+        db.CreateGroup(session, "test");
+        db.CreateTodo(session, "testtodo", "test");
 
-        var group = db.GetGroup("test", true);
+        var group = db.GetGroup(session, "test", true);
         Assert.IsNotNull(group);
         Assert.IsTrue(group.todos.Length > 0);
         Assert.AreEqual("testtodo", group.todos[0].title);
-
-        db.Close();
     }
 
     [TestMethod]
     public void TestUpdateGroup()
     {
-        db.CreateGroup("test");
+        db.CreateGroup(session, "test");
 
-        var result = db.UpdateGroup("test", "newTest", "newDescription");
+        var result = db.UpdateGroup(session, "test", "newTest", "newDescription");
         Assert.IsTrue(result);
 
-        var group = db.GetGroup("newTest");
+        var group = db.GetGroup(session, "newTest");
 
         Assert.IsNotNull(group);
         Assert.AreEqual("newTest", group.name);
-
-        db.Close();
     }
 
     [TestMethod]
     public void TestDeleteGroup()
     {
-        db.CreateGroup("test");
+        db.CreateGroup(session, "test");
 
-        var result = db.DeleteGroup("test");
+        var result = db.DeleteGroup(session, "test");
         Assert.IsTrue(result);
 
-        var group = db.GetGroup("test");
+        var group = db.GetGroup(session, "test");
 
         Assert.IsNull(group);
-
-        db.Close();
     }
 
     [TestMethod]
@@ -94,9 +106,9 @@ public sealed class TestTodoDatabase
     {
         try
         {
-            db.CreateGroup("test");
-            db.CreateTodo("testtodo", "test");
-            var groups = db.ListGroups(true);
+            db.CreateGroup(session, "test");
+            db.CreateTodo(session, "testtodo", "test");
+            var groups = db.ListGroups(session, true);
             Assert.IsNotNull(groups);
             Assert.IsTrue(groups.Length == 1);
             Assert.AreEqual("test", groups[0].name);
@@ -107,64 +119,52 @@ public sealed class TestTodoDatabase
         {
             Assert.Fail();
         }
-        finally
-        {
-            db.Close();
-        }
     }
 
     [TestMethod]
     public void TestCreateTodo()
     {
-        db.CreateGroup("test");
+        db.CreateGroup(session, "test");
 
-        var result = db.CreateTodo("testtodo", "test", "this is a test");
+        var result = db.CreateTodo(session, "testtodo", "test", "this is a test");
         Assert.IsTrue(result);
 
-        result = db.CreateTodo("anothertodo", "doesn't exist");
+        result = db.CreateTodo(session, "anothertodo", "doesn't exist");
         Assert.IsFalse(result);
-
-        db.Close();
     }
 
     [TestMethod]
     public void TestGetTodo()
     {
-        db.CreateGroup("test");
+        db.CreateGroup(session, "test");
 
-        var result = db.CreateTodo("testtodo", "test", "this is a test");
+        var result = db.CreateTodo(session, "testtodo", "test", "this is a test");
         Assert.IsTrue(result);
 
-        var todo = db.GetTodo("testtodo", "test");
+        var todo = db.GetTodo(session, "testtodo", "test");
         Assert.IsNotNull(todo);
         Assert.AreEqual("testtodo", todo.title);
-
-        db.Close();
     }
 
     [TestMethod]
     public void TestUpdateTodo()
     {
-        db.CreateGroup("test");
+        db.CreateGroup(session, "test");
 
-        var result = db.CreateTodo("testtodo", "test", "this is a test");
+        var result = db.CreateTodo(session, "testtodo", "test", "this is a test");
         Assert.IsTrue(result);
 
-        var result2 = db.UpdateTodo("testtodo", "test", "newtitle");
+        var result2 = db.UpdateTodo(session, "testtodo", "test", "newtitle");
         Assert.IsTrue(result2);
 
-        var todo = db.GetTodo("newtitle", "test");
+        var todo = db.GetTodo(session, "newtitle", "test");
         Assert.IsNotNull(todo);
         Assert.AreEqual("newtitle", todo.title);
-
-        db.Close();
     }
 
     [TestMethod]
     public void TestDeleteTodo()
     {
-        db.CreateGroup("test");
-
-        db.Close();
+        db.CreateGroup(session, "test");
     }
 }
