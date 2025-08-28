@@ -113,4 +113,15 @@ internal static class Config
 
         return configPath;
     }
+
+    public static JObject? GetConfig()
+    {
+        var configPath = GetProfileConfig("config.json");
+        if (!Path.Exists(configPath))
+        {
+            return null;
+        }
+
+        return JObject.Parse(File.ReadAllText(configPath));
+    }
 }

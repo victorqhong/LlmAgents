@@ -100,7 +100,20 @@ internal class DefaultCommand : RootCommand
             systemPrompt = File.ReadAllText(systemPromptFileValue);
         }
 
-        var agentId = context.ParseResult.GetValueForOption(ConsoleAgent.Options.AgentId) ?? apiModel;
+        var agentId = context.ParseResult.GetValueForOption(ConsoleAgent.Options.AgentId);
+        if (string.IsNullOrEmpty(agentId))
+        {
+            var config = Config.GetConfig();
+            if (config == null || !config.ContainsKey("agent"))
+            {
+                agentId = apiModel;
+            }
+            else
+            {
+                agentId = config.Value<string>("agent") ?? apiModel;
+            }
+        }
+
         var sessionId = context.ParseResult.GetValueForOption(ConsoleAgent.Options.SessionId);
 
         var consoleCommunication = new ConsoleCommunication();
