@@ -114,7 +114,7 @@ internal class DefaultCommand : RootCommand
 
         agent.StreamOutput = true;
         agent.PreWaitForContent = () => { Console.Write("> "); };
-        agent.PostSendMessage = () => { logger.LogInformation("PromptTokens: {PromptTokens}, CompletionTokens: {UsageCompletionTokens}, TotalTokens: {UsageTotalTokens}, Context Used: {ContextUsedPercent}", agent.llmApi.UsagePromptTokens, agent.llmApi.UsageCompletionTokens, agent.llmApi.UsageTotalTokens, ((double)agent.llmApi.UsageTotalTokens / agent.llmApi.TargetContextSize).ToString("P")); };
+        agent.llmApi.PostParseUsage += (usage) => { Console.WriteLine(); logger.LogInformation("PromptTokens: {PromptTokens}, CompletionTokens: {UsageCompletionTokens}, TotalTokens: {UsageTotalTokens}, Context Used: {ContextUsedPercent}", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, ((double)usage.TotalTokens / agent.llmApi.TargetContextSize).ToString("P")); };
 
         var cancellationToken = context.GetCancellationToken();
 
