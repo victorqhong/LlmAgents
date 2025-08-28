@@ -1,5 +1,6 @@
 ﻿using LlmAgents.Communication;
 using LlmAgents.LlmApi;
+using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
@@ -70,10 +71,13 @@ async Task RootCommandHandler(InvocationContext context)
     var toolsFile = JObject.Parse(File.ReadAllText(toolsConfigValue));
     var toolFactory = new ToolFactory(loggerFactory, toolsFile);
 
+    var stateDatabase = new StateDatabase(loggerFactory, ":memory:");
+
     toolFactory.Register<IAgentCommunication>(new ConsoleCommunication());
     toolFactory.Register(loggerFactory);
     toolFactory.Register<ILlmApiMessageProvider>(new MockLlmApiMessageProvider());
     toolFactory.Register<IToolEventBus>(toolEventBus);
+    toolFactory.Register(stateDatabase);
 
     toolFactory.AddParameter("basePath", workingDirectoryValue);
 
