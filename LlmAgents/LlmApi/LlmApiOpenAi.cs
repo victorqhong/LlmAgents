@@ -53,6 +53,8 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 
     public int UsageTotalTokens { get; private set; }
 
+    public event Action<TokenUsage>? PostParseUsage;
+
     public async Task<string?> GenerateCompletion(IEnumerable<IMessageContent> messageContents, CancellationToken cancellationToken = default)
     {
         var completion = await GenerateStreamingCompletion(messageContents, cancellationToken);
@@ -210,16 +212,23 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 continue;
             }
 
-            if (json["choices"]?[0] is not JObject choice)
-            {
-                continue;
-            }
-
             if (json.ContainsKey("usage") && json.Value<JObject>("usage") is JObject usage)
             {
                 UsageCompletionTokens = usage.Value<int>("completion_tokens");
                 UsagePromptTokens = usage.Value<int>("prompt_tokens");
                 UsageTotalTokens = usage.Value<int>("total_tokens");
+
+                PostParseUsage?.Invoke(new TokenUsage
+                {
+                    PromptTokens = UsagePromptTokens,
+                    CompletionTokens = UsageCompletionTokens,
+                    TotalTokens = UsageTotalTokens,
+                });
+            }
+
+            if (!json.ContainsKey("choices") || json["choices"] is not JArray choices || choices.Count < 1 || choices[0] is not JObject choice)
+            {
+                continue;
             }
 
             if (string.IsNullOrEmpty(finishReason))
