@@ -45,7 +45,7 @@ public class ApplyDiff : Tool
         function = new
         {
             name = "apply_diff",
-            description = "Applies the provided unified diff contents to a file and modifies it in-place",
+            description = "Applies the provided unified diff contents to a file and modifies it in-place. Use the 'number_lines' tool to generate line numbers for an accurate diff.",
             parameters = new
             {
                 type = "object",
@@ -59,7 +59,7 @@ public class ApplyDiff : Tool
                     diffContent = new
                     {
                         type = "string",
-                        description = "The contents of the unified diff (patch) to apply"
+                        description = "The contents of the unified diff (patch) to apply. Ensure hunk headers are included."
                     }
                 },
                 required = new[] { "path", "diffContent" }
@@ -162,7 +162,6 @@ public class ApplyDiff : Tool
                 {
                     throw new FormatException($"Error parsing hunk header '{line}': {e.Message}");
                 }
-
                 // Copy lines before the hunk if needed
                 while (currentLine < originalStart)
                 {
