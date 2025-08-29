@@ -101,7 +101,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
     {
         using HttpClient client = new();
         client.Timeout = Timeout.InfiniteTimeSpan;
-        client.DefaultRequestHeaders.Add("api-key", apiKey);
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
         client.DefaultRequestHeaders.Add("Accept", "text/event-stream");
 
         var request = new HttpRequestMessage(HttpMethod.Post, apiEndpoint)
