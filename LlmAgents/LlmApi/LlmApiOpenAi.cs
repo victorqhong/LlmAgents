@@ -101,7 +101,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
     {
         using HttpClient client = new();
         client.Timeout = Timeout.InfiniteTimeSpan;
-        client.DefaultRequestHeaders.Add("api-key", apiKey);
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
         client.DefaultRequestHeaders.Add("Accept", "text/event-stream");
 
         var request = new HttpRequestMessage(HttpMethod.Post, apiEndpoint)
@@ -135,35 +135,42 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                     return null;
                 }
 
-                var responseMessage = JObject.Parse(responseContent);
-
-                var error = responseMessage.Value<JObject>("error");
-                if (error != null)
+                if (string.Equals(response.Content.Headers.ContentType?.MediaType, "application/json"))
                 {
-                    var message = error.Value<string>("message");
-                    var code = error.Value<string>("code");
-                    if (string.Equals("429", code) && retryAttempt < 3)
+                    var responseMessage = JObject.Parse(responseContent);
+
+                    var error = responseMessage.Value<JObject>("error");
+                    if (error != null)
                     {
-                        var seconds = 30 * (retryAttempt + 1);
-
-                        if (!string.IsNullOrEmpty(message))
+                        var message = error.Value<string>("message");
+                        var code = error.Value<string>("code");
+                        if (string.Equals("429", code) && retryAttempt < 3)
                         {
-                            var pattern = @"retry\s+after\s+(\d+)\s+seconds";
-                            var regex = new Regex(pattern, RegexOptions.IgnoreCase);
-                            var match = regex.Match(message);
-                            if (match.Success)
-                            {
-                                seconds = int.Parse(match.Groups[1].Value) + 5;
-                            }
-                        }
+                            var seconds = 30 * (retryAttempt + 1);
 
-                        Log.LogInformation("Request throttled... waiting {seconds} seconds and retrying.", seconds);
-                        Thread.Sleep(seconds * 1000);
-                        return await GetCompletion(apiEndpoint, apiKey, content, retryAttempt + 1, cancellationToken);
+                            if (!string.IsNullOrEmpty(message))
+                            {
+                                var pattern = @"retry\s+after\s+(\d+)\s+seconds";
+                                var regex = new Regex(pattern, RegexOptions.IgnoreCase);
+                                var match = regex.Match(message);
+                                if (match.Success)
+                                {
+                                    seconds = int.Parse(match.Groups[1].Value) + 5;
+                                }
+                            }
+
+                            Log.LogInformation("Request throttled... waiting {seconds} seconds and retrying.", seconds);
+                            Thread.Sleep(seconds * 1000);
+                            return await GetCompletion(apiEndpoint, apiKey, content, retryAttempt + 1, cancellationToken);
+                        }
+                        else
+                        {
+                            Log.LogError("Error: {message}", message);
+                        }
                     }
                     else
                     {
-                        Log.LogError("Error: {message}", message);
+                        Log.LogError("Error: {responseContent}", responseContent);
                     }
                 }
                 else
@@ -299,6 +306,18 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         {
             Messages.Add(JObject.FromObject(new { role = "assistant", content }));
         }
+        else if (string.Equals(FinishReason, "length"))
+        {
+            Messages.Add(JObject.FromObject(new { role = "assistant", content }));
+            var continuation = await GenerateStreamingCompletion(Messages, cancellationToken);
+            if (continuation != null)
+            {
+                await foreach (var chunk in continuation)
+                {
+                    yield return chunk;
+                }
+            }
+        }
         else if (string.Equals(FinishReason, "tool_calls"))
         {
             var toolCalls = parsedToolCalls.Select(kvp =>
@@ -417,10 +436,6 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                     yield return chunk;
                 }
             }
-        }
-        else if (string.Equals(FinishReason, "length"))
-        {
-            throw new ApplicationException(FinishReason);
         }
         else
         {
