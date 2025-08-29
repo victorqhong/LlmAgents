@@ -63,7 +63,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
             return null;
         }
 
-        var sb = new System.Text.StringBuilder();
+        var sb = new StringBuilder();
         await foreach (var chunk in completion)
         {
             sb.Append(chunk);
@@ -106,7 +106,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 
         var request = new HttpRequestMessage(HttpMethod.Post, apiEndpoint)
         {
-            Content = new StringContent(content, System.Text.Encoding.UTF8, "application/json")
+            Content = new StringContent(content, Encoding.UTF8, "application/json")
         };
 
         try
@@ -189,9 +189,14 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 
     private async IAsyncEnumerable<string> ParseCompletion(Stream stream, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        string? role = null;
         string? finishReason = null;
         var parsedToolCalls = new Dictionary<int, Dictionary<string, string>>();
-        var sb = new System.Text.StringBuilder();
+        var contentBuffer = new StringBuilder();
+        var reasoningContentBuffer = new StringBuilder();
+
+        var seenReasoningContent = false;
+        var seenContent = false;
 
         using var reader = new StreamReader(stream);
         while (!reader.EndOfStream)
@@ -213,8 +218,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
             var data = line[6..];
             var json = JObject.Parse(data);
 
-            var @object = json["object"];
-            if (!"chat.completion.chunk".Equals(@object?.Value<string>()))
+            if (!json.ContainsKey("object") || json.Value<string>("object") is not string @object || !"chat.completion.chunk".Equals(@object))
             {
                 continue;
             }
@@ -233,7 +237,8 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 });
             }
 
-            if (!json.ContainsKey("choices") || json["choices"] is not JArray choices || choices.Count < 1 || choices[0] is not JObject choice)
+            // by default just use the first choice, technically there may be more
+            if (!json.ContainsKey("choices") || json.Value<JArray>("choices") is not JArray choices || choices.Count < 1 || choices[0] is not JObject choice)
             {
                 continue;
             }
@@ -243,14 +248,41 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 finishReason = choice.Value<string>("finish_reason");
             }
 
-            var delta = choice["delta"]?.Value<JObject>();
-            if (delta?["content"]?.Value<string>() is string deltaContent)
+            if (!choice.ContainsKey("delta") || choice.Value<JObject>("delta") is not JObject delta)
             {
-                yield return deltaContent;
-                sb.Append(deltaContent);
+                continue;
             }
 
-            if (delta?["tool_calls"]?.Value<JArray>() is JArray toolCalls)
+            if (string.IsNullOrEmpty(role))
+            {
+                role = delta.Value<string>("role");
+            }
+
+            if (delta.ContainsKey("reasoning_content") && delta.Value<string>("reasoning_content") is string deltaReasoningContent)
+            {
+                if (!seenReasoningContent)
+                {
+                    yield return "<thinking>";
+                    seenReasoningContent = true;
+                }
+
+                yield return deltaReasoningContent;
+                reasoningContentBuffer.Append(deltaReasoningContent);
+            }
+
+            if (delta.ContainsKey("content") && delta.Value<string>("content") is string deltaContent)
+            {
+                if (seenReasoningContent && !seenContent)
+                {
+                    yield return "</thinking>\n";
+                    seenContent = true;
+                }
+
+                yield return deltaContent;
+                contentBuffer.Append(deltaContent);
+            }
+
+            if (delta.ContainsKey("tool_calls") && delta.Value<JArray>("tool_calls") is JArray toolCalls)
             {
                 foreach (var element in toolCalls)
                 {
@@ -298,17 +330,26 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 }
             }
         }
+
+        if (seenReasoningContent && !seenContent)
+        {
+            yield return "</thinking>\n";
+            seenContent = true;
+        }
         
-        var content = sb.ToString();
+        role ??= "assistant";
         FinishReason = finishReason;
+
+        var content = contentBuffer.ToString();
+        var reasoningContent = reasoningContentBuffer.ToString();
 
         if (string.Equals(FinishReason, "stop"))
         {
-            Messages.Add(JObject.FromObject(new { role = "assistant", content }));
+            Messages.Add(JObject.FromObject(new { role, content }));
         }
         else if (string.Equals(FinishReason, "length"))
         {
-            Messages.Add(JObject.FromObject(new { role = "assistant", content }));
+            Messages.Add(JObject.FromObject(new { role, content }));
             var continuation = await GenerateStreamingCompletion(Messages, cancellationToken);
             if (continuation != null)
             {
@@ -334,7 +375,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 };
             });
 
-            Messages.Add(JObject.FromObject(new { role = "assistant", content, tool_calls = toolCalls }));
+            Messages.Add(JObject.FromObject(new { role, content, tool_calls = toolCalls }));
 
             foreach (var toolCall in toolCalls)
             {
