@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
-using LlmAgents.Agents;
+using System.Text;
 
 namespace LlmAgents.LlmApi;
 
