@@ -135,6 +135,8 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                     return null;
                 }
 
+                if (string.Equals(response.Content.Headers.ContentType?.MediaType, "application/json"))
+                {
                 var responseMessage = JObject.Parse(responseContent);
 
                 var error = responseMessage.Value<JObject>("error");
@@ -170,6 +172,11 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 {
                     Log.LogError("Error: {responseContent}", responseContent);
                 }
+            }
+                else
+                {
+                    Log.LogError("Error: {responseContent}", responseContent);
+        }
             }
         }
         catch (Exception e)
