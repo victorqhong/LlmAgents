@@ -20,6 +20,11 @@ internal static class Options
         name: "--apiModel",
         description: "Name of the model to include in requests");
 
+    public readonly static Option<int> ContextSize = new Option<int>(
+        name: "--contextSize",
+        description: "Maximum number of tokens to use with the api",
+        getDefaultValue: () => 8192);
+
     public readonly static Option<string> ApiConfig = new Option<string>(
         name: "--apiConfig",
         description: "Path to a JSON file with configuration for api values",

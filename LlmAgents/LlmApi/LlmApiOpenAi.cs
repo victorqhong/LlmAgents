@@ -1,10 +1,10 @@
 ﻿using LlmAgents.Agents;
-﻿using LlmAgents.LlmApi.Content;
+using LlmAgents.LlmApi.Content;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
-using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace LlmAgents.LlmApi;
 
@@ -40,9 +40,9 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 
     public string Model { get; set; }
 
-    public int MaxCompletionTokens { get; set; } = 2048;
+    public int? MaxCompletionTokens { get; set; } = null;
 
-    public int TargetContextSize { get; set; } = 51200;
+    public int ContextSize { get; set; } = 8192;
 
     public double Temperature { get; set; } = 0.7;
 
@@ -93,7 +93,14 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
             return null;
         }
 
-        var payload = GetPayload(Model, messages, MaxCompletionTokens, Temperature, Agent?.GetToolDefinitions(), "auto", true);
+        var maxCompletionTokens = MaxCompletionTokens != null ? MaxCompletionTokens.Value : ContextSize - UsageTotalTokens;
+        if (UsageTotalTokens > ContextSize * 0.75)
+        {
+            Log.LogWarning("Total usage tokens ({0}) exceed target context size ({1}). Pruning context.", UsageTotalTokens, ContextSize * 0.75);
+            await PruneContext(Messages.Count - 1);
+        }
+
+        var payload = GetPayload(Model, messages, maxCompletionTokens, Temperature, Agent?.GetToolDefinitions(), "auto", true);
 
         return await GetCompletion(ApiEndpoint, ApiKey, payload, retryAttempt: 0, cancellationToken);
     }
@@ -337,7 +344,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
             yield return "</thinking>\n";
             seenContent = true;
         }
-        
+
         role ??= "assistant";
         FinishReason = finishReason;
 
@@ -350,7 +357,15 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         }
         else if (string.Equals(FinishReason, "length"))
         {
-            Messages.Add(JObject.FromObject(new { role, content }));
+            if (string.Equals(role, Messages[^1].Value<string>("role")))
+            {
+                Messages[^1]["content"] += content;
+            }
+            else
+            {
+                Messages.Add(JObject.FromObject(new { role, content }));
+            }
+
             var continuation = await GenerateStreamingCompletion(Messages, cancellationToken);
             if (continuation != null)
             {
@@ -358,6 +373,13 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 {
                     yield return chunk;
                 }
+            }
+
+            if ("assistant".Equals(Messages[^1].Value<string>("role")) && "assistant".Equals(Messages[^2].Value<string>("role")))
+            {
+                var lastMessage = Messages[^1].Value<string>("content");
+                Messages[^2]["content"] += lastMessage;
+                Messages.RemoveAt(Messages.Count - 1);
             }
         }
         else if (string.Equals(FinishReason, "tool_calls"))
@@ -533,6 +555,13 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         }
 
         payload.Add("stream", stream);
+        if (stream)
+        {
+            payload.Add("stream_options", new JObject
+            {
+                { "include_usage", true }
+            });
+        }
 
         return payload.ToString(Newtonsoft.Json.Formatting.None);
     }
@@ -544,19 +573,29 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 
     public Task PruneContext(int numMessagesToKeep)
     {
+        // keep system prompt if present
+        var startIndex = 0;
+        if (string.Equals(Messages[0].Value<string>("role"), "system"))
+        {
+            startIndex = 1;
+            numMessagesToKeep = Math.Max(numMessagesToKeep, 1);
+        }
+
         if (Messages.Count <= numMessagesToKeep)
         {
             return Task.CompletedTask;
         }
 
-        // keep the first message (system prompt) and last message (a tool call is needed before a tool result)
-        var pruneCount = Math.Max(Messages.Count - numMessagesToKeep, 0) - 1;
-        Messages.RemoveRange(1, pruneCount - 1);
-
         // remove messages from the beginning to maintain a well-formatted message list
-        while (Messages.Count > 1 && !string.Equals(Messages[0].Value<string>("role"), "user") && !string.Equals(Messages[0].Value<string>("role"), "system"))
+        var numMessagesToRemove = Messages.Count - numMessagesToKeep;
+        for (int i = 0; i < numMessagesToRemove; i++)
         {
-            Messages.RemoveAt(1);
+            Messages.RemoveAt(startIndex);
+        }
+
+        while (string.Equals(Messages[startIndex].Value<string>("role"), "tool"))
+        {
+            Messages.RemoveAt(startIndex);
         }
 
         return Task.CompletedTask;
