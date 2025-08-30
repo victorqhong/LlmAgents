@@ -25,7 +25,7 @@ public sealed class TestLlmApiOpenAi
         var temperature = 0.7;
 
         var payload = LlmApiOpenAi.GetPayload(model, messages, maxTokens, temperature);
-        var expected = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"this is the system prompt\"},{\"role\":\"user\",\"content\":\"this is the user message\"},{\"role\":\"assistant\",\"content\":\"this is the assistant message\"}],\"max_completion_tokens\":100,\"temperature\":0.7,\"stream\":true}";
+        var expected = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"this is the system prompt\"},{\"role\":\"user\",\"content\":\"this is the user message\"},{\"role\":\"assistant\",\"content\":\"this is the assistant message\"}],\"max_completion_tokens\":100,\"temperature\":0.7,\"stream\":true,\"stream_options\":{\"include_usage\":true}}";
         Assert.AreEqual(expected, payload);
     }
 
@@ -36,7 +36,7 @@ public sealed class TestLlmApiOpenAi
         var messages = new List<JObject>();
 
         var payload = LlmApiOpenAi.GetPayload(model, messages, 100, 1);
-        var expected = "{\"model\":\"gpt-4o\",\"messages\":[],\"max_completion_tokens\":100,\"temperature\":1.0,\"stream\":true}";
+        var expected = "{\"model\":\"gpt-4o\",\"messages\":[],\"max_completion_tokens\":100,\"temperature\":1.0,\"stream\":true,\"stream_options\":{\"include_usage\":true}}";
         Assert.AreEqual(expected, payload);
     }
 
@@ -49,7 +49,7 @@ public sealed class TestLlmApiOpenAi
         var temperature = 0.7;
 
         var payload = LlmApiOpenAi.GetPayload(model, messages, maxTokens, temperature);
-        var expected = "{\"model\":\"gpt-4o\",\"messages\":[],\"max_completion_tokens\":100,\"temperature\":0.7,\"stream\":true}";
+        var expected = "{\"model\":\"gpt-4o\",\"messages\":[],\"max_completion_tokens\":100,\"temperature\":0.7,\"stream\":true,\"stream_options\":{\"include_usage\":true}}";
         Assert.AreEqual(expected, payload);
     }
 
