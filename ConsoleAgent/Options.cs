@@ -25,6 +25,11 @@ internal static class Options
         description: "Maximum number of tokens to use with the api",
         getDefaultValue: () => 8192);
 
+    public readonly static Option<int> MaxCompletionTokens = new Option<int>(
+        name: "--maxCompletionTokens",
+        description: "Maximum number of tokens in a completion",
+        getDefaultValue: () => 8192);
+
     public readonly static Option<string> ApiConfig = new Option<string>(
         name: "--apiConfig",
         description: "Path to a JSON file with configuration for api values",
