@@ -96,7 +96,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         var maxCompletionTokens = MaxCompletionTokens != null ? MaxCompletionTokens.Value : ContextSize - UsageTotalTokens;
         if (UsageTotalTokens > ContextSize * 0.75)
         {
-            Log.LogWarning("Total usage tokens ({0}) exceed target context size ({1}). Pruning context.", UsageTotalTokens, ContextSize * 0.75);
+            Log.LogWarning("Total usage tokens ({UsageTotalTokens}) exceed target context size ({ContextSize}). Pruning context.", UsageTotalTokens, ContextSize * 0.75);
             await PruneContext(Messages.Count - 1);
         }
 

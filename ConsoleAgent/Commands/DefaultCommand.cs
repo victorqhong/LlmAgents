@@ -29,6 +29,7 @@ internal class DefaultCommand : RootCommand
         AddOption(ConsoleAgent.Options.ApiKey);
         AddOption(ConsoleAgent.Options.ApiModel);
         AddOption(ConsoleAgent.Options.ContextSize);
+        AddOption(ConsoleAgent.Options.MaxCompletionTokens);
         AddOption(ConsoleAgent.Options.ApiConfig);
         AddOption(ConsoleAgent.Options.Persistent);
         AddOption(ConsoleAgent.Options.SystemPromptFile);
@@ -42,10 +43,13 @@ internal class DefaultCommand : RootCommand
 
     private async Task CommandHandler(InvocationContext context)
     {
+        var logger = loggerFactory.CreateLogger(nameof(ConsoleAgent));
+
         var apiEndpoint = string.Empty;
         var apiKey = string.Empty;
         var apiModel = string.Empty;
         var contextSize = 8192;
+        var maxCompletionTokens = 8192;
 
         var apiConfigValue = context.ParseResult.GetValueForOption(ConsoleAgent.Options.ApiConfig);
         if (!string.IsNullOrEmpty(apiConfigValue) && File.Exists(apiConfigValue))
@@ -56,6 +60,7 @@ internal class DefaultCommand : RootCommand
             apiKey = apiConfig.Value<string>("apiKey");
             apiModel = apiConfig.Value<string>("apiModel");
             contextSize = apiConfig.Value<int>("contextSize");
+            maxCompletionTokens = apiConfig.Value<int>("maxCompletionTokens");
         }
         else
         {
@@ -63,6 +68,7 @@ internal class DefaultCommand : RootCommand
             apiKey = context.ParseResult.GetValueForOption(ConsoleAgent.Options.ApiKey);
             apiModel = context.ParseResult.GetValueForOption(ConsoleAgent.Options.ApiModel);
             contextSize = context.ParseResult.GetValueForOption(ConsoleAgent.Options.ContextSize);
+            maxCompletionTokens = context.ParseResult.GetValueForOption(ConsoleAgent.Options.MaxCompletionTokens);
         }
 
         if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(apiModel))
@@ -82,6 +88,18 @@ internal class DefaultCommand : RootCommand
         {
             Console.Error.WriteLine("apiEndpoint, apiKey, and/or apiModel is null or empty.");
             return;
+        }
+
+        if (contextSize < 1)
+        {
+            logger.LogWarning("Context size must be greater than zero. Setting to default 8192");
+            contextSize = 8192;
+        }
+
+        if (maxCompletionTokens < 1)
+        {
+            logger.LogWarning("Maximum completion tokens must be greater than zero. Setting to default 8192");
+            maxCompletionTokens = 8192;
         }
 
         var toolsConfigValue = context.ParseResult.GetValueForOption(ConsoleAgent.Options.ToolsConfig);
@@ -110,11 +128,9 @@ internal class DefaultCommand : RootCommand
         var consoleCommunication = new ConsoleCommunication();
 
         var agent = await CreateAgent(loggerFactory, consoleCommunication,
-            apiEndpoint, apiKey, apiModel, contextSize,
+            apiEndpoint, apiKey, apiModel, contextSize, maxCompletionTokens,
             agentId, workingDirectoryValue, storageDirectoryValue, persistent, systemPrompt, sessionId,
             toolsFilePath: toolsConfigValue, toolServerAddress: toolServerAddressValue, toolServerPort: toolServerPortValue);
-
-        var logger = loggerFactory.CreateLogger(nameof(ConsoleAgent));
 
         agent.StreamOutput = true;
         agent.PreWaitForContent = () => { Console.Write("> "); };
@@ -127,13 +143,14 @@ internal class DefaultCommand : RootCommand
 
     private static async Task<LlmAgent> CreateAgent(
         ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
-        string apiEndpoint, string apiKey, string apiModel, int contextSize,
+        string apiEndpoint, string apiKey, string apiModel, int contextSize, int maxCompletionTokens,
         string agentId, string workingDirectory, string storageDirectory, bool persistent = false, string? systemPrompt = null, string? sessionId = null,
         string? toolsFilePath = null, string? toolServerAddress = null, int toolServerPort = 5000)
     {
         var llmApi = new LlmApiOpenAi(loggerFactory, apiEndpoint, apiKey, apiModel)
         {
-            ContextSize = contextSize
+            ContextSize = contextSize,
+            MaxCompletionTokens = maxCompletionTokens
         };
 
         var agent = new LlmAgent(agentId, llmApi, agentCommunication)
