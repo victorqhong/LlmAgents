@@ -503,6 +503,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         }
         else
         {
+            Log.LogCritical("FinishReason '{FinishReason}' is not implemented", FinishReason);
             throw new NotImplementedException(FinishReason);
         }
     }
