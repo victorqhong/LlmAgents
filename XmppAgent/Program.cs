@@ -2,6 +2,7 @@
 using LlmAgents.Agents;
 using LlmAgents.Communication;
 using LlmAgents.LlmApi;
+using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
@@ -128,7 +129,7 @@ async Task RootCommandHander(InvocationContext context)
     var agentsConfig = JObject.Parse(File.ReadAllText(agentsConfigValue));
     foreach (var agentProperty in agentsConfig.Properties())
     {
-        var agentId = agentProperty.Value.Value<string>("agentId");
+        var agentId = agentProperty.Name;
         var apiConfig = agentProperty.Value.Value<string>("apiConfig");
         var xmppConfig = agentProperty.Value.Value<string>("xmppConfig");
         var toolsConfig = agentProperty.Value.Value<string>("toolsConfig");
@@ -243,7 +244,8 @@ Task RunAgent(AgentParameters agentParameters, CancellationToken cancellationTok
     }, cancellationToken);
 }
 
-LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, ApiParameters apiParameters, string agentId, bool persistent = false, string? systemPromptFile = null, string? workingDirectory = null, string? agentDirectory = null, string? toolsFilePath = null)
+LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, ApiParameters apiParameters,
+    string agentId, bool persistent = false, string? systemPromptFile = null, string? workingDirectory = null, string? agentDirectory = null, string? toolsFilePath = null)
 {
     var llmApi = new LlmApiOpenAi(loggerFactory, apiParameters.apiEndpoint, apiParameters.apiKey, apiParameters.apiModel);
 
@@ -255,6 +257,7 @@ LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentComm
 
     if (!string.IsNullOrEmpty(toolsFilePath))
     {
+        var stateDatabase = new StateDatabase(loggerFactory, Path.Join(agentDirectory, $"{agentId}.db"));
         var toolEventBus = new ToolEventBus();
         var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
         var toolFactory = new ToolFactory(loggerFactory, toolsFile);
@@ -263,6 +266,7 @@ LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentComm
         toolFactory.Register(loggerFactory);
         toolFactory.Register<ILlmApiMessageProvider>(llmApi);
         toolFactory.Register<IToolEventBus>(toolEventBus);
+        toolFactory.Register(stateDatabase);
 
         toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
 
