@@ -73,6 +73,23 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         return sb.ToString();
     }
 
+    public async Task<string?> GenerateCompletion(List<JObject> messages, CancellationToken cancellationToken = default)
+    {
+        var completion = await GenerateStreamingCompletion(messages, cancellationToken);
+        if (completion == null)
+        {
+            return null;
+        }
+        
+        var sb = new StringBuilder();
+        await foreach (var chunk in completion)
+        {
+            sb.Append(chunk);
+        }
+
+        return sb.ToString();
+    }
+
     public async Task<IAsyncEnumerable<string>?> GenerateStreamingCompletion(IEnumerable<IMessageContent> messageContents, CancellationToken cancellationToken = default)
     {
         var message = GetMessage(messageContents);

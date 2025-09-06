@@ -4,6 +4,7 @@ using LlmAgents.Communication;
 using LlmAgents.LlmApi;
 using LlmAgents.State;
 using LlmAgents.Tools;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -156,6 +157,94 @@ public class LlmAgent
         var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
 
         File.WriteAllText(messagesFilePath, JsonConvert.SerializeObject(llmApi.Messages));
+    }
+
+    public static async Task<LlmAgent> CreateAgent(
+        ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
+        string apiEndpoint, string apiKey, string apiModel, int contextSize, int maxCompletionTokens,
+        string agentId, string workingDirectory, string storageDirectory, bool persistent = false, string? systemPrompt = null, string? sessionId = null,
+        string? toolsFilePath = null, string? toolServerAddress = null, int toolServerPort = 5000)
+    {
+        var llmApi = new LlmApiOpenAi(loggerFactory, apiEndpoint, apiKey, apiModel)
+        {
+            ContextSize = contextSize,
+            MaxCompletionTokens = maxCompletionTokens
+        };
+
+        var agent = new LlmAgent(agentId, llmApi, agentCommunication)
+        {
+            Persistent = persistent,
+            PersistentMessagesPath = storageDirectory,
+            SessionId = sessionId
+        };
+
+        if (!Path.Exists(workingDirectory))
+        {
+            Directory.CreateDirectory(workingDirectory);
+        }
+
+        if (!Path.Exists(storageDirectory))
+        {
+            Directory.CreateDirectory(storageDirectory);
+        }
+
+        var stateDatabase = new StateDatabase(loggerFactory, Path.Join(storageDirectory, $"{agentId}.db"));
+        agent.StateDatabase = stateDatabase;
+
+        Session? session = null;
+        if (!string.IsNullOrEmpty(sessionId))
+        {
+            session = stateDatabase.GetSession(sessionId);
+            if (session == null)
+            {
+                session = new Session
+                {
+                    SessionId = sessionId,
+                    Status = "New"
+                };
+
+                stateDatabase.CreateSession(session);
+            }
+        }
+
+        Tool[]? tools = null;
+
+        if (tools == null && !string.IsNullOrEmpty(toolsFilePath) && File.Exists(toolsFilePath))
+        {
+            var toolEventBus = new ToolEventBus();
+            var toolsFile = JObject.Parse(File.ReadAllText(toolsFilePath));
+            var toolFactory = new ToolFactory(loggerFactory, toolsFile);
+
+            toolFactory.Register(agentCommunication);
+            toolFactory.Register(loggerFactory);
+            toolFactory.Register<ILlmApiMessageProvider>(llmApi);
+            toolFactory.Register<IToolEventBus>(toolEventBus);
+            toolFactory.Register(stateDatabase);
+
+            toolFactory.AddParameter("basePath", workingDirectory);
+            toolFactory.AddParameter("storageDirectory", storageDirectory);
+
+            tools = toolFactory.Load(session, stateDatabase);
+
+            agent.ToolEventBus = toolEventBus;
+        }
+
+        if (tools != null)
+        {
+            agent.AddTool(tools);
+        }
+
+        if (persistent)
+        {
+            agent.LoadMessages();
+        }
+
+        if (agent.llmApi.Messages.Count == 0 && !string.IsNullOrEmpty(systemPrompt))
+        {
+            agent.llmApi.Messages.Add(JObject.FromObject(new { role = "system", content = systemPrompt }));
+        }
+
+        return agent;
     }
 
     private static string GetMessagesFilename(string agentId)
