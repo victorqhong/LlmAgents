@@ -2,7 +2,7 @@
   "profiles": {
     "ConsoleAgent": {
       "commandName": "Project",
-      "commandLineArgs": "--apiConfig api.json --toolsConfig tools.json --workingDirectory work",
+      "commandLineArgs": "--apiConfig C:\\Users\\victo\\Code\\agents\\config\\api\\llamacpp.json --toolsConfig C:\\Users\\victo\\Code\\agents\\config\\tools\\default.json --workingDirectory C:\\Users\\victo\\Code\\LlmAgents",
       "workingDirectory": "..\\Agent"
     }
   }

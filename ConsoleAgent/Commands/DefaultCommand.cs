@@ -115,7 +115,7 @@ internal class DefaultCommand : RootCommand
         string workingDirectoryValue = context.ParseResult.GetValueForOption(ConsoleAgent.Options.WorkingDirectory) ?? Environment.CurrentDirectory;
         string storageDirectoryValue = context.ParseResult.GetValueForOption(ConsoleAgent.Options.StorageDirectory) ?? Environment.CurrentDirectory;
 
-        string? systemPrompt = Prompts.DefaultSystemPrompt;
+        string? systemPrompt = null;
         var systemPromptFileValue = context.ParseResult.GetValueForOption(ConsoleAgent.Options.SystemPromptFile);
         if (!string.IsNullOrEmpty(systemPromptFileValue) && File.Exists(systemPromptFileValue))
         {

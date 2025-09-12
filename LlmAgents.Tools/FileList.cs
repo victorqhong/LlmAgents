@@ -83,11 +83,12 @@ public class FileList : Tool
     {
         var result = new JObject();
 
-        var path = parameters["path"]?.ToString();
+        var path = parameters.Value<string>("path");
         if (string.IsNullOrEmpty(path))
         {
-            result.Add("error", "path is null or empty");
-            return Task.FromResult<JToken>(result);
+            path = basePath;
+            //result.Add("error", "path is null or empty");
+            //return Task.FromResult<JToken>(result);
         }
 
         var recursive = parameters["recursive"]?.Value<bool>() ?? false;

@@ -13,12 +13,13 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+    <PackageReference Include="Parquet.Net" Version="5.2.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="tools.json">
+    <Content Include="tools.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    </Content>
   </ItemGroup>
 
 </Project>

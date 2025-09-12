@@ -6,19 +6,21 @@ public class ToolEventBus : IToolEventBus
 
     public void PostToolEvent(ToolEvent @event)
     {
-        Task.Run(async () =>
-        {
-            var type = @event.Sender.GetType();
-            if (!toolEventHandlers.TryGetValue(type, out List<Func<ToolEvent, Task>>? handlers))
-            {
-                return;
-            }
+        var handlers = new List<Func<ToolEvent, Task>>();
 
-            foreach (var handler in handlers)
+        var type = @event.Sender.GetType();
+        foreach (var handler in toolEventHandlers)
+        {
+            if (handler.Key.IsAssignableFrom(type))
             {
-                await handler(@event);
+                handlers.AddRange(handler.Value);
             }
-        });
+        }
+
+        foreach (var handler in handlers)
+        {
+            handler(@event).ConfigureAwait(false).GetAwaiter().GetResult();
+        }
     }
 
     public void SubscribeToolEvent<T>(Func<ToolEvent, Task> handler) where T : Tool

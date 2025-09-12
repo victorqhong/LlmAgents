@@ -21,7 +21,7 @@ public class AgentContextPrune : Tool
         function = new
         {
             name = "agent_context_prune",
-            description = "Prune the conversation context",
+            description = "Prune the conversation context. Not all messages can be pruned in order to keep a consistent context.",
             parameters = new
             {
                 type = "object",
@@ -49,9 +49,6 @@ public class AgentContextPrune : Tool
             return result;
         }
 
-        var messageCount = await messageProvider.CountMessages();
-        result.Add("message_count_before", await messageProvider.CountMessages());
-
         try
         {
             await messageProvider.PruneContext(messagesKeep.Value);
@@ -61,9 +58,6 @@ public class AgentContextPrune : Tool
         {
             result.Add("exception", e.Message);
         }
-
-        messageCount = await messageProvider.CountMessages();
-        result.Add("message_count_after", await messageProvider.CountMessages());
 
         return result;
     }

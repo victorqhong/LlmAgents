@@ -4,6 +4,8 @@ namespace LlmAgents.Communication;
 
 public class ConsoleCommunication : IAgentCommunication
 {
+    public bool NullOutput { get; set; } = false;
+
     public Task<IEnumerable<IMessageContent>?> WaitForContent(CancellationToken cancellationToken = default)
     {
         var line = Console.ReadLine();
@@ -17,6 +19,11 @@ public class ConsoleCommunication : IAgentCommunication
 
     public Task SendMessage(string message, bool newLine = true)
     {
+        if (NullOutput)
+        {
+            return Task.CompletedTask;
+        }
+
         if (newLine)
         {
             Console.WriteLine(message);

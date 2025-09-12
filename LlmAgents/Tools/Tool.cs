@@ -8,9 +8,13 @@ public abstract class Tool
 {
     protected readonly ToolFactory toolFactory;
 
+    protected readonly IToolEventBus toolEventBus;
+
     public Tool(ToolFactory toolFactory)
     {
         this.toolFactory = toolFactory;
+
+        toolEventBus = toolFactory.Resolve<IToolEventBus>();
     }
 
     public abstract JObject Schema { get; protected set; }
@@ -30,6 +34,13 @@ public abstract class Tool
     }
 
     public abstract Task<JToken> Function(JObject parameters);
+
+    public async Task<JToken> Invoke(JObject parameters)
+    {
+        var result = await Function(parameters);
+        toolEventBus.PostCallToolEvent(this, parameters, result);
+        return result;
+    }
 
     public virtual void Save(string sessionId, StateDatabase stateDatabase) { }
 

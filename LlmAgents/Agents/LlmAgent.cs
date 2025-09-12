@@ -2,17 +2,17 @@
 
 using LlmAgents.Communication;
 using LlmAgents.LlmApi;
+using LlmAgents.LlmApi.Content;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Threading;
 
 public class LlmAgent
 {
-    private readonly List<JObject> ToolDefinitions = [];
-
-    private readonly Dictionary<string, Tool> ToolMap = [];
+    public readonly List<Tool> Tools = [];
 
     public readonly LlmApiOpenAi llmApi;
 
@@ -34,15 +34,17 @@ public class LlmAgent
 
     public string? SessionId { get; set; }
 
+    public List<JObject> Messages { get; private set; } = [];
+
     public StateDatabase? StateDatabase { get; set; }
+
+    public string ToolChoice { get; set; } = "auto";
 
     public LlmAgent(string id, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
     {
         Id = id;
         this.llmApi = llmApi;
         this.agentCommunication = agentCommunication;
-
-        this.llmApi.Agent = this;
     }
 
     public void AddTool(params Tool[] tools)
@@ -57,13 +59,18 @@ public class LlmAgent
     {
         ArgumentNullException.ThrowIfNull(tool);
 
-        ToolDefinitions.Add(tool.Schema);
-        ToolMap.Add(tool.Name, tool);
+        Tools.Add(tool);
+    }
+
+    public Tool? FindTool(string name)
+    {
+        return Tools.Find(tool => string.Equals(name, tool.Name));
     }
 
     public async Task<JToken?> CallTool(string toolName, JObject arguments)
     {
-        if (!ToolMap.TryGetValue(toolName, out var tool))
+        var tool = FindTool(toolName);
+        if (tool == null)
         {
             return null;
         }
@@ -79,11 +86,6 @@ public class LlmAgent
         return result;
     }
 
-    public IReadOnlyList<JObject> GetToolDefinitions()
-    {
-        return ToolDefinitions;
-    }
-
     public async Task Run(CancellationToken cancellationToken = default)
     {
         while (!cancellationToken.IsCancellationRequested)
@@ -96,31 +98,7 @@ public class LlmAgent
                 break;
             }
 
-            if (StreamOutput)
-            {
-                var response = await llmApi.GenerateStreamingCompletion(messageContent, cancellationToken);
-                if (response == null)
-                {
-                    continue;
-                }
-
-                await foreach (var chunk in response)
-                {
-                    await agentCommunication.SendMessage(chunk, false);
-                }
-
-                await agentCommunication.SendMessage(string.Empty, true);
-            }
-            else
-            {
-                var response = await llmApi.GenerateCompletion(messageContent, cancellationToken);
-                if (response == null)
-                {
-                    continue;
-                }
-
-                await agentCommunication.SendMessage(response, true);
-            }
+            await SendMessage(messageContent, Tools, ToolChoice, cancellationToken);
 
             PostSendMessage?.Invoke();
 
@@ -128,6 +106,55 @@ public class LlmAgent
             {
                 SaveMessages();
             }
+        }
+    }
+
+    public async Task SendMessage(IEnumerable<IMessageContent> messageContents, List<Tool>? tools = null, string? toolChoice = null, CancellationToken cancellationToken = default)
+    {
+        tools ??= Tools;
+        toolChoice ??= ToolChoice;
+
+        var message = LlmApiOpenAi.GetMessage(messageContents);
+        Messages.Add(message);
+
+        if (StreamOutput)
+        {
+            var response = await llmApi.GenerateStreamingCompletion(Messages, tools, toolChoice, cancellationToken);
+            if (response == null)
+            {
+                return;
+            }
+
+            await foreach (var chunk in response)
+            {
+                await agentCommunication.SendMessage(chunk, false);
+            }
+
+            await agentCommunication.SendMessage(string.Empty, true);
+
+            if (string.Equals(llmApi.FinishReason, "tool_calls"))
+            {
+                var toolCompletion = await llmApi.GenerateStreamingCompletion(Messages, tools, "auto", cancellationToken);
+                if (toolCompletion != null)
+                {
+                    await foreach (var chunk in toolCompletion)
+                    {
+                        await agentCommunication.SendMessage(chunk, false);
+                    }
+
+                    await agentCommunication.SendMessage(string.Empty, true);
+                }
+            }
+        }
+        else
+        {
+            var response = await llmApi.GenerateCompletion(Messages, tools, toolChoice, cancellationToken);
+            if (response == null)
+            {
+                return;
+            }
+
+            await agentCommunication.SendMessage(response, true);
         }
     }
 
@@ -147,8 +174,8 @@ public class LlmAgent
             return;
         }
 
-        llmApi.Messages.Clear();
-        llmApi.Messages.AddRange(messages);
+        Messages.Clear();
+        Messages.AddRange(messages);
     }
 
     public void SaveMessages()
@@ -156,7 +183,7 @@ public class LlmAgent
         var messagesFileName = GetMessagesFilename(Id);
         var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
 
-        File.WriteAllText(messagesFilePath, JsonConvert.SerializeObject(llmApi.Messages));
+        File.WriteAllText(messagesFilePath, JsonConvert.SerializeObject(Messages));
     }
 
     public static async Task<LlmAgent> CreateAgent(
@@ -239,9 +266,9 @@ public class LlmAgent
             agent.LoadMessages();
         }
 
-        if (agent.llmApi.Messages.Count == 0 && !string.IsNullOrEmpty(systemPrompt))
+        if (agent.Messages.Count == 0 && !string.IsNullOrEmpty(systemPrompt))
         {
-            agent.llmApi.Messages.Add(JObject.FromObject(new { role = "system", content = systemPrompt }));
+            agent.Messages.Add(JObject.FromObject(new { role = "system", content = systemPrompt }));
         }
 
         return agent;

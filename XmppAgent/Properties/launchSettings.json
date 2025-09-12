@@ -2,8 +2,8 @@
   "profiles": {
     "XmppAgent": {
       "commandName": "Project",
-      "commandLineArgs": "agent --apiConfig api.json --xmppConfig xmpp.json --toolsConfig tools.json --workingDirectory work",
-      "workingDirectory": "..\\Agent"
+      "commandLineArgs": "--agentsConfig C:\\Users\\victo\\Code\\agents\\agents.json",
+      "workingDirectory": "C:\\Users\\victo\\Code\\agents"
     }
   }
 }

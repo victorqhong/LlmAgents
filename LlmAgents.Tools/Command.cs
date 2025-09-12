@@ -6,6 +6,8 @@ public abstract class Command : Tool
 {
     private readonly string workingDirectory;
 
+    protected int timeoutMs = 10_000;
+
     public Command(ToolFactory toolFactory)
         : base(toolFactory)
     {
@@ -36,7 +38,7 @@ public abstract class Command : Tool
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
             process.Start();
-            process.WaitForExit();
+            process.WaitForExit(timeoutMs);
 
             result.Add("stdout", process.StandardOutput.ReadToEnd());
             result.Add("stderr", process.StandardError.ReadToEnd());

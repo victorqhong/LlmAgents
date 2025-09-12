@@ -1,5 +1,6 @@
 ﻿using LlmAgents.Agents;
 using LlmAgents.LlmApi.Content;
+using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.Runtime.CompilerServices;
@@ -12,7 +13,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 {
     private readonly ILogger Log;
 
-    public LlmApiOpenAi(ILoggerFactory loggerFactory, string apiEndpoint, string apiKey, string model, List<JObject>? messages = null)
+    public LlmApiOpenAi(ILoggerFactory loggerFactory, string apiEndpoint, string apiKey, string model)
     {
         ArgumentException.ThrowIfNullOrEmpty(apiEndpoint);
         ArgumentException.ThrowIfNullOrEmpty(apiKey);
@@ -23,16 +24,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         ApiEndpoint = apiEndpoint;
         ApiKey = apiKey;
         Model = model;
-
-        if (messages != null)
-        {
-            Messages.AddRange(messages);
-        }
     }
-
-    public LlmAgent? Agent { get; set; }
-
-    public List<JObject> Messages { get; private set; } = [];
 
     public string ApiEndpoint { get; private set; }
 
@@ -56,26 +48,9 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 
     public event Action<TokenUsage>? PostParseUsage;
 
-    public async Task<string?> GenerateCompletion(IEnumerable<IMessageContent> messageContents, CancellationToken cancellationToken = default)
+    public async Task<string?> GenerateCompletion(List<JObject> messages, List<Tool> tools, string toolChoice, CancellationToken cancellationToken = default)
     {
-        var completion = await GenerateStreamingCompletion(messageContents, cancellationToken);
-        if (completion == null)
-        {
-            return null;
-        }
-
-        var sb = new StringBuilder();
-        await foreach (var chunk in completion)
-        {
-            sb.Append(chunk);
-        }
-
-        return sb.ToString();
-    }
-
-    public async Task<string?> GenerateCompletion(List<JObject> messages, CancellationToken cancellationToken = default)
-    {
-        var completion = await GenerateStreamingCompletion(messages, cancellationToken);
+        var completion = await GenerateStreamingCompletion(messages, tools, toolChoice, cancellationToken);
         if (completion == null)
         {
             return null;
@@ -90,15 +65,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         return sb.ToString();
     }
 
-    public async Task<IAsyncEnumerable<string>?> GenerateStreamingCompletion(IEnumerable<IMessageContent> messageContents, CancellationToken cancellationToken = default)
-    {
-        var message = GetMessage(messageContents);
-        Messages.Add(message);
-
-        return await GenerateStreamingCompletion(Messages, cancellationToken);
-    }
-
-    public async Task<IAsyncEnumerable<string>?> GenerateStreamingCompletion(List<JObject> messages, CancellationToken cancellationToken = default)
+    public async Task<IAsyncEnumerable<string>?> GenerateStreamingCompletion(List<JObject> messages, List<Tool> tools, string toolChoice, CancellationToken cancellationToken = default)
     {
         if (messages == null || messages.Count < 1)
         {
@@ -110,26 +77,19 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
             return null;
         }
 
-        var maxCompletionTokens = MaxCompletionTokens != null ? MaxCompletionTokens.Value : ContextSize - UsageTotalTokens;
-        if (UsageTotalTokens > ContextSize * 0.75)
-        {
-            Log.LogWarning("Total usage tokens ({UsageTotalTokens}) exceed target context size ({ContextSize}). Pruning context.", UsageTotalTokens, ContextSize * 0.75);
-            await PruneContext(Messages.Count - 1);
-        }
-
-        var payload = GetPayload(Model, messages, maxCompletionTokens, Temperature, Agent?.GetToolDefinitions(), "auto", true);
-
-        return await GetCompletion(ApiEndpoint, ApiKey, payload, retryAttempt: 0, cancellationToken);
+        return await GetCompletion(messages, tools, toolChoice, retryAttempt: 0, cancellationToken);
     }
 
-    private async Task<IAsyncEnumerable<string>?> GetCompletion(string apiEndpoint, string apiKey, string content, int retryAttempt = 0, CancellationToken cancellationToken = default)
+    private async Task<IAsyncEnumerable<string>?> GetCompletion(List<JObject> messages, List<Tool> tools, string toolChoice, int retryAttempt = 0, CancellationToken cancellationToken = default)
     {
+        var content = GetPayload(Model, messages, MaxCompletionTokens ?? 8196, Temperature, tools, toolChoice, true);
+
         using HttpClient client = new();
         client.Timeout = Timeout.InfiniteTimeSpan;
-        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {ApiKey}");
         client.DefaultRequestHeaders.Add("Accept", "text/event-stream");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, apiEndpoint)
+        var request = new HttpRequestMessage(HttpMethod.Post, ApiEndpoint)
         {
             Content = new StringContent(content, Encoding.UTF8, "application/json")
         };
@@ -150,7 +110,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                     return null;
                 }
 
-                return ParseCompletion(stream, cancellationToken);
+                return ParseCompletion(stream, messages, tools, toolChoice, cancellationToken);
             }
             else
             {
@@ -163,9 +123,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 if (string.Equals(response.Content.Headers.ContentType?.MediaType, "application/json"))
                 {
                     var responseMessage = JObject.Parse(responseContent);
-
-                    var error = responseMessage.Value<JObject>("error");
-                    if (error != null)
+                    if (responseMessage.ContainsKey("error") && responseMessage.Value<JObject>("error") is JObject error)
                     {
                         var message = error.Value<string>("message");
                         var code = error.Value<string>("code");
@@ -186,7 +144,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 
                             Log.LogInformation("Request throttled... waiting {seconds} seconds and retrying.", seconds);
                             Thread.Sleep(seconds * 1000);
-                            return await GetCompletion(apiEndpoint, apiKey, content, retryAttempt + 1, cancellationToken);
+                            return await GetCompletion(messages, tools, toolChoice, retryAttempt + 1, cancellationToken);
                         }
                         else
                         {
@@ -212,7 +170,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         return null;
     }
 
-    private async IAsyncEnumerable<string> ParseCompletion(Stream stream, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    private async IAsyncEnumerable<string> ParseCompletion(Stream stream, List<JObject> messages, List<Tool> tools, string toolChoice, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         string? role = null;
         string? finishReason = null;
@@ -356,6 +314,8 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
             }
         }
 
+        reader.Close();
+
         if (seenReasoningContent && !seenContent)
         {
             yield return "</thinking>\n";
@@ -370,20 +330,20 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 
         if (string.Equals(FinishReason, "stop"))
         {
-            Messages.Add(JObject.FromObject(new { role, content }));
+            messages.Add(JObject.FromObject(new { role, content }));
         }
         else if (string.Equals(FinishReason, "length"))
         {
-            if (string.Equals(role, Messages[^1].Value<string>("role")))
+            if (string.Equals(role, messages[^1].Value<string>("role")))
             {
-                Messages[^1]["content"] += content;
+                messages[^1]["content"] += content;
             }
             else
             {
-                Messages.Add(JObject.FromObject(new { role, content }));
+                messages.Add(JObject.FromObject(new { role, content }));
             }
 
-            var continuation = await GenerateStreamingCompletion(Messages, cancellationToken);
+            var continuation = await GenerateStreamingCompletion(messages, tools, toolChoice, cancellationToken);
             if (continuation != null)
             {
                 await foreach (var chunk in continuation)
@@ -392,11 +352,11 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 }
             }
 
-            if ("assistant".Equals(Messages[^1].Value<string>("role")) && "assistant".Equals(Messages[^2].Value<string>("role")))
+            if ("assistant".Equals(messages[^1].Value<string>("role")) && "assistant".Equals(messages[^2].Value<string>("role")))
             {
-                var lastMessage = Messages[^1].Value<string>("content");
-                Messages[^2]["content"] += lastMessage;
-                Messages.RemoveAt(Messages.Count - 1);
+                var lastMessage = messages[^1].Value<string>("content");
+                messages[^2]["content"] += lastMessage;
+                messages.RemoveAt(messages.Count - 1);
             }
         }
         else if (string.Equals(FinishReason, "tool_calls"))
@@ -415,28 +375,16 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 };
             });
 
-            Messages.Add(JObject.FromObject(new { role, content, tool_calls = toolCalls }));
+            messages.Add(JObject.FromObject(new { role, content, tool_calls = toolCalls }));
 
             foreach (var toolCall in toolCalls)
             {
                 var id = toolCall.id;
 
-                if (Agent == null)
-                {
-                    Messages.Add(JObject.FromObject(new
-                    {
-                        role = "tool",
-                        tool_call_id = id,
-                        content = $"Invalid tool call: tools are not available"
-                    }));
-
-                    continue;
-                }
-
                 var function = toolCall.function;
                 if (function == null)
                 {
-                    Messages.Add(JObject.FromObject(new
+                    messages.Add(JObject.FromObject(new
                     {
                         role = "tool",
                         tool_call_id = id,
@@ -449,7 +397,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 var name = function.name;
                 if (string.IsNullOrEmpty(name))
                 {
-                    Messages.Add(JObject.FromObject(new
+                    messages.Add(JObject.FromObject(new
                     {
                         role = "tool",
                         tool_call_id = id,
@@ -463,7 +411,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 var arguments = function.arguments;
                 if (arguments == null)
                 {
-                    Messages.Add(JObject.FromObject(new
+                    messages.Add(JObject.FromObject(new
                     {
                         role = "tool",
                         tool_call_id = id,
@@ -474,25 +422,26 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                     continue;
                 }
 
+                var tool = tools.Find(tool => string.Equals(tool.Name, name));
+                if (tool == null)
+                {
+                    messages.Add(JObject.FromObject(new
+                    {
+                        role = "tool",
+                        tool_call_id = id,
+                        name,
+                        content = $"Invalid tool call: tool {name} could not be found"
+                    }));
+
+                    continue;
+                }
+
                 Log.LogInformation("Calling tool '{name}' with arguments '{arguments}'", name, arguments);
 
                 string toolContent;
                 try
                 {
-                    var toolResult = await Agent.CallTool(name, JObject.Parse(arguments));
-                    if (toolResult == null)
-                    {
-                        Messages.Add(JObject.FromObject(new
-                        {
-                            role = "tool",
-                            tool_call_id = id,
-                            name,
-                            content = $"Invalid tool call: tool {name} could not be found"
-                        }));
-
-                        continue;
-                    }
-
+                    var toolResult = await tool.Invoke(JObject.Parse(arguments));
                     toolContent = Newtonsoft.Json.JsonConvert.SerializeObject(toolResult);
                 }
                 catch (Exception ex)
@@ -500,22 +449,13 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                     toolContent = $"Got exception: {ex.Message}";
                 }
 
-                Messages.Add(JObject.FromObject(new
+                messages.Add(JObject.FromObject(new
                 {
                     role = "tool",
                     tool_call_id = id,
                     name,
                     content = toolContent
                 }));
-            }
-
-            var toolCompletion = await GenerateStreamingCompletion(Messages, cancellationToken);
-            if (toolCompletion != null)
-            {
-                await foreach (var chunk in toolCompletion)
-                {
-                    yield return chunk;
-                }
             }
         }
         else
@@ -559,7 +499,7 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         return message;
     }
 
-    public static string GetPayload(string model, List<JObject> messages, int maxCompletionTokens, double temperature, IReadOnlyList<JObject>? tools = null, string toolChoice = "auto", bool stream = true)
+    public static string GetPayload(string model, List<JObject> messages, int maxCompletionTokens, double temperature, List<Tool>? tools = null, string toolChoice = "auto", bool stream = true)
     {
         var payload = new JObject();
         payload.Add("model", model);
@@ -568,8 +508,34 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         payload.Add("temperature", temperature);
         if (tools != null && tools.Count > 0)
         {
-            payload.Add("tools", JArray.FromObject(tools));
-            payload.Add("tool_choice", toolChoice);
+            payload.Add("tools", JArray.FromObject(tools.Select(tool => tool.Schema)));
+
+            JToken tool_choice;
+            if (string.Equals(toolChoice, "auto"))
+            {
+                tool_choice = "auto";
+            }
+            else if (string.Equals(toolChoice, "required"))
+            {
+                tool_choice = "required";
+            }
+            else if (tools?.Exists(tool => string.Equals(toolChoice, tool.Name)) ?? false)
+            {
+                tool_choice = JObject.FromObject(new
+                {
+                    type = "function",
+                    function = new
+                    {
+                        name = toolChoice
+                    }
+                });
+            }
+            else
+            {
+                tool_choice = "none";
+            }
+
+            payload.Add("tool_choice", tool_choice);
         }
 
         payload.Add("stream", stream);
@@ -586,35 +552,40 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 
     public Task<int> CountMessages()
     {
-        return Task.FromResult(Messages.Count);
+        //return Task.FromResult(Messages.Count);
+        return Task.FromResult(0);
     }
 
     public Task PruneContext(int numMessagesToKeep)
     {
-        // keep system prompt if present
-        var startIndex = 0;
-        if (string.Equals(Messages[0].Value<string>("role"), "system"))
-        {
-            startIndex = 1;
-            numMessagesToKeep = Math.Max(numMessagesToKeep, 1);
-        }
+        //// keep system prompt if present
+        //var startIndex = 0;
+        //if (string.Equals(Messages[0].Value<string>("role"), "system"))
+        //{
+        //    startIndex = 1;
+        //    numMessagesToKeep = Math.Max(numMessagesToKeep, 1);
+        //}
 
-        if (Messages.Count <= numMessagesToKeep)
-        {
-            return Task.CompletedTask;
-        }
+        //if (Messages.Count <= numMessagesToKeep)
+        //{
+        //    return Task.CompletedTask;
+        //}
 
-        // remove messages from the beginning to maintain a well-formatted message list
-        var numMessagesToRemove = Messages.Count - numMessagesToKeep;
-        for (int i = 0; i < numMessagesToRemove; i++)
-        {
-            Messages.RemoveAt(startIndex);
-        }
+        //// remove messages from the beginning to maintain a well-formatted message list
+        //var numMessagesToRemove = Messages.Count - numMessagesToKeep;
+        //for (int i = 0; i < numMessagesToRemove; i++)
+        //{
+        //    if (string.Equals(Messages[startIndex].Value<string>("role"), "assistant") && startIndex == Messages.Count - 1)
+        //    {
+        //        continue;
+        //    }
+        //    else if (string.Equals(Messages[startIndex].Value<string>("role"), "user") && (startIndex == Messages.Count - 1 || startIndex == Messages.Count - 2 || startIndex == Messages.Count - 3))
+        //    {
+        //        continue;
+        //    }
 
-        while (string.Equals(Messages[startIndex].Value<string>("role"), "tool"))
-        {
-            Messages.RemoveAt(startIndex);
-        }
+        //    Messages.RemoveAt(startIndex);
+        //}
 
         return Task.CompletedTask;
     }
