@@ -22,7 +22,7 @@ public class ApplyDiff : Tool
         currentDirectory = basePath;
 
         var toolEventBus = toolFactory.Resolve<IToolEventBus>();
-        toolEventBus.SubscribeToolEvent<ChangeDirectory>(OnChangeDirectory);
+        toolEventBus.SubscribeToolEvent<DirectoryCurrent>(OnChangeDirectory);
     }
 
     private Task OnChangeDirectory(ToolEvent e)

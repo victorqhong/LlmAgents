@@ -4,46 +4,29 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
 
-public class FileRead : Tool
+public class DirectoryChange : Tool
 {
     private readonly string basePath;
     private readonly bool restrictToBasePath;
 
-    private string currentDirectory;
-
-    public FileRead(ToolFactory toolFactory)
+    public DirectoryChange(ToolFactory toolFactory)
         : base(toolFactory)
     {
         basePath = Path.GetFullPath(toolFactory.GetParameter(nameof(basePath)) ?? Environment.CurrentDirectory);
         restrictToBasePath = bool.TryParse(toolFactory.GetParameter(nameof(restrictToBasePath)), out restrictToBasePath) ? restrictToBasePath : true;
 
-        currentDirectory = basePath;
-
-        var toolEventBus = toolFactory.Resolve<IToolEventBus>();
-        toolEventBus.SubscribeToolEvent<DirectoryCurrent>(OnChangeDirectory);
+        CurrentDirectory = basePath;
     }
 
-    private Task OnChangeDirectory(ToolEvent e)
-    {
-        if (e is ToolCallEvent tce)
-        {
-            currentDirectory = tce.Result.Value<string>("currentDirectory") ?? currentDirectory;
-        }
-        else if (e is Events.ChangeDirectoryEvent cde)
-        {
-            currentDirectory = cde.Directory;
-        }
-
-        return Task.CompletedTask;
-    }
+    public string CurrentDirectory { get; private set; }
 
     public override JObject Schema { get; protected set; } = JObject.FromObject(new
     {
         type = "function",
         function = new
         {
-            name = "file_read",
-            description = "Read the string contents of the file at the specified path",
+            name = "directory_change",
+            description = "Change the current working directory",
             parameters = new
             {
                 type = "object",
@@ -52,7 +35,7 @@ public class FileRead : Tool
                     path = new
                     {
                         type = "string",
-                        description = "The path of the file to read relative to the current directory"
+                        description = "The directory which to change"
                     }
                 },
                 required = new[] { "path" }
@@ -75,25 +58,27 @@ public class FileRead : Tool
         {
             if (restrictToBasePath && !Path.IsPathRooted(path))
             {
-                path = Path.Combine(currentDirectory, path);
+                path = Path.Combine(CurrentDirectory, path);
             }
 
             path = Path.GetFullPath(path);
 
             if (restrictToBasePath && !path.StartsWith(basePath))
             {
-                result.Add("error", $"files outside {basePath} can not be read");
+                result.Add("error", $"cannot change to directory outside of {basePath}");
                 return Task.FromResult<JToken>(result);
             }
 
-            if (!File.Exists(path))
+            if (!Path.Exists(path))
             {
-                result.Add("error", $"file at {path} does not exist or cannot be read");
+                result.Add("error", $"path does not exist: {path}");
                 return Task.FromResult<JToken>(result);
             }
 
-            var text = File.ReadAllText(path);
-            result.Add("contents", text);
+            CurrentDirectory = path;
+
+            result.Add("currentDirectory", CurrentDirectory);
+            result.Add("success", true);
         }
         catch (Exception e)
         {
@@ -101,5 +86,16 @@ public class FileRead : Tool
         }
 
         return Task.FromResult<JToken>(result);
+    }
+
+    public override void Save(string sessionId, State.StateDatabase stateDatabase)
+    {
+        stateDatabase.SetState(sessionId, $"{nameof(DirectoryCurrent)}:{nameof(CurrentDirectory)}", CurrentDirectory);
+    }
+
+    public override void Load(string sessionId, State.StateDatabase stateDatabase)
+    {
+        CurrentDirectory = stateDatabase.GetSessionState(sessionId, $"{nameof(DirectoryCurrent)}:{nameof(CurrentDirectory)}") ?? CurrentDirectory;
+        toolEventBus.PostToolEvent(new Events.ChangeDirectoryEvent { Sender = this, Directory = CurrentDirectory });
     }
 }

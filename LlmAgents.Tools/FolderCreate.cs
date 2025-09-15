@@ -2,17 +2,16 @@ namespace LlmAgents.Tools;
 
 using Newtonsoft.Json.Linq;
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 
-public class FileWrite : Tool
+public class FolderCreate : Tool
 {
     private readonly string basePath;
     private readonly bool restrictToBasePath;
 
     private string currentDirectory;
 
-    public FileWrite(ToolFactory toolFactory)
+    public FolderCreate(ToolFactory toolFactory)
         : base(toolFactory)
     {
         basePath = Path.GetFullPath(toolFactory.GetParameter(nameof(basePath)) ?? Environment.CurrentDirectory);
@@ -20,7 +19,6 @@ public class FileWrite : Tool
 
         currentDirectory = basePath;
 
-        var toolEventBus = toolFactory.Resolve<IToolEventBus>();
         toolEventBus.SubscribeToolEvent<DirectoryCurrent>(OnChangeDirectory);
     }
 
@@ -43,25 +41,20 @@ public class FileWrite : Tool
         type = "function",
         function = new
         {
-            name = "file_write",
-            description = "Write the string contents to the file at the specified path",
+            name = "folder_create",
+            description = "Create an empty folder at the specified path",
             parameters = new
             {
                 type = "object",
                 properties = new
                 {
-                    contents = new
-                    {
-                        type = "string",
-                        description = "The string contents to write"
-                    },
                     path = new
                     {
                         type = "string",
-                        description = "The path of the file to write relative to the current directory"
+                        description = "The path of the folder to create relative to the current directory"
                     }
                 },
-                required = new[] { "contents", "path" }
+                required = new[] { "path" }
             }
         }
     });
@@ -69,13 +62,6 @@ public class FileWrite : Tool
     public override Task<JToken> Function(JObject parameters)
     {
         var result = new JObject();
-
-        var contents = parameters["contents"]?.ToString();
-        if (string.IsNullOrEmpty(contents))
-        {
-            result.Add("error", "contents is null or empty");
-            return Task.FromResult<JToken>(result);
-        }
 
         var path = parameters["path"]?.ToString();
         if (string.IsNullOrEmpty(path))
@@ -99,15 +85,8 @@ public class FileWrite : Tool
                 return Task.FromResult<JToken>(result);
             }
 
-            var directoryName = Path.GetDirectoryName(path);
-            if (!Directory.Exists(directoryName))
-            {
-                result.Add("error", $"directory does not exist: {directoryName}");
-                return Task.FromResult<JToken>(result);
-            }
-
-            File.WriteAllText(path, contents.Replace("\r\n", Environment.NewLine).Replace("\n", Environment.NewLine));
-            result.Add("result", $"file wrote to: {path}");
+            Directory.CreateDirectory(path);
+            result.Add("result", $"folder at path created: {path}");
         }
         catch (Exception e)
         {

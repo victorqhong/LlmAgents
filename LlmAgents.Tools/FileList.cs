@@ -24,7 +24,7 @@ public class FileList : Tool
         currentDirectory = basePath;
 
         var toolEventBus = toolFactory.Resolve<IToolEventBus>();
-        toolEventBus.SubscribeToolEvent<ChangeDirectory>(OnChangeDirectory);
+        toolEventBus.SubscribeToolEvent<DirectoryCurrent>(OnChangeDirectory);
     }
 
     private Task OnChangeDirectory(ToolEvent e)
@@ -56,7 +56,7 @@ public class FileList : Tool
                     path = new
                     {
                         type = "string",
-                        description = "The path to list files"
+                        description = "The path to list files relative to the current directory. Cannot be empty (use '.' for the current directory)"
                     },
                     recursive = new
                     {

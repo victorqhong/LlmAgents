@@ -20,7 +20,7 @@ public class FileDelete : Tool
         currentDirectory = basePath;
 
         var toolEventBus = toolFactory.Resolve<IToolEventBus>();
-        toolEventBus.SubscribeToolEvent<ChangeDirectory>(OnChangeDirectory);
+        toolEventBus.SubscribeToolEvent<DirectoryCurrent>(OnChangeDirectory);
     }
 
     private Task OnChangeDirectory(ToolEvent e)
@@ -52,7 +52,7 @@ public class FileDelete : Tool
                     path = new
                     {
                         type = "string",
-                        description = "The path of the file to delete"
+                        description = "The path of the file to delete relative to the current directory"
                     }
                 },
                 required = new[] { "path" }
@@ -93,7 +93,7 @@ public class FileDelete : Tool
             }
 
             File.Delete(path);
-            result.Add("result", "succeeded");
+            result.Add("result", $"file at path deleted: {path}");
         }
         catch (Exception e)
         {

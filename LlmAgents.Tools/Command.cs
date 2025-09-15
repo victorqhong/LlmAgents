@@ -4,7 +4,7 @@ using Newtonsoft.Json.Linq;
 
 public abstract class Command : Tool
 {
-    private readonly string workingDirectory;
+    private string workingDirectory;
 
     protected int timeoutMs = 10_000;
 
@@ -12,11 +12,27 @@ public abstract class Command : Tool
         : base(toolFactory)
     {
         workingDirectory = toolFactory.GetParameter("basePath") ?? Environment.CurrentDirectory;
+
+        toolEventBus.SubscribeToolEvent<DirectoryCurrent>(OnChangeDirectory);
     }
 
     public required string FileName { get; set; }
 
     public required Func<JObject, string?> Arguments { get; set; }
+
+    private Task OnChangeDirectory(ToolEvent e)
+    {
+        if (e is ToolCallEvent tce)
+        {
+            workingDirectory = tce.Result.Value<string>("currentDirectory") ?? workingDirectory;
+        }
+        else if (e is Events.ChangeDirectoryEvent cde)
+        {
+            workingDirectory = cde.Directory;
+        }
+
+        return Task.CompletedTask;
+    }
 
     public override Task<JToken> Function(JObject parameters)
     {
