@@ -111,9 +111,6 @@ public class LlmAgent
 
     public async Task SendMessage(IEnumerable<IMessageContent> messageContents, List<Tool>? tools = null, string? toolChoice = null, CancellationToken cancellationToken = default)
     {
-        tools ??= Tools;
-        toolChoice ??= ToolChoice;
-
         var message = LlmApiOpenAi.GetMessage(messageContents);
         Messages.Add(message);
 
@@ -134,7 +131,8 @@ public class LlmAgent
 
             if (string.Equals(llmApi.FinishReason, "tool_calls"))
             {
-                var toolCompletion = await llmApi.GenerateStreamingCompletion(Messages, tools, "auto", cancellationToken);
+                await llmApi.ProcessToolCalls(Messages, tools);
+                var toolCompletion = await llmApi.GenerateStreamingCompletion(Messages, [], "auto", cancellationToken);
                 if (toolCompletion != null)
                 {
                     await foreach (var chunk in toolCompletion)

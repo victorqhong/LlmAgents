@@ -376,92 +376,106 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
             });
 
             messages.Add(JObject.FromObject(new { role, content, tool_calls = toolCalls }));
-
-            foreach (var toolCall in toolCalls)
-            {
-                var id = toolCall.id;
-
-                var function = toolCall.function;
-                if (function == null)
-                {
-                    messages.Add(JObject.FromObject(new
-                    {
-                        role = "tool",
-                        tool_call_id = id,
-                        content = $"Invalid tool call: tool call does not contain 'function' property"
-                    }));
-
-                    continue;
-                }
-
-                var name = function.name;
-                if (string.IsNullOrEmpty(name))
-                {
-                    messages.Add(JObject.FromObject(new
-                    {
-                        role = "tool",
-                        tool_call_id = id,
-                        name,
-                        content = $"Invalid tool call: tool call does not contain 'name' property"
-                    }));
-
-                    continue;
-                }
-
-                var arguments = function.arguments;
-                if (arguments == null)
-                {
-                    messages.Add(JObject.FromObject(new
-                    {
-                        role = "tool",
-                        tool_call_id = id,
-                        name,
-                        content = $"Invalid tool call: tool call does not contain 'arguments' property"
-                    }));
-
-                    continue;
-                }
-
-                var tool = tools.Find(tool => string.Equals(tool.Name, name));
-                if (tool == null)
-                {
-                    messages.Add(JObject.FromObject(new
-                    {
-                        role = "tool",
-                        tool_call_id = id,
-                        name,
-                        content = $"Invalid tool call: tool {name} could not be found"
-                    }));
-
-                    continue;
-                }
-
-                Log.LogInformation("Calling tool '{name}' with arguments '{arguments}'", name, arguments);
-
-                string toolContent;
-                try
-                {
-                    var toolResult = await tool.Invoke(JObject.Parse(arguments));
-                    toolContent = Newtonsoft.Json.JsonConvert.SerializeObject(toolResult);
-                }
-                catch (Exception ex)
-                {
-                    toolContent = $"Got exception: {ex.Message}";
-                }
-
-                messages.Add(JObject.FromObject(new
-                {
-                    role = "tool",
-                    tool_call_id = id,
-                    name,
-                    content = toolContent
-                }));
-            }
         }
         else
         {
             Log.LogCritical("FinishReason '{FinishReason}' is not implemented", FinishReason);
             throw new NotImplementedException(FinishReason);
+        }
+    }
+
+    public async Task ProcessToolCalls(List<JObject> messages, List<Tool> tools)
+    {
+        if (!string.Equals(FinishReason, "tool_calls"))
+        {
+            return;
+        }
+
+        var lastMessage = messages[^1];
+        if (!lastMessage.ContainsKey("tool_calls") || lastMessage.Value<JArray>("tool_calls") is not JArray toolCalls)
+        {
+            return;
+        }
+
+        foreach (JObject toolCall in toolCalls)
+        {
+            var id = toolCall.Value<string>("id");
+
+            var function = toolCall.Value<JObject>("function");
+            if (function == null)
+            {
+                messages.Add(JObject.FromObject(new
+                {
+                    role = "tool",
+                    tool_call_id = id,
+                    content = $"Invalid tool call: tool call does not contain 'function' property"
+                }));
+
+                continue;
+            }
+
+            var name = function.Value<string>("name");
+            if (string.IsNullOrEmpty(name))
+            {
+                messages.Add(JObject.FromObject(new
+                {
+                    role = "tool",
+                    tool_call_id = id,
+                    name,
+                    content = $"Invalid tool call: tool call does not contain 'name' property"
+                }));
+
+                continue;
+            }
+
+            var arguments = function.Value<string>("arguments");
+            if (arguments == null)
+            {
+                messages.Add(JObject.FromObject(new
+                {
+                    role = "tool",
+                    tool_call_id = id,
+                    name,
+                    content = $"Invalid tool call: tool call does not contain 'arguments' property"
+                }));
+
+                continue;
+            }
+
+            var tool = tools.Find(tool => string.Equals(tool.Name, name));
+            if (tool == null)
+            {
+                messages.Add(JObject.FromObject(new
+                {
+                    role = "tool",
+                    tool_call_id = id,
+                    name,
+                    content = $"Invalid tool call: tool {name} could not be found"
+                }));
+
+                continue;
+            }
+
+            Log.LogInformation("Calling tool '{name}' with arguments '{arguments}'", name, arguments);
+
+            string toolContent;
+            try
+            {
+                var toolResult = await tool.Invoke(JObject.Parse(arguments));
+                toolContent = Newtonsoft.Json.JsonConvert.SerializeObject(toolResult);
+            }
+            catch (Exception ex)
+            {
+                toolContent = $"Got exception: {ex.Message}";
+            }
+
+            messages.Add(JObject.FromObject(new
+            {
+                role = "tool",
+                tool_call_id = id,
+                name,
+                content = toolContent
+            }));
         }
     }
 
