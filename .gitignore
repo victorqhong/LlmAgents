@@ -7,3 +7,5 @@ launchSettings.json
 api.json
 xmpp.json
 tools.json
+
+*.bin
