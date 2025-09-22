@@ -181,140 +181,149 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
         var seenReasoningContent = false;
         var seenContent = false;
 
-        using var reader = new StreamReader(stream);
-        while (!reader.EndOfStream)
+        StreamReader? reader = null;
+        try
         {
-            var line = await reader.ReadLineAsync(cancellationToken);
-            if (cancellationToken.IsCancellationRequested)
+            reader = new StreamReader(stream);
+            while (!reader.EndOfStream)
             {
-                yield break;
-            }
-            else if (string.IsNullOrEmpty(line))
-            {
-                continue;
-            }
-            else if ("data: [DONE]".Equals(line))
-            {
-                break;
-            }
-
-            var data = line[6..];
-            var json = JObject.Parse(data);
-
-            if (!json.ContainsKey("object") || json.Value<string>("object") is not string @object || !"chat.completion.chunk".Equals(@object))
-            {
-                continue;
-            }
-
-            if (json.ContainsKey("usage") && json.Value<JObject>("usage") is JObject usage)
-            {
-                UsageCompletionTokens = usage.Value<int>("completion_tokens");
-                UsagePromptTokens = usage.Value<int>("prompt_tokens");
-                UsageTotalTokens = usage.Value<int>("total_tokens");
-
-                PostParseUsage?.Invoke(new TokenUsage
+                var line = await reader.ReadLineAsync(cancellationToken);
+                if (cancellationToken.IsCancellationRequested)
                 {
-                    PromptTokens = UsagePromptTokens,
-                    CompletionTokens = UsageCompletionTokens,
-                    TotalTokens = UsageTotalTokens,
-                });
-            }
-
-            // by default just use the first choice, technically there may be more
-            if (!json.ContainsKey("choices") || json.Value<JArray>("choices") is not JArray choices || choices.Count < 1 || choices[0] is not JObject choice)
-            {
-                continue;
-            }
-
-            if (string.IsNullOrEmpty(finishReason))
-            {
-                finishReason = choice.Value<string>("finish_reason");
-            }
-
-            if (!choice.ContainsKey("delta") || choice.Value<JObject>("delta") is not JObject delta)
-            {
-                continue;
-            }
-
-            if (string.IsNullOrEmpty(role))
-            {
-                role = delta.Value<string>("role");
-            }
-
-            if (delta.ContainsKey("reasoning_content") && delta.Value<string>("reasoning_content") is string deltaReasoningContent)
-            {
-                if (!seenReasoningContent)
+                    yield break;
+                }
+                else if (string.IsNullOrEmpty(line))
                 {
-                    yield return "<thinking>";
-                    seenReasoningContent = true;
+                    continue;
+                }
+                else if ("data: [DONE]".Equals(line))
+                {
+                    break;
                 }
 
-                yield return deltaReasoningContent;
-                reasoningContentBuffer.Append(deltaReasoningContent);
-            }
+                var data = line[6..];
+                var json = JObject.Parse(data);
 
-            if (delta.ContainsKey("content") && delta.Value<string>("content") is string deltaContent)
-            {
-                if (seenReasoningContent && !seenContent)
+                if (!json.ContainsKey("object") || json.Value<string>("object") is not string @object || !"chat.completion.chunk".Equals(@object))
                 {
-                    yield return "</thinking>\n";
-                    seenContent = true;
+                    continue;
                 }
 
-                yield return deltaContent;
-                contentBuffer.Append(deltaContent);
-            }
-
-            if (delta.ContainsKey("tool_calls") && delta.Value<JArray>("tool_calls") is JArray toolCalls)
-            {
-                foreach (var element in toolCalls)
+                if (json.ContainsKey("usage") && json.Value<JObject>("usage") is JObject usage)
                 {
-                    if (element is not JObject toolCall)
+                    UsageCompletionTokens = usage.Value<int>("completion_tokens");
+                    UsagePromptTokens = usage.Value<int>("prompt_tokens");
+                    UsageTotalTokens = usage.Value<int>("total_tokens");
+
+                    PostParseUsage?.Invoke(new TokenUsage
                     {
-                        continue;
+                        PromptTokens = UsagePromptTokens,
+                        CompletionTokens = UsageCompletionTokens,
+                        TotalTokens = UsageTotalTokens,
+                    });
+                }
+
+                // by default just use the first choice, technically there may be more
+                if (!json.ContainsKey("choices") || json.Value<JArray>("choices") is not JArray choices || choices.Count < 1 || choices[0] is not JObject choice)
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(finishReason))
+                {
+                    finishReason = choice.Value<string>("finish_reason");
+                }
+
+                if (!choice.ContainsKey("delta") || choice.Value<JObject>("delta") is not JObject delta)
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(role))
+                {
+                    role = delta.Value<string>("role");
+                }
+
+                if (delta.ContainsKey("reasoning_content") && delta.Value<string>("reasoning_content") is string deltaReasoningContent)
+                {
+                    if (!seenReasoningContent)
+                    {
+                        yield return "<thinking>";
+                        seenReasoningContent = true;
                     }
 
-                    if (!toolCall.ContainsKey("index") || toolCall.Value<int?>("index") is not int index)
+                    yield return deltaReasoningContent;
+                    reasoningContentBuffer.Append(deltaReasoningContent);
+                }
+
+                if (delta.ContainsKey("content") && delta.Value<string>("content") is string deltaContent)
+                {
+                    if (seenReasoningContent && !seenContent)
                     {
-                        continue;
+                        yield return "</thinking>\n";
+                        seenContent = true;
                     }
 
-                    if (!parsedToolCalls.TryGetValue(index, out Dictionary<string, string>? toolCallData))
-                    {
-                        toolCallData = [];
-                        parsedToolCalls.Add(index, toolCallData);
-                    }
+                    yield return deltaContent;
+                    contentBuffer.Append(deltaContent);
+                }
 
-                    if (toolCall.ContainsKey("id") && toolCall.Value<string>("id") is string id && !toolCallData.ContainsKey("id"))
+                if (delta.ContainsKey("tool_calls") && delta.Value<JArray>("tool_calls") is JArray toolCalls)
+                {
+                    foreach (var element in toolCalls)
                     {
-                        toolCallData.Add("id", id);
-                    }
-
-                    if (toolCall.ContainsKey("type") && toolCall.Value<string>("type") is string type && !toolCallData.ContainsKey("type"))
-                    {
-                        toolCallData.Add("type", type);
-                    }
-
-                    if (toolCall.ContainsKey("function") && toolCall.Value<JObject>("function") is JObject function)
-                    {
-                        if (function.ContainsKey("name") && function.Value<string>("name") is string functionName && !toolCallData.ContainsKey("functionName"))
+                        if (element is not JObject toolCall)
                         {
-                            toolCallData.Add("functionName", functionName);
+                            continue;
                         }
 
-                        if (function.ContainsKey("arguments") && function.Value<string>("arguments") is string functionArguments)
+                        if (!toolCall.ContainsKey("index") || toolCall.Value<int?>("index") is not int index)
                         {
-                            if (!toolCallData.TryAdd("functionArguments", functionArguments))
+                            continue;
+                        }
+
+                        if (!parsedToolCalls.TryGetValue(index, out Dictionary<string, string>? toolCallData))
+                        {
+                            toolCallData = [];
+                            parsedToolCalls.Add(index, toolCallData);
+                        }
+
+                        if (toolCall.ContainsKey("id") && toolCall.Value<string>("id") is string id && !toolCallData.ContainsKey("id"))
+                        {
+                            toolCallData.Add("id", id);
+                        }
+
+                        if (toolCall.ContainsKey("type") && toolCall.Value<string>("type") is string type && !toolCallData.ContainsKey("type"))
+                        {
+                            toolCallData.Add("type", type);
+                        }
+
+                        if (toolCall.ContainsKey("function") && toolCall.Value<JObject>("function") is JObject function)
+                        {
+                            if (function.ContainsKey("name") && function.Value<string>("name") is string functionName && !toolCallData.ContainsKey("functionName"))
                             {
-                                toolCallData["functionArguments"] += functionArguments;
+                                toolCallData.Add("functionName", functionName);
+                            }
+
+                            if (function.ContainsKey("arguments") && function.Value<string>("arguments") is string functionArguments)
+                            {
+                                if (!toolCallData.TryAdd("functionArguments", functionArguments))
+                                {
+                                    toolCallData["functionArguments"] += functionArguments;
+                                }
                             }
                         }
                     }
                 }
             }
         }
-
-        reader.Close();
+        finally
+        {
+            if (reader != null)
+            {
+                reader.Close();
+            }
+        }
 
         if (seenReasoningContent && !seenContent)
         {
