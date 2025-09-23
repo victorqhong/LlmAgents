@@ -23,10 +23,16 @@ var toolsConfigOption = new Option<string>(
     description: "Path to a JSON file with configuration for tool values",
     getDefaultValue: () => "tools.json");
 
+var workingDirectory = new Option<string>(
+    name: "--workingDirectory",
+    description: "Directory which tools will be run by default",
+    getDefaultValue: () => Environment.CurrentDirectory);
+
 var rootCommand = new RootCommand("ToolServer");
 rootCommand.AddOption(listenAddressOption);
 rootCommand.AddOption(listenPortOption);
 rootCommand.AddOption(toolsConfigOption);
+rootCommand.AddOption(workingDirectory);
 rootCommand.SetHandler(RootCommandHandler);
 
 async Task RootCommandHandler(InvocationContext context)
@@ -36,20 +42,21 @@ async Task RootCommandHandler(InvocationContext context)
     var listenAddress = context.ParseResult.GetValueForOption(listenAddressOption);
     var listenPort = context.ParseResult.GetValueForOption(listenPortOption);
     var toolsConfigValue = context.ParseResult.GetValueForOption(toolsConfigOption);
+    var workingDirectoryValue = context.ParseResult.GetValueForOption(workingDirectory);
 
     ArgumentException.ThrowIfNullOrEmpty(listenAddress);
     ArgumentException.ThrowIfNullOrEmpty(toolsConfigValue);
 
-    await RunServer(listenAddress, listenPort, toolsConfigValue, string.Empty, new ConsoleCommunication());
+    await RunServer(listenAddress, listenPort, toolsConfigValue, workingDirectoryValue, new ConsoleCommunication());
 }
 
 return await rootCommand.InvokeAsync(args);
 
-async Task RunServer(string listenAddress, int listenPort, string toolsConfigPath, string basePath, IAgentCommunication agentCommunication, CancellationToken cancellationToken = default)
+async Task RunServer(string listenAddress, int listenPort, string toolsConfigPath, string? workingDirectory, IAgentCommunication agentCommunication, CancellationToken cancellationToken = default)
 {
-    if (string.IsNullOrEmpty(basePath))
+    if (string.IsNullOrEmpty(workingDirectory))
     {
-        basePath = Environment.CurrentDirectory;
+        workingDirectory = Environment.CurrentDirectory;
     }
 
     var toolsFile = JObject.Parse(File.ReadAllText(toolsConfigPath));
@@ -63,7 +70,7 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
     toolFactory.Register(stateDatabase);
     toolFactory.Register<IToolEventBus>(toolEventBus);
 
-    toolFactory.AddParameter("basePath", basePath);
+    toolFactory.AddParameter("basePath", workingDirectory);
 
     var tools = toolFactory.Load() ?? [];
     var mcpTools = tools.Select(tool => new McpToolAdapter(tool));

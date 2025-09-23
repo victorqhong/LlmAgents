@@ -103,6 +103,11 @@ public class FileList : Tool
 
             path = Path.GetFullPath(path);
 
+            if (Directory.Exists(path) && !Path.EndsInDirectorySeparator(path))
+            {
+                path += Path.DirectorySeparatorChar;
+            }
+
             if (restrictToBasePath && !path.StartsWith(basePath))
             {
                 result.Add("error", $"cannot list files outside {basePath}");
