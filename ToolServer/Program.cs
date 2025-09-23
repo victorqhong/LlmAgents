@@ -1,13 +1,10 @@
 ﻿using LlmAgents.Communication;
-using LlmAgents.LlmApi;
+using LlmAgents.State;
 using LlmAgents.Tools;
-using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
-using StreamJsonRpc;
 using System.CommandLine;
 using System.CommandLine.Invocation;
-using System.Net;
-using System.Net.Sockets;
+using ToolServer;
 
 using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
@@ -43,112 +40,48 @@ async Task RootCommandHandler(InvocationContext context)
     ArgumentException.ThrowIfNullOrEmpty(listenAddress);
     ArgumentException.ThrowIfNullOrEmpty(toolsConfigValue);
 
-    await RunServer(listenAddress, listenPort, toolsConfigValue, cancellationToken);
+    await RunServer(listenAddress, listenPort, toolsConfigValue, string.Empty, new ConsoleCommunication());
 }
 
 return await rootCommand.InvokeAsync(args);
 
-async Task RunServer(string listenAddress, int listenPort, string toolsConfigValue, CancellationToken cancellationToken)
+async Task RunServer(string listenAddress, int listenPort, string toolsConfigPath, string basePath, IAgentCommunication agentCommunication, CancellationToken cancellationToken = default)
 {
-    var listener = new TcpListener(IPAddress.Parse(listenAddress), listenPort);
-    listener.Start();
-
-    try
+    if (string.IsNullOrEmpty(basePath))
     {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            var client = await listener.AcceptTcpClientAsync(cancellationToken);
-            if (cancellationToken.IsCancellationRequested)
-            {
-                break;
-            }
-
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    using (client)
-                    {
-                        using var stream = client.GetStream();
-                        var rpc = new JsonRpc(stream);
-                        var agentCommunication = rpc.Attach<IAgentCommunication>();
-                        var messageProvider = rpc.Attach<ILlmApiMessageProvider>();
-                        var toolService = new JsonRpcToolService(loggerFactory, agentCommunication, messageProvider, toolsConfigValue);
-                        rpc.AddLocalRpcTarget<IJsonRpcToolService>(toolService, null);
-                        rpc.StartListening();
-                        await rpc.Completion;
-                    }
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                }
-                finally
-                {
-                    Console.WriteLine("client disconnected");
-                }
-            }, cancellationToken);
-        }
-    }
-    finally
-    {
-        listener.Stop();
-    }
-}
-
-public class JsonRpcToolService : IJsonRpcToolService
-{
-    private readonly Dictionary<string, Tool> toolMap = new Dictionary<string, Tool>();
-
-    public JsonRpcToolService(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, ILlmApiMessageProvider messageProvider, string toolsConfigPath, string? basePath = null)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(toolsConfigPath, nameof(toolsConfigPath));
-
-        if (string.IsNullOrEmpty(basePath))
-        {
-            basePath = Environment.CurrentDirectory;
-        }
-
-        var toolsFile = JObject.Parse(File.ReadAllText(toolsConfigPath));
-        var toolFactory = new ToolFactory(loggerFactory, toolsFile);
-
-        toolFactory.Register(agentCommunication);
-        toolFactory.Register(loggerFactory);
-        toolFactory.Register(messageProvider);
-
-        toolFactory.AddParameter("basePath", basePath);
-
-        var tools = toolFactory.Load() ?? [];
-        for (int i = 0; i < tools.Length; i++)
-        {
-            toolMap.Add(tools[i].Name, tools[i]);
-        }
+        basePath = Environment.CurrentDirectory;
     }
 
-    public async Task<string?> CallTool(string name, string parameters)
-    {
-        if (!toolMap.TryGetValue(name, out Tool? tool))
-        {
-            return null;
-        }
+    var toolsFile = JObject.Parse(File.ReadAllText(toolsConfigPath));
+    var toolFactory = new ToolFactory(loggerFactory, toolsFile);
 
-        var result = await tool.Function(JObject.Parse(parameters));
-        return result.ToString();
-    }
+    var stateDatabase = new StateDatabase(loggerFactory, ":memory:");
+    var toolEventBus = new ToolEventBus();
 
-    public Task<string[]> GetToolNames()
-    {
-        return Task.FromResult(toolMap.Keys.ToArray());
-    }
+    toolFactory.Register(agentCommunication);
+    toolFactory.Register(loggerFactory);
+    toolFactory.Register(stateDatabase);
+    toolFactory.Register<IToolEventBus>(toolEventBus);
 
-    public Task<string?> GetToolSchema(string name)
-    {
-        if (!toolMap.TryGetValue(name, out Tool? tool))
-        {
-            return Task.FromResult<string?>(null);
-        }
+    toolFactory.AddParameter("basePath", basePath);
 
-        var result = tool.Schema.ToString();
-        return Task.FromResult<string?>(result);
-    }
+    var tools = toolFactory.Load() ?? [];
+    var mcpTools = tools.Select(tool => new McpToolAdapter(tool));
+
+    var builder = WebApplication.CreateBuilder(args);
+
+    builder.WebHost
+        .UseUrls($"http://{listenAddress}:{listenPort}");
+
+    builder.Services
+        .AddMcpServer(options => { })
+        .WithHttpTransport()
+        .WithStdioServerTransport()
+        .WithTools(mcpTools);
+
+    var app = builder.Build();
+
+    app.MapMcp();
+
+    await app.RunAsync(cancellationToken);
 }
