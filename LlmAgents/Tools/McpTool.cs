@@ -34,6 +34,14 @@ public class McpTool : Tool
     {
         var arguments = parameters.ToObject<IReadOnlyDictionary<string, object?>>();
         var toolCallResult = await mcpClient.CallToolAsync(mcpClientTool.Name, arguments);
-        return JToken.Parse(toolCallResult.StructuredContent.ToString());
+
+        if (toolCallResult.StructuredContent != null)
+        {
+            return JToken.Parse(toolCallResult.StructuredContent.ToString());
+        }
+        else
+        {
+            throw new NotImplementedException();
+        }
     }
 }
