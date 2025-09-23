@@ -5,12 +5,11 @@ using LlmAgents.LlmApi;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Client;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using StreamJsonRpc;
 using System.CommandLine;
 using System.CommandLine.Invocation;
-using System.Net;
-using System.Net.Sockets;
 
 namespace ConsoleAgent.Commands;
 
@@ -130,7 +129,7 @@ internal class DefaultCommand : RootCommand
         var agent = await CreateAgent(loggerFactory, consoleCommunication,
             apiEndpoint, apiKey, apiModel, contextSize, maxCompletionTokens,
             agentId, workingDirectoryValue, storageDirectoryValue, persistent, systemPrompt, sessionId,
-            toolsFilePath: toolsConfigValue, toolServerAddress: toolServerAddressValue, toolServerPort: toolServerPortValue);
+            toolsFilePath: toolsConfigValue, new Uri($"http://{toolServerAddressValue}:{toolServerPortValue}"));
 
         agent.StreamOutput = true;
         agent.PreWaitForContent = () => { Console.Write("> "); };
@@ -145,7 +144,7 @@ internal class DefaultCommand : RootCommand
         ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
         string apiEndpoint, string apiKey, string apiModel, int contextSize, int maxCompletionTokens,
         string agentId, string workingDirectory, string storageDirectory, bool persistent = false, string? systemPrompt = null, string? sessionId = null,
-        string? toolsFilePath = null, string? toolServerAddress = null, int toolServerPort = 5000)
+        string? toolsFilePath = null, Uri? toolServerUri = null)
     {
         var llmApi = new LlmApiOpenAi(loggerFactory, apiEndpoint, apiKey, apiModel)
         {
@@ -191,37 +190,17 @@ internal class DefaultCommand : RootCommand
 
         Tool[]? tools = null;
 
-        if (!string.IsNullOrEmpty(toolServerAddress))
+        if (toolServerUri != null)
         {
-            try
+            var clientTransport = new SseClientTransport(new SseClientTransportOptions()
             {
-                var tcpClient = new TcpClient();
-                await tcpClient.ConnectAsync(IPAddress.Parse(toolServerAddress), toolServerPort);
-                var stream = tcpClient.GetStream();
+                Endpoint = toolServerUri
+            });
 
-                var rpc = new JsonRpc(stream);
+            var client = await McpClientFactory.CreateAsync(clientTransport);
+            var mcpTools = await client.ListToolsAsync();
 
-                rpc.AddLocalRpcTarget(agentCommunication);
-                rpc.AddLocalRpcTarget<ILlmApiMessageProvider>(llmApi, null);
-
-                rpc.StartListening();
-
-                var jsonRpcToolService = rpc.Attach<IJsonRpcToolService>();
-
-                var toolNames = await jsonRpcToolService.GetToolNames();
-
-                var remoteTools = new RemoteTool[toolNames.Length];
-                for (int i = 0; i < remoteTools.Length; i++)
-                {
-                    remoteTools[i] = new RemoteTool(toolNames[i], jsonRpcToolService);
-                }
-
-                tools = remoteTools;
-            }
-            catch
-            {
-                tools = null;
-            }
+            tools = mcpTools.Select(mcpClientTool => new McpTool(mcpClientTool, client)).ToArray();
         }
 
         if (tools == null && !string.IsNullOrEmpty(toolsFilePath) && File.Exists(toolsFilePath))
