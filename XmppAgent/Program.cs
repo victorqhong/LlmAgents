@@ -5,6 +5,7 @@ using LlmAgents.LlmApi;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Client;
 using Newtonsoft.Json.Linq;
 using System.CommandLine;
 using System.CommandLine.Invocation;
@@ -76,6 +77,10 @@ var toolsConfigOption = new Option<string>(
     description: "Path to a JSON file with configuration for tool values",
     getDefaultValue: () => Environment.GetEnvironmentVariable("TOOLS_CONFIG", environmentVariableTarget) ?? "tools.json");
 
+var toolServerAddressOption = new Option<string>(
+    name: "--toolServerAddress",
+    description: "Address of the tool server (e.g. http://localhost:5000)");
+
 var workingDirectoryOption = new Option<string>(
     name: "--workingDirectory",
     description: "",
@@ -95,6 +100,7 @@ var agentsConfigOption = new Option<string>(
 var rootCommand = new RootCommand("XmppAgent");
 rootCommand.SetHandler(RootCommandHander);
 rootCommand.AddOption(agentsConfigOption);
+rootCommand.AddOption(toolServerAddressOption);
 
 var agentCommand = new Command("agent", "Run a single agent.");
 agentCommand.SetHandler(AgentCommandHandler);
@@ -111,6 +117,7 @@ agentCommand.AddOption(xmppTargetJidOption);
 agentCommand.AddOption(xmppTrustHostOption);
 agentCommand.AddOption(xmppConfigOption);
 agentCommand.AddOption(toolsConfigOption);
+agentCommand.AddOption(toolServerAddressOption);
 agentCommand.AddOption(workingDirectoryOption);
 agentCommand.AddOption(agentDirectoryOption);
 rootCommand.AddCommand(agentCommand);
@@ -123,6 +130,8 @@ async Task RootCommandHander(InvocationContext context)
         Console.WriteLine("agentsConfig is invalid or does not exist");
         return;
     }
+
+    var toolServerAddress = context.ParseResult.GetValueForOption(toolServerAddressOption);
 
     var agentTasks = new List<Task>();
 
@@ -150,7 +159,7 @@ async Task RootCommandHander(InvocationContext context)
             continue;
         }
 
-        agentTasks.Add(RunAgent(agentParameters));
+        agentTasks.Add(RunAgent(agentParameters, toolServerAddress, context.GetCancellationToken()));
     }
 
     if (agentTasks.Count < 1)
@@ -180,6 +189,7 @@ async Task AgentCommandHandler(InvocationContext context)
     var systemPromptFile = context.ParseResult.GetValueForOption(systemPromptOption);
     var workingDirectoryValue = context.ParseResult.GetValueForOption(workingDirectoryOption) ?? Environment.CurrentDirectory;
     var agentDirectoryValue = context.ParseResult.GetValueForOption(agentDirectoryOption);
+    var toolServerAddress = context.ParseResult.GetValueForOption(toolServerAddressOption);
 
     if (!string.IsNullOrEmpty(apiConfigValue) && File.Exists(apiConfigValue) && !string.IsNullOrEmpty(xmppConfigValue) && File.Exists(xmppConfigValue) && !string.IsNullOrEmpty(toolsConfigValue) && File.Exists(toolsConfigValue))
     {
@@ -205,11 +215,11 @@ async Task AgentCommandHandler(InvocationContext context)
 
     if (parameters != null)
     {
-        await RunAgent(parameters);
+        await RunAgent(parameters, toolServerAddress, context.GetCancellationToken());
     }
 }
 
-Task RunAgent(AgentParameters agentParameters, CancellationToken cancellationToken = default)
+Task RunAgent(AgentParameters agentParameters, string? toolServerAddress = null, CancellationToken cancellationToken = default)
 {
     return Task.Run(async () =>
     {
@@ -227,9 +237,10 @@ Task RunAgent(AgentParameters agentParameters, CancellationToken cancellationTok
 
             using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
 
-        var agent = CreateAgent(loggerFactory, xmppCommunication, agentParameters.apiParameters, agentParameters.agentId, agentParameters.persistent,
+        var agent = await CreateAgent(loggerFactory, xmppCommunication, agentParameters.apiParameters, agentParameters.agentId, agentParameters.persistent,
             workingDirectory: agentParameters.workingDirectory,
             toolsFilePath: agentParameters.toolsConfigPath,
+            toolServerAddress: toolServerAddress,
             agentDirectory: agentParameters.agentDirectory,
             systemPromptFile: agentParameters.systemPromptFile);
 
@@ -244,8 +255,8 @@ Task RunAgent(AgentParameters agentParameters, CancellationToken cancellationTok
     }, cancellationToken);
 }
 
-LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, ApiParameters apiParameters,
-    string agentId, bool persistent = false, string? systemPromptFile = null, string? workingDirectory = null, string? agentDirectory = null, string? toolsFilePath = null)
+async Task<LlmAgent> CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, ApiParameters apiParameters,
+    string agentId, bool persistent = false, string? systemPromptFile = null, string? workingDirectory = null, string? agentDirectory = null, string? toolsFilePath = null, string? toolServerAddress = null)
 {
     var llmApi = new LlmApiOpenAi(loggerFactory, apiParameters.apiEndpoint, apiParameters.apiKey, apiParameters.apiModel);
 
@@ -255,7 +266,22 @@ LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentComm
         PersistentMessagesPath = agentDirectory ?? Environment.CurrentDirectory
     };
 
-    if (!string.IsNullOrEmpty(toolsFilePath))
+    Tool[]? tools = null;
+
+    if (!string.IsNullOrEmpty(toolServerAddress))
+    {
+        var clientTransport = new SseClientTransport(new SseClientTransportOptions()
+        {
+            Endpoint = new Uri(toolServerAddress)
+        });
+
+        var client = await McpClientFactory.CreateAsync(clientTransport);
+        var mcpTools = await client.ListToolsAsync();
+
+        tools = mcpTools.Select(mcpClientTool => new McpTool(mcpClientTool, client)).ToArray();
+    }
+
+    if (tools == null && !string.IsNullOrEmpty(toolsFilePath))
     {
         var stateDatabase = new StateDatabase(loggerFactory, Path.Join(agentDirectory, $"{agentId}.db"));
         var toolEventBus = new ToolEventBus();
@@ -270,7 +296,7 @@ LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentComm
 
         toolFactory.AddParameter("basePath", workingDirectory ?? Environment.CurrentDirectory);
 
-        var tools = toolFactory.Load();
+        tools = toolFactory.Load();
         if (tools != null)
         {
             agent.AddTool(tools);
