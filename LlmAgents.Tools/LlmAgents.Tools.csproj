@@ -6,6 +6,13 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <Authors>Victor Hong</Authors>
+    <Description></Description>
+    <RepositoryUrl>https://github.com/victorqhong/LlmAgents</RepositoryUrl>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\LlmAgents\LlmAgents.csproj" />
   </ItemGroup>
