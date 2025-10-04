@@ -1,0 +1,54 @@
+name: Publish NuGet Package
+
+permissions:
+  packages: write
+  contents: read
+
+on:
+  push:
+    branches:
+      - master
+  release:
+    types: [published]
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+
+    - name: Test
+      run: dotnet test --no-build --configuration Release
+
+    - name: Set package version
+      id: set_version
+      run: |
+        if [[ "${{ github.event_name }}" == "push" ]]; then
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          echo "PACKAGE_VERSION=0.0.1-$SHORT_SHA" >> $GITHUB_OUTPUT
+        else
+          TAG_VERSION=${{ github.event.release.tag_name }}
+          if [[ $TAG_VERSION == v* ]]; then
+            TAG_VERSION=${TAG_VERSION#v}
+          fi
+          echo "PACKAGE_VERSION=$TAG_VERSION" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Pack
+      run: dotnet pack --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.set_version.outputs.PACKAGE_VERSION }}
+
+    - name: Publish to NuGet
+      run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.GITHUB_TOKEN }} --source https://nuget.pkg.github.com/victorqhong/index.json

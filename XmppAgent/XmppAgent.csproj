@@ -6,10 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackAsTool>true</PackAsTool>
-    <PackageId>XmppAgent</PackageId>
-    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <Authors>Victor Hong</Authors>
     <Description>Exposes a LLM agent on an XMPP server</Description>
+    <RepositoryUrl>https://github.com/victorqhong/LlmAgents</RepositoryUrl>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>
