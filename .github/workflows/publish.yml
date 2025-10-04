@@ -50,5 +50,11 @@ jobs:
     - name: Pack
       run: dotnet pack --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.set_version.outputs.PACKAGE_VERSION }}
 
+    - name: Upload NuGet packages
+      uses: actions/upload-artifact@v4
+      with:
+        name: nupkgs
+        path: ./nupkgs/**/*.nupkg
+
     - name: Publish to NuGet
       run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.GITHUB_TOKEN }} --source https://nuget.pkg.github.com/victorqhong/index.json
