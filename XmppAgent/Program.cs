@@ -35,6 +35,11 @@ var apiContextSizeOption = new Option<int>(
     description: "The context window size available from the API"
 );
 
+var maxCompletionTokensOption = new Option<int>(
+    name: "--maxCompletionTokens",
+    description: "Maximum number of tokens in a completion"
+);
+
 var persistentOption = new Option<bool>(
     name: "--persistent",
     description: "Whether messages are saved",
@@ -107,6 +112,7 @@ agentCommand.AddOption(apiEndpointOption);
 agentCommand.AddOption(apiKeyOption);
 agentCommand.AddOption(apiModelOption);
 agentCommand.AddOption(apiContextSizeOption);
+agentCommand.AddOption(maxCompletionTokensOption);
 agentCommand.AddOption(apiConfigOption);
 agentCommand.AddOption(persistentOption);
 agentCommand.AddOption(systemPromptOption);
@@ -199,6 +205,7 @@ async Task AgentCommandHandler(InvocationContext context)
         var apiKey = context.ParseResult.GetValueForOption(apiKeyOption);
         var apiModel = context.ParseResult.GetValueForOption(apiModelOption);
         var apiContextSize = context.ParseResult.GetValueForOption(apiContextSizeOption);
+        var maxCompletionTokens = context.ParseResult.GetValueForOption(maxCompletionTokensOption);
 
         var xmppDomain = context.ParseResult.GetValueForOption(xmppDomainOption);
         var xmppUsername = context.ParseResult.GetValueForOption(xmppUsernameOption);
@@ -206,7 +213,7 @@ async Task AgentCommandHandler(InvocationContext context)
         var xmppTargetJid = context.ParseResult.GetValueForOption(xmppTargetJidOption);
         var xmppTrustHost = context.ParseResult.GetValueForOption(xmppTrustHostOption);
 
-        parameters = AgentParameters.Create(agentIdValue, apiEndpoint, apiKey, apiModel, apiContextSize,
+        parameters = AgentParameters.Create(agentIdValue, apiEndpoint, apiKey, apiModel, apiContextSize, maxCompletionTokens,
             xmppDomain, xmppUsername, xmppPassword, xmppTargetJid, xmppTrustHost,
             toolsConfigValue, agentDirectoryValue, workingDirectoryValue, persistent, systemPromptFile);
     }
@@ -255,12 +262,16 @@ Task RunAgent(AgentParameters agentParameters, CancellationToken cancellationTok
 LlmAgent CreateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, ApiParameters apiParameters,
     string agentId, bool persistent = false, string? systemPromptFile = null, string? workingDirectory = null, string? agentDirectory = null, string? toolsFilePath = null)
 {
-    var llmApi = new LlmApiOpenAi(loggerFactory, apiParameters.apiEndpoint, apiParameters.apiKey, apiParameters.apiModel);
+    var llmApi = new LlmApiOpenAi(loggerFactory, apiParameters.apiEndpoint, apiParameters.apiKey, apiParameters.apiModel)
+    {
+        ContextSize = apiParameters.contextSize,
+        MaxCompletionTokens = apiParameters.maxCompletionTokens,
+    };
 
     var agent = new LlmAgent(agentId, llmApi, agentCommunication)
     {
         Persistent = persistent,
-        PersistentMessagesPath = agentDirectory ?? Environment.CurrentDirectory
+        PersistentMessagesPath = agentDirectory ?? Environment.CurrentDirectory,
     };
 
     if (!string.IsNullOrEmpty(toolsFilePath))
@@ -312,8 +323,9 @@ class ApiParameters
     public string apiKey = string.Empty;
     public string apiModel = string.Empty;
     public int contextSize = 8196;
+    public int maxCompletionTokens = 8196;
 
-    public static ApiParameters? Create(string? apiEndpoint, string? apiKey, string? apiModel, int contextSize = 8196)
+    public static ApiParameters? Create(string? apiEndpoint, string? apiKey, string? apiModel, int contextSize = 8196, int maxCompletionTokens = 8196)
     {
         if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(apiModel))
         {
@@ -326,7 +338,8 @@ class ApiParameters
             apiEndpoint = apiEndpoint,
             apiKey = apiKey,
             apiModel = apiModel,
-            contextSize = contextSize
+            contextSize = contextSize,
+            maxCompletionTokens = maxCompletionTokens
         };
     }
 }
@@ -382,11 +395,11 @@ class AgentParameters
 
     public static AgentParameters? Create(
         string agentId,
-        string? apiEndpoint, string? apiKey, string? apiModel, int contextSize,
+        string? apiEndpoint, string? apiKey, string? apiModel, int contextSize, int maxCompletionTokens,
         string? xmppDomain, string? xmppUsername, string? xmppPassword, string? xmppTargetJid, bool xmppTrustHost,
         string? toolsConfigPath, string? agentDirectory, string? workingDirectory, bool persistent, string? systemPromptFile)
     {
-        var apiParameters = ApiParameters.Create(apiEndpoint, apiKey, apiModel, contextSize);
+        var apiParameters = ApiParameters.Create(apiEndpoint, apiKey, apiModel, contextSize, maxCompletionTokens);
         if (apiParameters == null)
         {
             return null;
@@ -427,12 +440,13 @@ class AgentParameters
         var apiKey = apiConfig.Value<string>("apiKey");
         var apiModel = apiConfig.Value<string>("apiModel");
         var contextSize = apiConfig.Value<int>("contextSize");
+        var maxCompletionTokens = apiConfig.Value<int>("maxCompletionTokens");
         var xmppDomain = xmppConfig.Value<string>("xmppDomain");
         var xmppUsername = xmppConfig.Value<string>("xmppUsername");
         var xmppPassword = xmppConfig.Value<string>("xmppPassword");
         var xmppTargetJid = xmppConfig.Value<string>("xmppTargetJid");
         var xmppTrustHost = xmppConfig.Value<bool>("xmppTrustHost");
 
-        return Create(agentId, apiEndpoint, apiKey, apiModel, contextSize, xmppDomain, xmppUsername, xmppPassword, xmppTargetJid, xmppTrustHost, toolsConfigPath, agentDirectory, workingDirectory, persistent, systemPromptFile);
+        return Create(agentId, apiEndpoint, apiKey, apiModel, contextSize, maxCompletionTokens, xmppDomain, xmppUsername, xmppPassword, xmppTargetJid, xmppTrustHost, toolsConfigPath, agentDirectory, workingDirectory, persistent, systemPromptFile);
     }
 }
