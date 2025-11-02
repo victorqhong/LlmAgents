@@ -129,7 +129,7 @@ internal class DefaultCommand : RootCommand
         var agent = await CreateAgent(loggerFactory, consoleCommunication,
             apiEndpoint, apiKey, apiModel, contextSize, maxCompletionTokens,
             agentId, workingDirectoryValue, storageDirectoryValue, persistent, systemPrompt, sessionId,
-            toolsFilePath: toolsConfigValue, new Uri($"http://{toolServerAddressValue}:{toolServerPortValue}"));
+            toolsFilePath: toolsConfigValue, toolServerAddressValue, toolServerPortValue);
 
         agent.StreamOutput = true;
         agent.PreWaitForContent = () => { Console.Write("> "); };
@@ -144,7 +144,7 @@ internal class DefaultCommand : RootCommand
         ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
         string apiEndpoint, string apiKey, string apiModel, int contextSize, int maxCompletionTokens,
         string agentId, string workingDirectory, string storageDirectory, bool persistent = false, string? systemPrompt = null, string? sessionId = null,
-        string? toolsFilePath = null, Uri? toolServerUri = null)
+        string? toolsFilePath = null, string? toolServerAddress = null, int? toolServerPort = null)
     {
         var llmApi = new LlmApiOpenAi(loggerFactory, apiEndpoint, apiKey, apiModel)
         {
@@ -190,11 +190,11 @@ internal class DefaultCommand : RootCommand
 
         Tool[]? tools = null;
 
-        if (toolServerUri != null)
+        if (!string.IsNullOrEmpty(toolServerAddress))
         {
             var clientTransport = new SseClientTransport(new SseClientTransportOptions()
             {
-                Endpoint = toolServerUri
+                Endpoint = new Uri($"http://{toolServerAddress}:{toolServerPort}")
             });
 
             var client = await McpClientFactory.CreateAsync(clientTransport);
