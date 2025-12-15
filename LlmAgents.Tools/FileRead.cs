@@ -20,7 +20,7 @@ public class FileRead : Tool
         currentDirectory = basePath;
 
         var toolEventBus = toolFactory.Resolve<IToolEventBus>();
-        toolEventBus.SubscribeToolEvent<ChangeDirectory>(OnChangeDirectory);
+        toolEventBus.SubscribeToolEvent<DirectoryChange>(OnChangeDirectory);
     }
 
     private Task OnChangeDirectory(ToolEvent e)

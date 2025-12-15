@@ -4,14 +4,14 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
 
-public class ChangeDirectory : Tool
+public class DirectoryChange : Tool
 {
     private readonly IToolEventBus toolEventBus;
 
     private readonly string basePath;
     private readonly bool restrictToBasePath;
 
-    public ChangeDirectory(ToolFactory toolFactory)
+    public DirectoryChange(ToolFactory toolFactory)
         : base(toolFactory)
     {
         toolEventBus = toolFactory.Resolve<IToolEventBus>();
@@ -94,12 +94,12 @@ public class ChangeDirectory : Tool
 
     public override void Save(string sessionId, State.StateDatabase stateDatabase)
     {
-        stateDatabase.SetState(sessionId, $"{nameof(ChangeDirectory)}:{nameof(CurrentDirectory)}", CurrentDirectory);
+        stateDatabase.SetState(sessionId, $"{nameof(DirectoryChange)}:{nameof(CurrentDirectory)}", CurrentDirectory);
     }
 
     public override void Load(string sessionId, State.StateDatabase stateDatabase)
     {
-        CurrentDirectory = stateDatabase.GetSessionState(sessionId, $"{nameof(ChangeDirectory)}:{nameof(CurrentDirectory)}") ?? CurrentDirectory;
+        CurrentDirectory = stateDatabase.GetSessionState(sessionId, $"{nameof(DirectoryChange)}:{nameof(CurrentDirectory)}") ?? CurrentDirectory;
         toolEventBus.PostToolEvent(new Events.ChangeDirectoryEvent { Sender = this, Directory = CurrentDirectory });
     }
 }
