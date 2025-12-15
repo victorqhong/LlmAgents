@@ -113,13 +113,21 @@ public class ToolFactory
             return null;
         }
 
-        var result = Activator.CreateInstance(toolType, this);
-        if (result is not Tool tool)
+        try
         {
+            var result = Activator.CreateInstance(toolType, this);
+            if (result is not Tool tool)
+            {
+                return null;
+            }
+
+            return tool;
+        }
+        catch (Exception e)
+        {
+            log.LogError(e, "Exception while creating tool of type: {type}", toolType.FullName);
             return null;
         }
-
-        return tool;
     }
 
     public Tool[]? Load(Session? session = null, StateDatabase? stateDatabase = null)
