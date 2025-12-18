@@ -16,6 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\LlmAgents.CommandLineParser\LlmAgents.CommandLineParser.csproj" />
     <ProjectReference Include="..\LlmAgents\LlmAgents.csproj" />
   </ItemGroup>
 

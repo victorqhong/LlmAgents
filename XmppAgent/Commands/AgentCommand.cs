@@ -1,27 +1,24 @@
 ﻿using LlmAgents;
-using LlmAgents.Agents;
 using LlmAgents.CommandLineParser;
-using LlmAgents.Communication;
 using Microsoft.Extensions.Logging;
 using System.CommandLine;
 using System.CommandLine.Invocation;
 
 using LlmAgentsOptions = LlmAgents.CommandLineParser.Options;
-using Parser = LlmAgents.CommandLineParser.Parser;
+using XmppOptions = XmppAgent.Options;
 
-namespace ConsoleAgent.Commands;
+namespace XmppAgent.Commands;
 
-internal class DefaultCommand : RootCommand
+internal class AgentCommand : Command
 {
     private readonly ILoggerFactory loggerFactory;
 
-    public DefaultCommand(ILoggerFactory loggerFactory)
-        : base("ConsoleAgent - runs an LLM agent in the console")
+    public AgentCommand(ILoggerFactory loggerFactory)
+        : base("agent", "Run a single XMPP agent")
     {
         this.loggerFactory = loggerFactory;
 
         this.SetHandler(CommandHandler);
-        AddOption(LlmAgentsOptions.AgentId);
         AddOption(LlmAgentsOptions.ApiEndpoint);
         AddOption(LlmAgentsOptions.ApiKey);
         AddOption(LlmAgentsOptions.ApiModel);
@@ -30,20 +27,25 @@ internal class DefaultCommand : RootCommand
         AddOption(LlmAgentsOptions.ApiConfig);
         AddOption(LlmAgentsOptions.Persistent);
         AddOption(LlmAgentsOptions.SystemPromptFile);
-        AddOption(LlmAgentsOptions.WorkingDirectory);
-        AddOption(LlmAgentsOptions.StorageDirectory);
-        AddOption(LlmAgentsOptions.SessionId);
-        AddOption(LlmAgentsOptions.StreamOutput);
         AddOption(LlmAgentsOptions.ToolsConfig);
         AddOption(LlmAgentsOptions.ToolServerAddress);
-        AddOption(LlmAgentsOptions.ToolServerPort);
+        AddOption(LlmAgentsOptions.WorkingDirectory);
+        AddOption(LlmAgentsOptions.StorageDirectory);
+        AddOption(LlmAgentsOptions.AgentId);
+
+        AddOption(XmppOptions.XmppDomain);
+        AddOption(XmppOptions.XmppUsername);
+        AddOption(XmppOptions.XmppPassword);
+        AddOption(XmppOptions.XmppTargetJid);
+        AddOption(XmppOptions.XmppTrustHost);
+        AddOption(XmppOptions.XmppConfig);
     }
 
     private async Task CommandHandler(InvocationContext context)
     {
-        var logger = loggerFactory.CreateLogger(nameof(ConsoleAgent));
+        var logger = loggerFactory.CreateLogger(nameof(XmppAgent));
 
-        var apiParameters = Parser.ParseApiParameters(context) ?? Config.InteractiveApiConfigSetup();
+        var apiParameters = Parser.ParseApiParameters(context);
         if (apiParameters == null)
         {
             Console.Error.WriteLine("apiEndpoint, apiKey, and/or apiModel is null or empty.");
@@ -70,11 +72,6 @@ internal class DefaultCommand : RootCommand
         }
 
         var toolParameters = Parser.ParseToolParameters(context);
-        if (string.IsNullOrEmpty(toolParameters.ToolsConfig) || !File.Exists(toolParameters.ToolsConfig))
-        {
-            toolParameters.ToolsConfig = Config.InteractiveToolsConfigSetup();
-        }
-
         var sessionParameters = Parser.ParseSessionParameters(context);
 
         string? systemPrompt = Prompts.DefaultSystemPrompt;
@@ -83,15 +80,13 @@ internal class DefaultCommand : RootCommand
             systemPrompt = File.ReadAllText(sessionParameters.SystemPromptFile);
         }
 
-        var consoleCommunication = new ConsoleCommunication();
+        var xmppParameters = XmppParameters.ParseXmppParameters(context);
+        if (xmppParameters == null)
+        {
+            logger.LogError("xmppParameters not configured correctly");
+            return;
+        }
 
-        var agent = await LlmAgentFactory.CreateAgent(loggerFactory, consoleCommunication, apiParameters, agentParameters, toolParameters, sessionParameters);
-
-        agent.PreWaitForContent = () => { Console.Write("> "); };
-        agent.llmApi.PostParseUsage += (usage) => { Console.WriteLine(); logger.LogInformation("PromptTokens: {PromptTokens}, CompletionTokens: {UsageCompletionTokens}, TotalTokens: {UsageTotalTokens}, Context Used: {ContextUsedPercent}", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, ((double)usage.TotalTokens / agent.llmApi.ContextSize).ToString("P")); };
-
-        var cancellationToken = context.GetCancellationToken();
-
-        await agent.Run(cancellationToken);
+        await AgentFactory.RunAgent(apiParameters, agentParameters, toolParameters, sessionParameters, xmppParameters, context.GetCancellationToken());
     }
 }

@@ -12,6 +12,13 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
 {
     private readonly ILogger Log;
 
+    public LlmApiOpenAi(ILoggerFactory loggerFactory, LlmApiOpenAiParameters parameters, List<JObject>? messages = null)
+        : this(loggerFactory, parameters.ApiEndpoint, parameters.ApiKey, parameters.ApiModel, messages)
+    {
+        ContextSize = parameters.ContextSize;
+        MaxCompletionTokens = parameters.MaxCompletionTokens;
+    }
+
     public LlmApiOpenAi(ILoggerFactory loggerFactory, string apiEndpoint, string apiKey, string model, List<JObject>? messages = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(apiEndpoint);
@@ -563,6 +570,8 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
                 { "include_usage", true }
             });
         }
+
+        payload.Add("skip_special_tokens", false);
 
         return payload.ToString(Newtonsoft.Json.Formatting.None);
     }
