@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 using System.CommandLine;
 using System.CommandLine.Invocation;
 
+using LlmAgentsOptions = LlmAgents.CommandLineParser.Options;
+
 namespace ConsoleAgent.Commands;
 
 internal class SessionsCommand : Command
@@ -18,13 +20,13 @@ internal class SessionsCommand : Command
 
         this.SetHandler(CommandHandler);
         AddArgument(sessionsAgentIdArgument);
-        AddOption(ConsoleAgent.Options.StorageDirectory);
+        AddOption(LlmAgentsOptions.StorageDirectory);
     }
 
     private void CommandHandler(InvocationContext context)
     {
         var agentId = context.ParseResult.GetValueForArgument(sessionsAgentIdArgument);
-        var storageDirectory = context.ParseResult.GetValueForOption(ConsoleAgent.Options.StorageDirectory);
+        var storageDirectory = context.ParseResult.GetValueForOption(LlmAgentsOptions.StorageDirectory);
 
         if (storageDirectory == null)
         {

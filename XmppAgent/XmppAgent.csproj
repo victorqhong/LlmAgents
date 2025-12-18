@@ -16,10 +16,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\LlmAgents.CommandLineParser\LlmAgents.CommandLineParser.csproj" />
     <ProjectReference Include="..\LlmAgents\LlmAgents.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
     <PackageReference Include="XmppDotNet" Version="3.2.5" />
     <PackageReference Include="XmppDotNet.Extensions" Version="3.2.5" />

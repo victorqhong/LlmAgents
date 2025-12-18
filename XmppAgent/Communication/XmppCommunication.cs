@@ -31,7 +31,7 @@ public class XmppCommunication : IAgentCommunication
     private readonly FileTransferStateMachine fileTransferStateMachine;
 
     public XmppCommunication(XmppParameters xmppParameters)
-        : this(xmppParameters.xmppUsername, xmppParameters.xmppDomain, xmppParameters.xmppPassword, null, null, null, xmppParameters.xmppTrustHost)
+        : this(xmppParameters.XmppUsername, xmppParameters.XmppDomain, xmppParameters.XmppPassword, null, null, null, xmppParameters.XmppTrustHost)
     {
     }
 

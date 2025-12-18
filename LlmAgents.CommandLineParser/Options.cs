@@ -1,8 +1,8 @@
 ﻿using System.CommandLine;
 
-namespace ConsoleAgent;
+namespace LlmAgents.CommandLineParser;
 
-internal static class Options
+public static class Options
 {
     public readonly static Option<string> AgentId = new Option<string>(
         name: "--agentId",
@@ -75,4 +75,8 @@ internal static class Options
         description: "The port of the tool server",
         getDefaultValue: () => 5000);
 
+    public readonly static Option<bool> StreamOutput = new Option<bool>(
+        name: "--streamOutput",
+        description: "Whether to stream the output responses",
+        getDefaultValue: () => true);
 }

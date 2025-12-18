@@ -35,6 +35,14 @@ public class LlmAgent
 
     public StateDatabase? StateDatabase { get; set; }
 
+    public LlmAgent(LlmAgentParameters parameters, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
+        : this(parameters.AgentId, llmApi, agentCommunication)
+    {
+        Persistent = parameters.Persistent;
+        PersistentMessagesPath = parameters.StorageDirectory;
+        StreamOutput = parameters.StreamOutput;
+    }
+
     public LlmAgent(string id, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
     {
         Id = id;

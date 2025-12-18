@@ -1,10 +1,11 @@
-﻿namespace ConsoleAgent;
-
+﻿using LlmAgents.LlmApi;
 using LlmAgents.Tools;
 using Newtonsoft.Json.Linq;
 using System.Runtime.InteropServices;
 
-internal static class Config
+namespace LlmAgents.CommandLineParser;
+
+public static class Config
 {
     public static string GetProfileConfig(string file)
     {
@@ -45,7 +46,7 @@ internal static class Config
         }
     }
 
-    public static string? InteractiveApiConfigSetup()
+    public static LlmApiOpenAiParameters? InteractiveApiConfigSetup()
     {
         Console.WriteLine("Interactive API setup. Leave blank to cancel.");
 
@@ -70,6 +71,20 @@ internal static class Config
             return null;
         }
 
+        Console.Write("Context size: ");
+        string? contextSizeInput = Console.ReadLine();
+        if (string.IsNullOrEmpty(contextSizeInput) || int.TryParse(contextSizeInput, out var contextSize))
+        {
+            return null;
+        }
+
+        Console.Write("Max completion tokens: ");
+        string? maxCompletionTokensInput = Console.ReadLine();
+        if (string.IsNullOrEmpty(maxCompletionTokensInput) || int.TryParse(maxCompletionTokensInput, out var maxCompletionTokens))
+        {
+            return null;
+        }
+
         var apiConfig = new JObject
         {
             ["apiEndpoint"] = endpoint,
@@ -83,7 +98,14 @@ internal static class Config
         File.WriteAllText(configPath, apiConfig.ToString());
         Console.WriteLine($"Saved API config to: {configPath}");
 
-        return configPath;
+        return new LlmApiOpenAiParameters
+        {
+            ApiEndpoint = endpoint,
+            ApiKey = apiKey,
+            ApiModel = model,
+            ContextSize = contextSize,
+            MaxCompletionTokens = maxCompletionTokens,
+        };
     }
 
     public static string? InteractiveToolsConfigSetup()
