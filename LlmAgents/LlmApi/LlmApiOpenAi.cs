@@ -571,8 +571,6 @@ public class LlmApiOpenAi : ILlmApiMessageProvider
             });
         }
 
-        payload.Add("skip_special_tokens", false);
-
         return payload.ToString(Newtonsoft.Json.Formatting.None);
     }
 
