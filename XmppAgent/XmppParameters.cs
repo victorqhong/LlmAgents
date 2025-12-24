@@ -1,4 +1,5 @@
-﻿using System.CommandLine.Invocation;
+﻿using Newtonsoft.Json.Linq;
+using System.CommandLine.Invocation;
 
 namespace XmppAgent;
 
@@ -12,13 +13,35 @@ public class XmppParameters
 
     public static XmppParameters? ParseXmppParameters(InvocationContext invocationContext)
     {
-        var xmppDomainValue = invocationContext.ParseResult.GetValueForOption(Options.XmppDomain);
-        var xmppUsernameValue = invocationContext.ParseResult.GetValueForOption(Options.XmppUsername);
-        var xmppPasswordValue = invocationContext.ParseResult.GetValueForOption(Options.XmppPassword);
-        var xmppTargetJidValue = invocationContext.ParseResult.GetValueForOption(Options.XmppTargetJid);
-        var xmppTrustHostValue = invocationContext.ParseResult.GetValueForOption(Options.XmppTrustHost);
+        string? xmppDomain = null;
+        string? xmppUsername = null;
+        string? xmppPassword = null;
+        string? xmppTargetJid = null;
+        bool xmppTrustHost = false;
 
-        if (string.IsNullOrEmpty(xmppDomainValue) || string.IsNullOrEmpty(xmppUsernameValue) || string.IsNullOrEmpty(xmppPasswordValue) || string.IsNullOrEmpty(xmppTargetJidValue))
+        var xmppConfigValue = invocationContext.ParseResult.GetValueForOption(Options.XmppConfig);
+        if (!string.IsNullOrEmpty(xmppConfigValue) && File.Exists(xmppConfigValue))
+        {
+            var xmppConfig = JObject.Parse(File.ReadAllText(xmppConfigValue));
+            if (xmppConfig != null)
+            {
+                xmppDomain = xmppConfig.Value<string>("xmppDomain");
+                xmppUsername = xmppConfig.Value<string>("xmppUsername");
+                xmppPassword = xmppConfig.Value<string>("xmppPassword");
+                xmppTargetJid = xmppConfig.Value<string>("xmppTargetJid");
+                xmppTrustHost = xmppConfig.Value<bool>("xmppTrustHost");
+            }
+        }
+        else
+        {
+            xmppDomain = invocationContext.ParseResult.GetValueForOption(Options.XmppDomain);
+            xmppUsername = invocationContext.ParseResult.GetValueForOption(Options.XmppUsername);
+            xmppPassword = invocationContext.ParseResult.GetValueForOption(Options.XmppPassword);
+            xmppTargetJid = invocationContext.ParseResult.GetValueForOption(Options.XmppTargetJid);
+            xmppTrustHost = invocationContext.ParseResult.GetValueForOption(Options.XmppTrustHost);
+        }
+
+        if (string.IsNullOrEmpty(xmppDomain) || string.IsNullOrEmpty(xmppUsername) || string.IsNullOrEmpty(xmppPassword) || string.IsNullOrEmpty(xmppTargetJid))
         {
             Console.Error.WriteLine("xmppDomain, xmppUsername, xmppPassword and/or xmppTargetJid is null or empty.");
             return null;
@@ -26,11 +49,11 @@ public class XmppParameters
 
         return new XmppParameters
         {
-            XmppDomain = xmppDomainValue,
-            XmppUsername = xmppUsernameValue,
-            XmppPassword = xmppPasswordValue,
-            XmppTargetJid = xmppTargetJidValue,
-            XmppTrustHost = xmppTrustHostValue
+            XmppDomain = xmppDomain,
+            XmppUsername = xmppUsername,
+            XmppPassword = xmppPassword,
+            XmppTargetJid = xmppTargetJid,
+            XmppTrustHost = xmppTrustHost
         };
     }
 }
