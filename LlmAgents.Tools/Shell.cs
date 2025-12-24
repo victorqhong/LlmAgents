@@ -14,6 +14,8 @@ public class Shell : Tool
 
     private static string shellName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "PowerShell Core" : "bash";
 
+    private static string echoCommand = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Write-Host" : "echo";
+
     private readonly ILogger Log;
 
     private readonly int waitTimeMs;
@@ -150,7 +152,7 @@ public class Shell : Tool
         try
         {
             commandId = Guid.NewGuid().ToString();
-            var commandDelimiter = $"Write-Host \"{commandId}\"";
+            var commandDelimiter = $"{echoCommand} \"{commandId}\"";
 
             CancellationTokenSource = new CancellationTokenSource();
 
