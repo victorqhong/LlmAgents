@@ -86,6 +86,7 @@ public class XmppCommunication : IAgentCommunication
             });
 
         HandleDiscoInfo();
+        HandlePresenceSubscribe();
 
         await XmppClient.ConnectAsync();
     }
@@ -221,6 +222,40 @@ public class XmppCommunication : IAgentCommunication
                 result.Add(resultQuery);
 
                 Task.Run(async () => await XmppClient.SendIqAsync(result));
+            });
+    }
+
+    private void HandlePresenceSubscribe()
+    {
+        XmppClient.XmppXElementReceived
+            .Where(el =>
+            {
+                if (!el.OfType<Presence>()) return false;
+
+                var presence = el.Cast<Presence>();
+                if (presence.Type != PresenceType.Subscribe) return false;
+
+                return true;
+            })
+            .Subscribe(el =>
+            {
+                var elTo = el.GetAttributeJid("to");
+                var elFrom = el.GetAttributeJid("from");
+                var response = new Presence
+                {
+                    From = elTo,
+                    To = elFrom,
+                    Type = PresenceType.Subscribed
+                };
+                Task.Run(async () => await XmppClient.SendPresenceAsync(response));
+
+                var subscribeRequest = new Presence
+                {
+                    From = elTo,
+                    To = elFrom,
+                    Type = PresenceType.Subscribe
+                };
+                Task.Run(async () => await XmppClient.SendPresenceAsync(subscribeRequest));
             });
     }
 }
