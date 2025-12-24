@@ -4,12 +4,17 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
 public class Shell : Tool
 {
     private const int waitCheckTimeMs = 1000;
+
+    private static string shellName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "PowerShell Core" : "bash";
+
+    private static string echoCommand = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Write-Host" : "echo";
 
     private readonly ILogger Log;
 
@@ -34,9 +39,20 @@ public class Shell : Tool
 
         Process = new Process();
 
-        Process.StartInfo.FileName = "pwsh";
-        Process.StartInfo.ArgumentList.Add("-NoLogo");
-        Process.StartInfo.ArgumentList.Add("-NonInteractive");
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            Process.StartInfo.FileName = "pwsh";
+            Process.StartInfo.ArgumentList.Add("-NoLogo");
+            Process.StartInfo.ArgumentList.Add("-NonInteractive");
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            Process.StartInfo.FileName = "bash";
+        }
+        else
+        {
+            throw new NotImplementedException(RuntimeInformation.RuntimeIdentifier);
+        }
 
         Process.StartInfo.WorkingDirectory = Path.IsPathFullyQualified(currentDirectory) ? currentDirectory : Path.Combine(Environment.CurrentDirectory, currentDirectory);
 
@@ -105,7 +121,7 @@ public class Shell : Tool
         function = new
         {
             name = "shell",
-            description = "Runs a shell command in PowerShell Core. Prefer the 'file_write' tool for writing files.",
+            description = $"Runs a shell command in {shellName}. Prefer the 'file_write' tool for writing files.",
             parameters = new
             {
                 type = "object",
@@ -136,7 +152,7 @@ public class Shell : Tool
         try
         {
             commandId = Guid.NewGuid().ToString();
-            var commandDelimiter = $"Write-Host \"{commandId}\"";
+            var commandDelimiter = $"{echoCommand} \"{commandId}\"";
 
             CancellationTokenSource = new CancellationTokenSource();
 
