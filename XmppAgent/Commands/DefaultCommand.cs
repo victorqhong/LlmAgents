@@ -1,7 +1,7 @@
 ﻿using LlmAgents.Agents;
-using LlmAgents.CommandLineParser;
 using LlmAgents.LlmApi;
 using LlmAgents.State;
+using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.CommandLine;
@@ -37,8 +37,6 @@ internal class DefaultCommand : RootCommand
             Console.WriteLine("agentsConfig is invalid or does not exist");
             return;
         }
-
-        var toolParameters = Parser.ParseToolParameters(context);
 
         var agentTasks = new List<Task>();
 
@@ -108,6 +106,11 @@ internal class DefaultCommand : RootCommand
             {
                 SystemPromptFile = systemPromptFile,
                 WorkingDirectory = workingDirectory,
+            };
+
+            var toolParameters = new ToolParameters
+            {
+                ToolsConfig = toolsConfig,
             };
 
             var xmppParameters = new XmppParameters
