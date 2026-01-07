@@ -1,4 +1,4 @@
-﻿namespace LlmAgents.Agents;
+namespace LlmAgents.Agents;
 
 using LlmAgents.Communication;
 using LlmAgents.LlmApi;
@@ -26,6 +26,8 @@ public class LlmAgent
     public string PersistentMessagesPath { get; set; } = Environment.CurrentDirectory;
 
     public Action? PreWaitForContent { get; set; }
+
+    public Action? PostReceiveContent { get; set; }
 
     public Action? PostSendMessage { get; set; }
 
@@ -102,6 +104,8 @@ public class LlmAgent
             {
                 break;
             }
+
+            PostReceiveContent?.Invoke();
 
             if (StreamOutput)
             {

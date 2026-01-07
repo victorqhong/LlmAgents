@@ -1,4 +1,4 @@
-﻿using LlmAgents.Communication;
+using LlmAgents.Communication;
 using LlmAgents.LlmApi.Content;
 using System.Reactive.Linq;
 using System.Xml.Linq;
@@ -166,6 +166,34 @@ public class XmppCommunication : IAgentCommunication
         await XmppClient.SendChatMessageAsync(new Jid(TargetJid), message);
     }
 
+    public async Task SendComposing()
+    {
+        if (!Connected || string.IsNullOrEmpty(TargetJid))
+        {
+            return;
+        }
+
+        await SendChatStateAsync(new Jid(TargetJid), "composing");
+    }
+
+    public async Task SendActive()
+    {
+        if (!Connected || string.IsNullOrEmpty(TargetJid))
+        {
+            return;
+        }
+
+        await SendChatStateAsync(new Jid(TargetJid), "active");
+    }
+
+    private async Task SendChatStateAsync(Jid target, string state)
+    {
+        var message = new Message { To = target, Type = MessageType.Chat };
+        var stateElement = new XmppXElement(XName.Get(state, "http://jabber.org/protocol/chatstates"));
+        message.Add(stateElement);
+        await XmppClient.SendMessageAsync(message);
+    }
+
     private void HandleDiscoInfo()
     {
         Func<string, XmppXElement> CreateFeature = var =>
@@ -217,6 +245,7 @@ public class XmppCommunication : IAgentCommunication
                 resultQuery.Add(CreateFeature("urn:xmpp:jingle:1"));
                 resultQuery.Add(CreateFeature("urn:xmpp:jingle:apps:file-transfer:5"));
                 resultQuery.Add(CreateFeature("urn:xmpp:jingle:transports:ibb:1"));
+                resultQuery.Add(CreateFeature("http://jabber.org/protocol/chatstates"));
 
                 var result = new Iq(elFrom, elTo, IqType.Result, elId);
                 result.Add(resultQuery);
