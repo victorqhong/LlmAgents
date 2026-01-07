@@ -1,4 +1,4 @@
-﻿using LlmAgents.Agents;
+using LlmAgents.Agents;
 using LlmAgents.LlmApi;
 using LlmAgents.State;
 using LlmAgents.Tools;
@@ -29,6 +29,9 @@ internal static class AgentFactory
                 using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
 
                 var agent = await LlmAgentFactory.CreateAgent(loggerFactory, xmppCommunication, apiParameters, agentParameters, toolParameters, sessionParameters);
+
+                agent.PostReceiveContent = () => Task.Run(() => xmppCommunication.SendComposing());
+                agent.PostSendMessage = () => Task.Run(() => xmppCommunication.SendActive());
 
                 await agent.Run(cancellationToken);
             }
