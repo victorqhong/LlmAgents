@@ -81,7 +81,7 @@ public class Shell : Tool
             }
 
             stdout.AppendLine(e.Data);
-            Log.LogInformation("{data}", e.Data);
+            // Log.LogInformation("{data}", e.Data);
         };
 
         Process.ErrorDataReceived += (sender, e) =>
@@ -97,7 +97,7 @@ public class Shell : Tool
             }
 
             stderr.AppendLine(e.Data);
-            Log.LogInformation("{data}", e.Data);
+            // Log.LogInformation("{data}", e.Data);
         };
 
         Process.Start();
