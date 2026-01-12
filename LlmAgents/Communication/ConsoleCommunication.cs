@@ -5,13 +5,18 @@ namespace LlmAgents.Communication;
 public class ConsoleCommunication : IAgentCommunication
 {
     private int outputHeight = 30;         // Lines for output/log
+    private int outputWidth;
     private int windowHeight = 30 + 3;     // + prompt + input line + padding
+    private int windowWidth;
+
     private readonly List<string> logLines = [];
 
     public ConsoleCommunication()
     {
         windowHeight = Console.WindowHeight - 2;
+        windowWidth = Console.WindowWidth;
         outputHeight = windowHeight - 3;
+        outputWidth = windowWidth;
 
         Console.Clear();
         Console.WriteLine("=== OUTPUT LOG ===");
@@ -95,23 +100,21 @@ public class ConsoleCommunication : IAgentCommunication
         var savedLeft = Console.CursorLeft;
         var savedTop = Console.CursorTop;
 
+        Console.CursorVisible = false;
+
         // Move to start of output area (line 2)
         Console.SetCursorPosition(0, 2);
 
-        // Clear the output region
-        for (int i = 0; i < outputHeight; i++)
+        var outputBuffer = new List<string>(logLines);
+        for (int i = 0; i < outputBuffer.Count; i++)
         {
-            Console.Write(new string(' ', Console.WindowWidth - 1));
+            outputBuffer[i] = logLines[i].PadRight(outputWidth);
         }
 
-        // Rewrite the latest lines
-        Console.SetCursorPosition(0, 2);
-        int startIndex = Math.Max(0, logLines.Count - outputHeight);
-        for (int i = startIndex; i < logLines.Count; i++)
-        {
-            Console.WriteLine(logLines[i].PadRight(Console.WindowWidth - 1));
-        }
+        Console.Write(string.Join(Environment.NewLine, outputBuffer));
 
         Console.SetCursorPosition(savedLeft, savedTop);
+
+        Console.CursorVisible = true;
     }
 }
