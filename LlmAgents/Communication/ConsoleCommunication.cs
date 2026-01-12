@@ -8,7 +8,6 @@ public class ConsoleCommunication : IAgentCommunication
     private int outputWidth;
     private int windowHeight = 30 + 3;     // + prompt + input line + padding
     private int windowWidth;
-
     private readonly List<string> logLines = [];
 
     public ConsoleCommunication()
@@ -77,10 +76,10 @@ public class ConsoleCommunication : IAgentCommunication
                 logLines.Add(lines[i]);
             }
 
-            while (logLines[^1].Length > Console.WindowWidth)
+            while (logLines[^1].Length > outputWidth)
             {
-                var split1 = logLines[^1].Substring(0, Console.WindowWidth);
-                var split2 = logLines[^1].Substring(Console.WindowWidth);
+                var split1 = logLines[^1].Substring(0, outputWidth);
+                var split2 = logLines[^1].Substring(outputWidth);
 
                 logLines[^1] = split1;
                 logLines.Add(split2);
@@ -97,24 +96,19 @@ public class ConsoleCommunication : IAgentCommunication
 
     void RedrawOutputArea()
     {
+        var outputBuffer = new List<string>(outputHeight);
+        int startIndex = Math.Max(0, logLines.Count - outputHeight);
+        int count = Math.Min(logLines.Count, outputHeight);
+        for (int i = 0; i < count; i++)
+        {
+            outputBuffer.Add(logLines[startIndex + i].PadRight(outputWidth));
+        }
+
         var savedLeft = Console.CursorLeft;
         var savedTop = Console.CursorTop;
 
-        Console.CursorVisible = false;
-
-        // Move to start of output area (line 2)
         Console.SetCursorPosition(0, 2);
-
-        var outputBuffer = new List<string>(logLines);
-        for (int i = 0; i < outputBuffer.Count; i++)
-        {
-            outputBuffer[i] = logLines[i].PadRight(outputWidth);
-        }
-
         Console.Write(string.Join(Environment.NewLine, outputBuffer));
-
         Console.SetCursorPosition(savedLeft, savedTop);
-
-        Console.CursorVisible = true;
     }
 }
