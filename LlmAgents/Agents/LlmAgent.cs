@@ -2,6 +2,7 @@ namespace LlmAgents.Agents;
 
 using LlmAgents.Communication;
 using LlmAgents.LlmApi;
+using LlmAgents.LlmApi.Content;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Newtonsoft.Json;
@@ -37,6 +38,10 @@ public class LlmAgent
 
     public StateDatabase? StateDatabase { get; set; }
 
+    public List<JObject> Messages { get; private set; } = [];
+
+    private readonly List<Task> tasks = [];
+
     public LlmAgent(LlmAgentParameters parameters, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
         : this(parameters.AgentId, llmApi, agentCommunication)
     {
@@ -50,8 +55,6 @@ public class LlmAgent
         Id = id;
         this.llmApi = llmApi;
         this.agentCommunication = agentCommunication;
-
-        this.llmApi.Agent = this;
     }
 
     public void AddTool(params Tool[] tools)
@@ -93,52 +96,226 @@ public class LlmAgent
         return ToolDefinitions;
     }
 
+    private async Task GetUserInput()
+    {
+        var messageContent = await agentCommunication.WaitForContent();
+        if (messageContent == null)
+        {
+            return;
+        }
+
+        foreach (var content in messageContent)
+        {
+            if (content is not MessageContentText textContent)
+            {
+                continue;
+            }
+
+            await agentCommunication.SendMessage($"User: {textContent.Text}", true);
+        }
+
+        Messages.Add(LlmApiOpenAi.GetMessage(messageContent));
+
+        _ = Task.Run(() => ProcessUserInput(Messages));
+    }
+
+    private async Task ProcessUserInput(List<JObject> messages)
+    {
+        // var maxCompletionTokens = MaxCompletionTokens != null ? MaxCompletionTokens.Value : ContextSize - UsageTotalTokens;
+        // if (UsageTotalTokens > ContextSize * 0.75)
+        // {
+        //     Log.LogWarning("Total usage tokens ({UsageTotalTokens}) exceed target context size ({ContextSize}). Pruning context.", UsageTotalTokens, ContextSize * 0.75);
+        //     //await PruneContext(Messages.Count - 1);
+        // }
+
+        var parser = await llmApi.GetStreamingCompletion(messages);
+        if (parser == null)
+        {
+            return;
+        }
+
+        if (parser.StreamingCompletion == null)
+        {
+            return;
+        }
+
+        await agentCommunication.SendMessage("Assistant: ", true);
+        await foreach (var chunk in parser.StreamingCompletion)
+        {
+            await agentCommunication.SendMessage(chunk, false);
+        }
+
+        await agentCommunication.SendMessage(string.Empty, true);
+
+        messages.AddRange(parser.Messages);
+
+        if (parser.FinishReason?.Equals("tool_calls") ?? false)
+        {
+            await ProcessToolCalls(messages);
+        }
+    }
+
+    private async Task ProcessToolCalls(List<JObject> messages)
+    {
+        var toolCalls = messages[^1].Value<JArray>("tool_calls");
+        if (toolCalls == null)
+        {
+            return;
+        }
+
+        foreach (JObject toolCall in toolCalls.Cast<JObject>())
+        {
+            var id = toolCall.Value<string>("id");
+
+            var function = toolCall.Value<JObject>("function");
+            if (function == null)
+            {
+                messages.Add(JObject.FromObject(new
+                {
+                    role = "tool",
+                    tool_call_id = id,
+                    content = $"Invalid tool call: tool call does not contain 'function' property"
+                }));
+
+                continue;
+            }
+
+            var name = function.Value<string>("name");
+            if (string.IsNullOrEmpty(name))
+            {
+                messages.Add(JObject.FromObject(new
+                {
+                    role = "tool",
+                    tool_call_id = id,
+                    name,
+                    content = $"Invalid tool call: tool call does not contain 'name' property"
+                }));
+
+                continue;
+            }
+
+            var arguments = function.Value<string>("arguments");
+            if (arguments == null)
+            {
+                messages.Add(JObject.FromObject(new
+                {
+                    role = "tool",
+                    tool_call_id = id,
+                    name,
+                    content = $"Invalid tool call: tool call does not contain 'arguments' property"
+                }));
+
+                continue;
+            }
+
+            string toolContent;
+            try
+            {
+                await agentCommunication.SendMessage($"Calling tool '{name}' with arguments '{arguments}'", true);
+                var toolResult = await CallTool(name, JObject.Parse(arguments));
+                if (toolResult == null)
+                {
+                    messages.Add(JObject.FromObject(new
+                    {
+                        role = "tool",
+                        tool_call_id = id,
+                        name,
+                        content = $"Invalid tool call: tool {name} could not be found"
+                    }));
+
+                    continue;
+                }
+
+                toolContent = JsonConvert.SerializeObject(toolResult);
+            }
+            catch (Exception ex)
+            {
+                toolContent = $"Got exception: {ex.Message}";
+            }
+
+            messages.Add(JObject.FromObject(new
+            {
+                role = "tool",
+                tool_call_id = id,
+                name,
+                content = toolContent
+            }));
+        }
+
+        await ProcessUserInput(messages);
+    }
+
     public async Task Run(CancellationToken cancellationToken = default)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            PreWaitForContent?.Invoke();
+            // if (!tasks.TryPeek(out var work))
+            // {
+            //     var task = new Task(async () => { await GetUserInput(); });
+            //     tasks.Enqueue(task);
+            //     // await Task.Delay(1000, cancellationToken);
+            //     continue;
+            // }
+            //
+            // if (work.Status == TaskStatus.Created)
+            // {
+            //     work.Start();
+            // }
+            // else if (work.Status == TaskStatus.RanToCompletion)
+            // {
+            //     _ = tasks.Dequeue();
+            // }
+            // else if (work.Status == TaskStatus.Running)
+            // {
+            // }
+            // else
+            // {
+            // }
 
-            var messageContent = await agentCommunication.WaitForContent(cancellationToken);
-            if (cancellationToken.IsCancellationRequested || messageContent == null)
-            {
-                break;
-            }
+            await Task.Delay(1000, cancellationToken);
 
-            PostReceiveContent?.Invoke();
-
-            if (StreamOutput)
-            {
-                var response = await llmApi.GenerateStreamingCompletion(messageContent, cancellationToken);
-                if (response == null)
-                {
-                    continue;
-                }
-
-                await foreach (var chunk in response)
-                {
-                    await agentCommunication.SendMessage(chunk, false);
-                }
-
-                await agentCommunication.SendMessage(string.Empty, true);
-            }
-            else
-            {
-                var response = await llmApi.GenerateCompletion(messageContent, cancellationToken);
-                if (response == null)
-                {
-                    continue;
-                }
-
-                await agentCommunication.SendMessage(response, true);
-            }
-
-            PostSendMessage?.Invoke();
-
-            if (Persistent)
-            {
-                SaveMessages();
-            }
+            // PreWaitForContent?.Invoke();
+            //
+            // var messageContent = await agentCommunication.WaitForContent(cancellationToken);
+            // if (cancellationToken.IsCancellationRequested || messageContent == null)
+            // {
+            //     break;
+            // }
+            //
+            // PostReceiveContent?.Invoke();
+            //
+            // if (StreamOutput)
+            // {
+            //     var response = await llmApi.GenerateStreamingCompletion(messageContent, cancellationToken);
+            //     if (response == null)
+            //     {
+            //         continue;
+            //     }
+            //
+            //     await foreach (var chunk in response)
+            //     {
+            //         await agentCommunication.SendMessage(chunk, false);
+            //     }
+            //
+            //     await agentCommunication.SendMessage(string.Empty, true);
+            // }
+            // else
+            // {
+            //     var response = await llmApi.GenerateCompletion(messageContent, cancellationToken);
+            //     if (response == null)
+            //     {
+            //         continue;
+            //     }
+            //
+            //     await agentCommunication.SendMessage(response, true);
+            // }
+            //
+            // PostSendMessage?.Invoke();
+            //
+            // if (Persistent)
+            // {
+            //     SaveMessages();
+            // }
         }
     }
 
@@ -158,8 +335,8 @@ public class LlmAgent
             return;
         }
 
-        llmApi.Messages.Clear();
-        llmApi.Messages.AddRange(messages);
+        messages.Clear();
+        messages.AddRange(messages);
     }
 
     public void SaveMessages()
@@ -167,7 +344,7 @@ public class LlmAgent
         var messagesFileName = GetMessagesFilename(Id);
         var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
 
-        File.WriteAllText(messagesFilePath, JsonConvert.SerializeObject(llmApi.Messages));
+        File.WriteAllText(messagesFilePath, JsonConvert.SerializeObject(Messages));
     }
 
     private static string GetMessagesFilename(string agentId)
