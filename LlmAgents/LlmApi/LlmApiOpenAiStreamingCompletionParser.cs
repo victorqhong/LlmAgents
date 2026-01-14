@@ -25,7 +25,7 @@ public class LlmApiOpenAiStreamingCompletionParser
         this.stream = stream;
     }
 
-    public async Task Parse(CancellationToken cancellationToken)
+    public void Parse(CancellationToken cancellationToken)
     {
         StreamingCompletion = ParseCompletion(stream, cancellationToken);
     }
@@ -44,11 +44,7 @@ public class LlmApiOpenAiStreamingCompletionParser
         while (!reader.EndOfStream)
         {
             var line = await reader.ReadLineAsync(cancellationToken);
-            if (cancellationToken.IsCancellationRequested)
-            {
-                yield break;
-            }
-            else if (string.IsNullOrEmpty(line))
+            if (string.IsNullOrEmpty(line))
             {
                 continue;
             }

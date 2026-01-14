@@ -40,7 +40,7 @@ public class LlmAgent
 
     public List<JObject> Messages { get; private set; } = [];
 
-    private readonly Queue<Task> tasks = [];
+    private readonly List<Task> tasks = [];
 
     public LlmAgent(LlmAgentParameters parameters, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
         : this(parameters.AgentId, llmApi, agentCommunication)
@@ -55,8 +55,6 @@ public class LlmAgent
         Id = id;
         this.llmApi = llmApi;
         this.agentCommunication = agentCommunication;
-
-        this.llmApi.Agent = this;
     }
 
     public void AddTool(params Tool[] tools)
@@ -123,6 +121,13 @@ public class LlmAgent
 
     private async Task ProcessUserInput(List<JObject> messages)
     {
+        // var maxCompletionTokens = MaxCompletionTokens != null ? MaxCompletionTokens.Value : ContextSize - UsageTotalTokens;
+        // if (UsageTotalTokens > ContextSize * 0.75)
+        // {
+        //     Log.LogWarning("Total usage tokens ({UsageTotalTokens}) exceed target context size ({ContextSize}). Pruning context.", UsageTotalTokens, ContextSize * 0.75);
+        //     //await PruneContext(Messages.Count - 1);
+        // }
+
         var parser = await llmApi.GetStreamingCompletion(messages);
         if (parser == null)
         {
@@ -244,28 +249,28 @@ public class LlmAgent
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            if (!tasks.TryPeek(out var work))
-            {
-                var task = new Task(async () => { await GetUserInput(); });
-                tasks.Enqueue(task);
-                // await Task.Delay(1000, cancellationToken);
-                continue;
-            }
-
-            if (work.Status == TaskStatus.Created)
-            {
-                work.Start();
-            }
-            else if (work.Status == TaskStatus.RanToCompletion)
-            {
-                _ = tasks.Dequeue();
-            }
-            else if (work.Status == TaskStatus.Running)
-            {
-            }
-            else
-            {
-            }
+            // if (!tasks.TryPeek(out var work))
+            // {
+            //     var task = new Task(async () => { await GetUserInput(); });
+            //     tasks.Enqueue(task);
+            //     // await Task.Delay(1000, cancellationToken);
+            //     continue;
+            // }
+            //
+            // if (work.Status == TaskStatus.Created)
+            // {
+            //     work.Start();
+            // }
+            // else if (work.Status == TaskStatus.RanToCompletion)
+            // {
+            //     _ = tasks.Dequeue();
+            // }
+            // else if (work.Status == TaskStatus.Running)
+            // {
+            // }
+            // else
+            // {
+            // }
 
             await Task.Delay(1000, cancellationToken);
 
