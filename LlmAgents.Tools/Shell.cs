@@ -16,7 +16,7 @@ public class Shell : Tool
 
     private static string echoCommand = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Write-Host" : "echo";
 
-    private readonly ILogger Log;
+    //private readonly ILogger Log;
 
     private readonly int waitTimeMs;
 
@@ -31,7 +31,7 @@ public class Shell : Tool
     public Shell(ToolFactory toolFactory)
         : base(toolFactory)
     {
-        Log = toolFactory.Resolve<ILoggerFactory>().CreateLogger(nameof(Shell));
+        //Log = toolFactory.Resolve<ILoggerFactory>().CreateLogger(nameof(Shell));
 
         waitTimeMs = int.TryParse(toolFactory.GetParameter($"{nameof(Shell)}.{nameof(waitTimeMs)}"), out waitTimeMs) ? waitTimeMs : 180000;
 
@@ -81,7 +81,7 @@ public class Shell : Tool
             }
 
             stdout.AppendLine(e.Data);
-            Log.LogInformation("{data}", e.Data);
+            // Log.LogInformation("{data}", e.Data);
         };
 
         Process.ErrorDataReceived += (sender, e) =>
@@ -97,7 +97,7 @@ public class Shell : Tool
             }
 
             stderr.AppendLine(e.Data);
-            Log.LogInformation("{data}", e.Data);
+            // Log.LogInformation("{data}", e.Data);
         };
 
         Process.Start();
@@ -174,7 +174,7 @@ public class Shell : Tool
 
                 if (totalWaitTimeMs >= waitTimeMs)
                 {
-                    Log.LogInformation("shell command did not exit after {waitTimeMs} milliseconds", waitTimeMs);
+                    //Log.LogInformation("shell command did not exit after {waitTimeMs} milliseconds", waitTimeMs);
                     break;
                 }
 
