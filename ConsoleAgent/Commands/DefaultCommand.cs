@@ -89,8 +89,6 @@ internal class DefaultCommand : RootCommand
 
         var cancellationToken = context.GetCancellationToken();
 
-        _ = agent.Run(cancellationToken);
-
-        await Task.Delay(Timeout.Infinite, cancellationToken);
+        await agent.Run(cancellationToken);
     }
 }

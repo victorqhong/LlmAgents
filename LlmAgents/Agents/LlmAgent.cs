@@ -40,7 +40,7 @@ public class LlmAgent
 
     public List<JObject> Messages { get; private set; } = [];
 
-    private readonly List<Task> tasks = [];
+    private readonly List<AgentWork> tasks = [];
 
     public LlmAgent(LlmAgentParameters parameters, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
         : this(parameters.AgentId, llmApi, agentCommunication)
@@ -245,10 +245,25 @@ public class LlmAgent
         await ProcessUserInput(messages);
     }
 
-    public async Task Run(CancellationToken cancellationToken = default)
+    public async Task CreateUserInputWork(CancellationToken cancellationToken)
     {
+        // await agentCommunication.SendMessage($"create user input work", true);
+        var userInputWork = new GetUserInputWork(this);
+        tasks.Add(userInputWork);
+        await userInputWork.StartAsync(cancellationToken).ConfigureAwait(false);
+            // .ContinueWith(async t => await CreateUserInputWork(cancellationToken), cancellationToken);;
+    }
+
+    public async Task Run(CancellationToken cancellationToken)
+    {
+        _ = CreateUserInputWork(cancellationToken);
+        // var userInputWork = new GetUserInputWork(this);
+        // tasks.Add(userInputWork);
+        // _ = userInputWork.StartAsync(cancellationToken);
+        //
         while (!cancellationToken.IsCancellationRequested)
         {
+
             // if (!tasks.TryPeek(out var work))
             // {
             //     var task = new Task(async () => { await GetUserInput(); });
@@ -351,4 +366,77 @@ public class LlmAgent
     {
         return $"messages-{agentId}.json";
     }
+
+    internal abstract class AgentWork(string operationName)
+    {
+        public readonly string OperationName = operationName;
+
+        public abstract Task<ICollection<JObject>> Work(CancellationToken ct);
+
+        public abstract Task OnCompleted(ICollection<JObject> messages, CancellationToken ct);
+
+        public abstract Task<ICollection<JObject>?> GetState(CancellationToken ct);
+
+        public ICollection<JObject>? Result { get; private set; }
+
+        public bool Completed { get; private set; }
+
+        public async Task StartAsync(CancellationToken cancellationToken)
+        {
+            Result = await Work(cancellationToken).ConfigureAwait(false);
+            Completed = true;
+            await OnCompleted(Result, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    internal class GetUserInputWork : AgentWork
+    {
+        private readonly LlmAgent agent;
+
+        public GetUserInputWork(LlmAgent agent)
+            : base("user_input")
+        {
+            this.agent = agent;
+        }
+
+        public override Task<ICollection<JObject>?> GetState(CancellationToken ct)
+        {
+            return Task.FromResult<ICollection<JObject>?>(null);
+        }
+
+        public override async Task OnCompleted(ICollection<JObject> messages, CancellationToken ct)
+        {
+            foreach (var message in messages)
+            {
+                var content = message.Value<JArray>("content");
+                if (content == null) continue;
+
+                foreach (var c in content)
+                {
+                    var type = c.Value<string>("type");
+                    if (!string.Equals(type, "text"))
+                    {
+                        continue;
+                    }
+
+                    var text = c.Value<string>("text");
+
+                    await agent.agentCommunication.SendMessage($"User: {text}", true);
+                }
+            }
+        }
+
+        public override async Task<ICollection<JObject>> Work(CancellationToken ct)
+        {
+           var messageContent = await agent.agentCommunication.WaitForContent(ct); 
+           if (messageContent == null)
+           {
+               return [];
+           }
+
+           return [LlmApiOpenAi.GetMessage(messageContent)];
+
+        }
+    }
 }
+
