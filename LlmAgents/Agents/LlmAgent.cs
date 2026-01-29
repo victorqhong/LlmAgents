@@ -2,7 +2,6 @@ namespace LlmAgents.Agents;
 
 using LlmAgents.Communication;
 using LlmAgents.LlmApi;
-using LlmAgents.LlmApi.Content;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Newtonsoft.Json;
@@ -40,7 +39,7 @@ public class LlmAgent
 
     public List<JObject> Messages { get; private set; } = [];
 
-    private readonly List<AgentWork> tasks = [];
+    private readonly List<IAgentWork> tasks = [];
 
     public LlmAgent(LlmAgentParameters parameters, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
         : this(parameters.AgentId, llmApi, agentCommunication)
@@ -96,199 +95,110 @@ public class LlmAgent
         return ToolDefinitions;
     }
 
-    private async Task GetUserInput()
+    public List<JObject> RenderConversation()
     {
-        var messageContent = await agentCommunication.WaitForContent();
-        if (messageContent == null)
-        {
-            return;
-        }
-
-        foreach (var content in messageContent)
-        {
-            if (content is not MessageContentText textContent)
-            {
-                continue;
-            }
-
-            await agentCommunication.SendMessage($"User: {textContent.Text}", true);
-        }
-
-        Messages.Add(LlmApiOpenAi.GetMessage(messageContent));
-
-        _ = Task.Run(() => ProcessUserInput(Messages));
+        return tasks.SelectMany((work, selector) => work.Messages ?? []).ToList();
     }
 
-    private async Task ProcessUserInput(List<JObject> messages)
+    internal async Task<IAgentWork> CreateUserInputWork(IAgentWork? predecessor, CancellationToken cancellationToken)
     {
-        // var maxCompletionTokens = MaxCompletionTokens != null ? MaxCompletionTokens.Value : ContextSize - UsageTotalTokens;
-        // if (UsageTotalTokens > ContextSize * 0.75)
-        // {
-        //     Log.LogWarning("Total usage tokens ({UsageTotalTokens}) exceed target context size ({ContextSize}). Pruning context.", UsageTotalTokens, ContextSize * 0.75);
-        //     //await PruneContext(Messages.Count - 1);
-        // }
-
-        var parser = await llmApi.GetStreamingCompletion(messages);
-        if (parser == null)
-        {
-            return;
-        }
-
-        if (parser.StreamingCompletion == null)
-        {
-            return;
-        }
-
-        await agentCommunication.SendMessage("Assistant: ", true);
-        await foreach (var chunk in parser.StreamingCompletion)
-        {
-            await agentCommunication.SendMessage(chunk, false);
-        }
-
-        await agentCommunication.SendMessage(string.Empty, true);
-
-        messages.AddRange(parser.Messages);
-
-        if (parser.FinishReason?.Equals("tool_calls") ?? false)
-        {
-            await ProcessToolCalls(messages);
-        }
-    }
-
-    private async Task ProcessToolCalls(List<JObject> messages)
-    {
-        var toolCalls = messages[^1].Value<JArray>("tool_calls");
-        if (toolCalls == null)
-        {
-            return;
-        }
-
-        foreach (JObject toolCall in toolCalls.Cast<JObject>())
-        {
-            var id = toolCall.Value<string>("id");
-
-            var function = toolCall.Value<JObject>("function");
-            if (function == null)
-            {
-                messages.Add(JObject.FromObject(new
-                {
-                    role = "tool",
-                    tool_call_id = id,
-                    content = $"Invalid tool call: tool call does not contain 'function' property"
-                }));
-
-                continue;
-            }
-
-            var name = function.Value<string>("name");
-            if (string.IsNullOrEmpty(name))
-            {
-                messages.Add(JObject.FromObject(new
-                {
-                    role = "tool",
-                    tool_call_id = id,
-                    name,
-                    content = $"Invalid tool call: tool call does not contain 'name' property"
-                }));
-
-                continue;
-            }
-
-            var arguments = function.Value<string>("arguments");
-            if (arguments == null)
-            {
-                messages.Add(JObject.FromObject(new
-                {
-                    role = "tool",
-                    tool_call_id = id,
-                    name,
-                    content = $"Invalid tool call: tool call does not contain 'arguments' property"
-                }));
-
-                continue;
-            }
-
-            string toolContent;
-            try
-            {
-                await agentCommunication.SendMessage($"Calling tool '{name}' with arguments '{arguments}'", true);
-                var toolResult = await CallTool(name, JObject.Parse(arguments));
-                if (toolResult == null)
-                {
-                    messages.Add(JObject.FromObject(new
-                    {
-                        role = "tool",
-                        tool_call_id = id,
-                        name,
-                        content = $"Invalid tool call: tool {name} could not be found"
-                    }));
-
-                    continue;
-                }
-
-                toolContent = JsonConvert.SerializeObject(toolResult);
-            }
-            catch (Exception ex)
-            {
-                toolContent = $"Got exception: {ex.Message}";
-            }
-
-            messages.Add(JObject.FromObject(new
-            {
-                role = "tool",
-                tool_call_id = id,
-                name,
-                content = toolContent
-            }));
-        }
-
-        await ProcessUserInput(messages);
-    }
-
-    public async Task CreateUserInputWork(CancellationToken cancellationToken)
-    {
-        // await agentCommunication.SendMessage($"create user input work", true);
         var userInputWork = new GetUserInputWork(this);
-        tasks.Add(userInputWork);
-        await userInputWork.StartAsync(cancellationToken).ConfigureAwait(false);
-            // .ContinueWith(async t => await CreateUserInputWork(cancellationToken), cancellationToken);;
+
+        if (predecessor == null)
+        {
+            tasks.Add(userInputWork);
+        }
+        else
+        {
+            var index = tasks.IndexOf(predecessor);
+            if (index == -1 || index == tasks.Count - 1)
+            {
+                tasks.Add(userInputWork);
+            }
+            else
+            {
+                tasks.Insert(index + 1, userInputWork);
+            }
+        }
+
+        await userInputWork.StartAsync(cancellationToken);
+
+        return userInputWork;
+    }
+
+    internal async Task<GetAssistantResponseWork> CreateAssistantResponseWork(IAgentWork? predecessor, CancellationToken cancellationToken)
+    {
+        var assistantResponseWork = new GetAssistantResponseWork(this);
+        if (predecessor == null)
+        {
+            tasks.Add(assistantResponseWork);
+        }
+        else
+        {
+            var index = tasks.IndexOf(predecessor);
+            if (index == -1 || index == tasks.Count - 1)
+            {
+                tasks.Add(assistantResponseWork);
+            }
+            else
+            {
+                tasks.Insert(index + 1, assistantResponseWork);
+            }
+        }
+
+        await assistantResponseWork.StartAsync(cancellationToken);
+
+        return assistantResponseWork;
+    }
+
+    internal async Task<IAgentWork> CreateToolCallsWork(IAgentWork? predecessor, CancellationToken cancellationToken)
+    {
+        var toolCallsWork = new ToolCallWork(this);
+        if (predecessor == null)
+        {
+            tasks.Add(toolCallsWork);
+        }
+        else
+        {
+            var index = tasks.IndexOf(predecessor);
+            if (index == -1 || index == tasks.Count - 1)
+            {
+                tasks.Add(toolCallsWork);
+            }
+            else
+            {
+                tasks.Insert(index + 1, toolCallsWork);
+            }
+        }
+
+        await toolCallsWork.StartAsync(cancellationToken);
+
+        return toolCallsWork;
     }
 
     public async Task Run(CancellationToken cancellationToken)
     {
-        _ = CreateUserInputWork(cancellationToken);
-        // var userInputWork = new GetUserInputWork(this);
-        // tasks.Add(userInputWork);
-        // _ = userInputWork.StartAsync(cancellationToken);
-        //
-        while (!cancellationToken.IsCancellationRequested)
+        _ = Task.Run(async () =>
         {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var userInputWork = await CreateUserInputWork(null, cancellationToken);
+                var assistantWork = await CreateAssistantResponseWork(userInputWork, cancellationToken);
 
-            // if (!tasks.TryPeek(out var work))
-            // {
-            //     var task = new Task(async () => { await GetUserInput(); });
-            //     tasks.Enqueue(task);
-            //     // await Task.Delay(1000, cancellationToken);
-            //     continue;
-            // }
-            //
-            // if (work.Status == TaskStatus.Created)
-            // {
-            //     work.Start();
-            // }
-            // else if (work.Status == TaskStatus.RanToCompletion)
-            // {
-            //     _ = tasks.Dequeue();
-            // }
-            // else if (work.Status == TaskStatus.Running)
-            // {
-            // }
-            // else
-            // {
-            // }
+                if (assistantWork.WorkResult == null || !string.Equals(assistantWork.WorkResult.FinishReason, "tool_calls"))
+                {
+                    continue;
+                }
 
-            await Task.Delay(1000, cancellationToken);
+                var toolCallsWork = await CreateToolCallsWork(assistantWork, cancellationToken);
 
+            }
+        }, cancellationToken);
+
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+
+        // while (!cancellationToken.IsCancellationRequested)
+        // {
             // PreWaitForContent?.Invoke();
             //
             // var messageContent = await agentCommunication.WaitForContent(cancellationToken);
@@ -331,7 +241,7 @@ public class LlmAgent
             // {
             //     SaveMessages();
             // }
-        }
+        // }
     }
 
     public void LoadMessages()
@@ -367,45 +277,62 @@ public class LlmAgent
         return $"messages-{agentId}.json";
     }
 
-    internal abstract class AgentWork(string operationName)
+    internal interface IAgentWork
     {
-        public readonly string OperationName = operationName;
+        Task<ICollection<JObject>?> GetState(CancellationToken cancellationToken);
+        ICollection<JObject>? Messages { get; }
+    }
 
-        public abstract Task<ICollection<JObject>> Work(CancellationToken ct);
+    internal abstract class AgentWork<T> : IAgentWork
+    {
+        public abstract Task<T?> Work(CancellationToken ct);
 
-        public abstract Task OnCompleted(ICollection<JObject> messages, CancellationToken ct);
+        public abstract Task OnCompleted(T? result, CancellationToken ct);
 
         public abstract Task<ICollection<JObject>?> GetState(CancellationToken ct);
 
-        public ICollection<JObject>? Result { get; private set; }
+        public abstract ICollection<JObject>? Messages { get; protected set; }
 
-        public bool Completed { get; private set; }
+        public T? WorkResult { get; private set; }
 
-        public async Task StartAsync(CancellationToken cancellationToken)
-        {
-            Result = await Work(cancellationToken).ConfigureAwait(false);
-            Completed = true;
-            await OnCompleted(Result, cancellationToken).ConfigureAwait(false);
-        }
-    }
+        public readonly LlmAgent agent;
 
-    internal class GetUserInputWork : AgentWork
-    {
-        private readonly LlmAgent agent;
-
-        public GetUserInputWork(LlmAgent agent)
-            : base("user_input")
+        public AgentWork(LlmAgent agent)
         {
             this.agent = agent;
         }
+
+        public async Task StartAsync(CancellationToken cancellationToken)
+        {
+            var result = await Work(cancellationToken);
+            WorkResult = result;
+            await OnCompleted(result, cancellationToken);
+        }
+    }
+
+    internal class GetUserInputWork : AgentWork<ICollection<JObject>>
+    {
+        public GetUserInputWork(LlmAgent agent)
+            : base(agent)
+        {
+        }
+
+        public override ICollection<JObject>? Messages { get; protected set; }
 
         public override Task<ICollection<JObject>?> GetState(CancellationToken ct)
         {
             return Task.FromResult<ICollection<JObject>?>(null);
         }
 
-        public override async Task OnCompleted(ICollection<JObject> messages, CancellationToken ct)
+        public override async Task OnCompleted(ICollection<JObject>? messages, CancellationToken ct)
         {
+            if (messages == null)
+            {
+                return;
+            }
+
+            Messages = messages;
+
             foreach (var message in messages)
             {
                 var content = message.Value<JArray>("content");
@@ -426,16 +353,196 @@ public class LlmAgent
             }
         }
 
-        public override async Task<ICollection<JObject>> Work(CancellationToken ct)
+        public override async Task<ICollection<JObject>?> Work(CancellationToken ct)
         {
            var messageContent = await agent.agentCommunication.WaitForContent(ct); 
            if (messageContent == null)
            {
-               return [];
+               return null;
            }
 
            return [LlmApiOpenAi.GetMessage(messageContent)];
 
+        }
+    }
+
+    internal class GetAssistantResponseWork : AgentWork<LlmApiOpenAiStreamingCompletionParser>
+    {
+        public GetAssistantResponseWork(LlmAgent agent)
+            : base(agent)
+        {
+        }
+
+        public override ICollection<JObject>? Messages { get; protected set; }
+
+        public override Task<ICollection<JObject>?> GetState(CancellationToken ct)
+        {
+            return Task.FromResult<ICollection<JObject>?>(null);
+        }
+
+        public override async Task OnCompleted(LlmApiOpenAiStreamingCompletionParser? result, CancellationToken ct)
+        {
+            if (result == null || result.StreamingCompletion == null)
+            {
+                return;
+            }
+
+            await agent.agentCommunication.SendMessage("Assistant: ", true);
+            await foreach (var chunk in result.StreamingCompletion)
+            {
+                await agent.agentCommunication.SendMessage(chunk, false);
+            }
+
+            await agent.agentCommunication.SendMessage(string.Empty, true);
+
+            Messages = result.Messages;
+        }
+
+        public override async Task<LlmApiOpenAiStreamingCompletionParser?> Work(CancellationToken ct)
+        {
+            var conversation = agent.RenderConversation();
+            var parser = await agent.llmApi.GetStreamingCompletion(conversation, agent.ToolDefinitions, "auto", cancellationToken: ct);
+            if (parser == null)
+            {
+                return null;
+            }
+
+            return parser;
+        }
+    }
+
+    internal class ToolCallWork : AgentWork<LlmApiOpenAiStreamingCompletionParser>
+    {
+        public ToolCallWork(LlmAgent agent)
+            : base(agent)
+        {
+        }
+
+        public override ICollection<JObject>? Messages { get; protected set; }
+
+        public override Task<ICollection<JObject>?> GetState(CancellationToken ct)
+        {
+            return Task.FromResult<ICollection<JObject>?>(null);
+        }
+
+        public override async Task OnCompleted(LlmApiOpenAiStreamingCompletionParser? result, CancellationToken ct)
+        {
+            if (result == null || result.StreamingCompletion == null)
+            {
+                return;
+            }
+
+            await agent.agentCommunication.SendMessage("Assistant: ", true);
+            await foreach (var chunk in result.StreamingCompletion)
+            {
+                await agent.agentCommunication.SendMessage(chunk, false);
+            }
+
+            await agent.agentCommunication.SendMessage(string.Empty, true);
+
+            Messages = result.Messages;
+        }
+
+        public override async Task<LlmApiOpenAiStreamingCompletionParser?> Work(CancellationToken ct)
+        {
+            var conversation = agent.RenderConversation();
+            await ProcessToolCalls(conversation);
+
+            var parser = await agent.llmApi.GetStreamingCompletion(conversation, agent.ToolDefinitions, "auto", cancellationToken: ct);
+            if (parser == null)
+            {
+                return null;
+            }
+
+            return parser;
+        }
+
+        private async Task ProcessToolCalls(List<JObject> messages)
+        {
+            var toolCalls = messages[^1].Value<JArray>("tool_calls");
+            if (toolCalls == null)
+            {
+                return;
+            }
+
+            foreach (JObject toolCall in toolCalls.Cast<JObject>())
+            {
+                var id = toolCall.Value<string>("id");
+
+                var function = toolCall.Value<JObject>("function");
+                if (function == null)
+                {
+                    messages.Add(JObject.FromObject(new
+                    {
+                        role = "tool",
+                        tool_call_id = id,
+                        content = $"Invalid tool call: tool call does not contain 'function' property"
+                    }));
+
+                    continue;
+                }
+
+                var name = function.Value<string>("name");
+                if (string.IsNullOrEmpty(name))
+                {
+                    messages.Add(JObject.FromObject(new
+                    {
+                        role = "tool",
+                        tool_call_id = id,
+                        name,
+                        content = $"Invalid tool call: tool call does not contain 'name' property"
+                    }));
+
+                    continue;
+                }
+
+                var arguments = function.Value<string>("arguments");
+                if (arguments == null)
+                {
+                    messages.Add(JObject.FromObject(new
+                    {
+                        role = "tool",
+                        tool_call_id = id,
+                        name,
+                        content = $"Invalid tool call: tool call does not contain 'arguments' property"
+                    }));
+
+                    continue;
+                }
+
+                string toolContent;
+                try
+                {
+                    // await agentCommunication.SendMessage($"Calling tool '{name}' with arguments '{arguments}'", true);
+                    var toolResult = await agent.CallTool(name, JObject.Parse(arguments));
+                    if (toolResult == null)
+                    {
+                        messages.Add(JObject.FromObject(new
+                        {
+                            role = "tool",
+                            tool_call_id = id,
+                            name,
+                            content = $"Invalid tool call: tool {name} could not be found"
+                        }));
+
+                        continue;
+                    }
+
+                    toolContent = JsonConvert.SerializeObject(toolResult);
+                }
+                catch (Exception ex)
+                {
+                    toolContent = $"Got exception: {ex.Message}";
+                }
+
+                messages.Add(JObject.FromObject(new
+                {
+                    role = "tool",
+                    tool_call_id = id,
+                    name,
+                    content = toolContent
+                }));
+            }
         }
     }
 }

@@ -20,6 +20,8 @@ public class LlmApiOpenAiStreamingCompletionParser
 
     public List<JObject> Messages { get; private set; } = [];
 
+    public IReadOnlyList<Dictionary<string, string>> ParsedToolCalls { get; private set; } = [];
+
     public LlmApiOpenAiStreamingCompletionParser(Stream stream)
     {
         this.stream = stream;
@@ -192,6 +194,8 @@ public class LlmApiOpenAiStreamingCompletionParser
                     }
                 };
             });
+
+            ParsedToolCalls = parsedToolCalls.Select(kvp => kvp.Value).ToList();
 
             Messages.Add(JObject.FromObject(new { role, content, tool_calls = toolCalls }));
         }
