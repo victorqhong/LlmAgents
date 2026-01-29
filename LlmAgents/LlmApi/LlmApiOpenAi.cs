@@ -58,7 +58,7 @@ public class LlmApiOpenAi
         return streamParser;
     }
 
-    private async Task<Stream?> GetCompletionStream(IList<JObject> messages, List<JObject>? tools = null, string toolChoice = "auto", CancellationToken cancellationToken = default)
+    private async Task<Stream?> GetCompletionStream(IList<JObject> messages, IList<JObject>? tools = null, string toolChoice = "auto", CancellationToken cancellationToken = default)
     {
         if (messages == null || messages.Count < 1)
         {
@@ -186,7 +186,7 @@ public class LlmApiOpenAi
         return message;
     }
 
-    public static string GetPayload(string model, List<JObject> messages, int maxCompletionTokens, double temperature, IReadOnlyList<JObject>? tools = null, string toolChoice = "auto", bool stream = true)
+    public static string GetPayload(string model, IList<JObject> messages, int maxCompletionTokens, double temperature, IList<JObject>? tools = null, string toolChoice = "auto", bool stream = true)
     {
         var payload = new JObject();
         payload.Add("model", model);
