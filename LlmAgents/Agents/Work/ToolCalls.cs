@@ -6,7 +6,7 @@ using Newtonsoft.Json.Linq;
 
 public class ToolCalls : LlmAgentWork
 {
-    public LlmApiOpenAiStreamingCompletionParser Parser { get; private set; }
+    public LlmApiOpenAiStreamingCompletionParser? Parser { get; private set; }
 
     public ToolCalls(LlmAgent agent)
         : base(agent)

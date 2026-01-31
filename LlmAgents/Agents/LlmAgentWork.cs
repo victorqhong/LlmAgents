@@ -2,7 +2,7 @@ namespace LlmAgents.Agents;
 
 using Newtonsoft.Json.Linq;
 
-public abstract class LlmAgentWork : ILlmAgentWork
+public abstract class LlmAgentWork
 {
     public abstract Task<ICollection<JObject>?> GetState(CancellationToken ct);
 

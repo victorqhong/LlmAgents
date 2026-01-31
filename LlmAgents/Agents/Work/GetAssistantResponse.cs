@@ -1,15 +1,19 @@
 namespace LlmAgents.Agents.Work;
 
+using System.Text;
 using LlmAgents.LlmApi;
 using Newtonsoft.Json.Linq;
 
 internal class GetAssistantResponseWork : LlmAgentWork
 {
+    public readonly bool StreamOutput;
+
     public LlmApiOpenAiStreamingCompletionParser? Parser { get; private set; }
 
-    public GetAssistantResponseWork(LlmAgent agent)
+    public GetAssistantResponseWork(bool streamOutput, LlmAgent agent)
         : base(agent)
     {
+        StreamOutput = streamOutput;
     }
 
     public override Task<ICollection<JObject>?> GetState(CancellationToken ct)
@@ -33,13 +37,28 @@ internal class GetAssistantResponseWork : LlmAgentWork
             return;
         }
 
-        await agent.agentCommunication.SendMessage("Assistant: ", true);
-        await foreach (var chunk in parser.StreamingCompletion)
+        if (StreamOutput)
         {
-            await agent.agentCommunication.SendMessage(chunk, false);
-        }
+            await agent.agentCommunication.SendMessage("Assistant: ", true);
+            await foreach (var chunk in parser.StreamingCompletion)
+            {
+                await agent.agentCommunication.SendMessage(chunk, false);
+            }
 
-        await agent.agentCommunication.SendMessage(string.Empty, true);
+            await agent.agentCommunication.SendMessage(string.Empty, true);
+        }
+        else
+        {
+            var sb = new StringBuilder();
+            sb.Append("Assistant: ");
+            await foreach (var chunk in parser.StreamingCompletion)
+            {
+                sb.Append(chunk);
+            }
+            sb.Append('\n');
+
+            await agent.agentCommunication.SendMessage(sb.ToString(), true);
+        }
 
         Messages = parser.Messages;
     }

@@ -18,6 +18,8 @@ public class LlmAgent
 
     public readonly IAgentCommunication agentCommunication;
 
+    private readonly List<LlmAgentWork> tasks = [];
+
     public readonly string Id;
 
     public bool Persistent { get; set; }
@@ -37,10 +39,6 @@ public class LlmAgent
     public string? SessionId { get; set; }
 
     public StateDatabase? StateDatabase { get; set; }
-
-    public List<JObject> Messages { get; private set; } = [];
-
-    private readonly List<ILlmAgentWork> tasks = [];
 
     public LlmAgent(LlmAgentParameters parameters, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
         : this(parameters.AgentId, llmApi, agentCommunication)
@@ -101,7 +99,69 @@ public class LlmAgent
         return tasks.SelectMany((work, selector) => work.Messages ?? []).ToList();
     }
 
-    private void AddWorkToTasks(ILlmAgentWork work, ILlmAgentWork? predecessor)
+    public async Task Run(CancellationToken cancellationToken)
+    {
+        _ = Task.Run(async () =>
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                PreWaitForContent?.Invoke();
+                var userInputWork = await RunWork(new GetUserInputWork(this), null, cancellationToken);
+                PostReceiveContent?.Invoke();
+
+                var assistantWork = await RunWork(new GetAssistantResponseWork(StreamOutput, this), userInputWork, cancellationToken);
+                PostSendMessage?.Invoke();
+
+                if (assistantWork.Parser == null || !string.Equals(assistantWork.Parser.FinishReason, "tool_calls"))
+                {
+                    continue;
+                }
+
+                var toolCallsWork = await RunWork(new ToolCalls(this), assistantWork, cancellationToken);
+
+                if (Persistent)
+                {
+                    SaveMessages();
+                }
+            }
+        }, cancellationToken);
+
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+    }
+
+    public void AddMessages(ICollection<JObject> messages)
+    {
+        AddWorkToTasks(new StaticMessages(messages, this), null);
+    }
+
+    public void LoadMessages()
+    {
+        var messagesFileName = GetMessagesFilename(Id);
+        var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
+
+        if (!File.Exists(messagesFilePath))
+        {
+            return;
+        }
+
+        List<JObject>? messages = JsonConvert.DeserializeObject<List<JObject>>(File.ReadAllText(messagesFilePath));
+        if (messages == null)
+        {
+            return;
+        }
+
+        AddWorkToTasks(new StaticMessages(messages, this), null);
+    }
+
+    public void SaveMessages()
+    {
+        var messagesFileName = GetMessagesFilename(Id);
+        var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
+
+        File.WriteAllText(messagesFilePath, JsonConvert.SerializeObject(RenderConversation()));
+    }
+
+    private void AddWorkToTasks(LlmAgentWork work, LlmAgentWork? predecessor)
     {
         if (predecessor == null)
         {
@@ -121,108 +181,12 @@ public class LlmAgent
         }
     }
 
-    private async Task<T> RunWork<T>(T work, ILlmAgentWork? predecessor, CancellationToken cancellationToken) where T : LlmAgentWork
+    private async Task<T> RunWork<T>(T work, LlmAgentWork? predecessor, CancellationToken cancellationToken) where T : LlmAgentWork
     {
         AddWorkToTasks(work, predecessor);
         await work.Run(cancellationToken);
 
         return work;
-    }
-
-    public async Task Run(CancellationToken cancellationToken)
-    {
-        _ = Task.Run(async () =>
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                var userInputWork = await RunWork(new GetUserInputWork(this), null, cancellationToken);
-                var assistantWork = await RunWork(new GetAssistantResponseWork(this), userInputWork, cancellationToken);
-
-                if (assistantWork.Parser == null || !string.Equals(assistantWork.Parser.FinishReason, "tool_calls"))
-                {
-                    continue;
-                }
-
-                var toolCallsWork = await RunWork(new ToolCalls(this), assistantWork, cancellationToken);
-
-            }
-        }, cancellationToken);
-
-        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-
-        // while (!cancellationToken.IsCancellationRequested)
-        // {
-            // PreWaitForContent?.Invoke();
-            //
-            // var messageContent = await agentCommunication.WaitForContent(cancellationToken);
-            // if (cancellationToken.IsCancellationRequested || messageContent == null)
-            // {
-            //     break;
-            // }
-            //
-            // PostReceiveContent?.Invoke();
-            //
-            // if (StreamOutput)
-            // {
-            //     var response = await llmApi.GenerateStreamingCompletion(messageContent, cancellationToken);
-            //     if (response == null)
-            //     {
-            //         continue;
-            //     }
-            //
-            //     await foreach (var chunk in response)
-            //     {
-            //         await agentCommunication.SendMessage(chunk, false);
-            //     }
-            //
-            //     await agentCommunication.SendMessage(string.Empty, true);
-            // }
-            // else
-            // {
-            //     var response = await llmApi.GenerateCompletion(messageContent, cancellationToken);
-            //     if (response == null)
-            //     {
-            //         continue;
-            //     }
-            //
-            //     await agentCommunication.SendMessage(response, true);
-            // }
-            //
-            // PostSendMessage?.Invoke();
-            //
-            // if (Persistent)
-            // {
-            //     SaveMessages();
-            // }
-        // }
-    }
-
-    public void LoadMessages()
-    {
-        var messagesFileName = GetMessagesFilename(Id);
-        var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
-
-        if (!File.Exists(messagesFilePath))
-        {
-            return;
-        }
-
-        List<JObject>? messages = JsonConvert.DeserializeObject<List<JObject>>(File.ReadAllText(messagesFilePath));
-        if (messages == null)
-        {
-            return;
-        }
-
-        messages.Clear();
-        messages.AddRange(messages);
-    }
-
-    public void SaveMessages()
-    {
-        var messagesFileName = GetMessagesFilename(Id);
-        var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
-
-        File.WriteAllText(messagesFilePath, JsonConvert.SerializeObject(Messages));
     }
 
     private static string GetMessagesFilename(string agentId)
