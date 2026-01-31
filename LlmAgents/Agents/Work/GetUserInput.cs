@@ -1,6 +1,7 @@
 namespace LlmAgents.Agents.Work;
 
 using LlmAgents.LlmApi;
+using LlmAgents.LlmApi.Content;
 using Newtonsoft.Json.Linq;
 
 public class GetUserInputWork : LlmAgentWork
@@ -25,23 +26,14 @@ public class GetUserInputWork : LlmAgentWork
 
         Messages = [LlmApiOpenAi.GetMessage(messageContent)];
 
-        foreach (var message in Messages)
+        foreach (var message in messageContent)
         {
-            var content = message.Value<JArray>("content");
-            if (content == null) continue;
-
-            foreach (var c in content)
+            if (message is not MessageContentText textContent)
             {
-                var type = c.Value<string>("type");
-                if (!string.Equals(type, "text"))
-                {
-                    continue;
-                }
-
-                var text = c.Value<string>("text");
-
-                await agent.agentCommunication.SendMessage($"User: {text}", true);
+                continue;
             }
+            
+            await agent.agentCommunication.SendMessage($"User: {textContent.Text}", true);
         }
     }
 }

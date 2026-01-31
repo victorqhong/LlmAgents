@@ -19,10 +19,12 @@ public class ConsoleCommunication : IAgentCommunication
     {
         if (newLine)
         {
-            Console.WriteLine(Environment.NewLine);
+            Console.WriteLine(message);
         }
-
-        Console.Write(message);
+        else
+        {
+            Console.Write(message);
+        }
 
         return Task.CompletedTask;
     }
