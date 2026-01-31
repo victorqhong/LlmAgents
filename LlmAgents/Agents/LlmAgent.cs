@@ -101,80 +101,32 @@ public class LlmAgent
         return tasks.SelectMany((work, selector) => work.Messages ?? []).ToList();
     }
 
-    internal async Task<ILlmAgentWork> CreateUserInputWork(ILlmAgentWork? predecessor, CancellationToken cancellationToken)
+    private void AddWorkToTasks(ILlmAgentWork work, ILlmAgentWork? predecessor)
     {
-        var userInputWork = new GetUserInputWork(this);
-
         if (predecessor == null)
         {
-            tasks.Add(userInputWork);
+            tasks.Add(work);
         }
         else
         {
             var index = tasks.IndexOf(predecessor);
             if (index == -1 || index == tasks.Count - 1)
             {
-                tasks.Add(userInputWork);
+                tasks.Add(work);
             }
             else
             {
-                tasks.Insert(index + 1, userInputWork);
+                tasks.Insert(index + 1, work);
             }
         }
-
-        await userInputWork.StartAsync(cancellationToken);
-
-        return userInputWork;
     }
 
-    internal async Task<GetAssistantResponseWork> CreateAssistantResponseWork(ILlmAgentWork? predecessor, CancellationToken cancellationToken)
+    private async Task<T> RunWork<T>(T work, ILlmAgentWork? predecessor, CancellationToken cancellationToken) where T : LlmAgentWork
     {
-        var assistantResponseWork = new GetAssistantResponseWork(this);
-        if (predecessor == null)
-        {
-            tasks.Add(assistantResponseWork);
-        }
-        else
-        {
-            var index = tasks.IndexOf(predecessor);
-            if (index == -1 || index == tasks.Count - 1)
-            {
-                tasks.Add(assistantResponseWork);
-            }
-            else
-            {
-                tasks.Insert(index + 1, assistantResponseWork);
-            }
-        }
+        AddWorkToTasks(work, predecessor);
+        await work.Run(cancellationToken);
 
-        await assistantResponseWork.StartAsync(cancellationToken);
-
-        return assistantResponseWork;
-    }
-
-    internal async Task<ToolCalls> CreateToolCallsWork(ILlmAgentWork? predecessor, CancellationToken cancellationToken)
-    {
-        var toolCallsWork = new ToolCalls(this);
-        if (predecessor == null)
-        {
-            tasks.Add(toolCallsWork);
-        }
-        else
-        {
-            var index = tasks.IndexOf(predecessor);
-            if (index == -1 || index == tasks.Count - 1)
-            {
-                tasks.Add(toolCallsWork);
-            }
-            else
-            {
-                tasks.Insert(index + 1, toolCallsWork);
-            }
-        }
-
-        await toolCallsWork.StartAsync(cancellationToken);
-
-        return toolCallsWork;
+        return work;
     }
 
     public async Task Run(CancellationToken cancellationToken)
@@ -183,15 +135,15 @@ public class LlmAgent
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var userInputWork = await CreateUserInputWork(null, cancellationToken);
-                var assistantWork = await CreateAssistantResponseWork(userInputWork, cancellationToken);
+                var userInputWork = await RunWork(new GetUserInputWork(this), null, cancellationToken);
+                var assistantWork = await RunWork(new GetAssistantResponseWork(this), userInputWork, cancellationToken);
 
-                if (assistantWork.WorkResult == null || !string.Equals(assistantWork.WorkResult.FinishReason, "tool_calls"))
+                if (assistantWork.Parser == null || !string.Equals(assistantWork.Parser.FinishReason, "tool_calls"))
                 {
                     continue;
                 }
 
-                var toolCallsWork = await CreateToolCallsWork(assistantWork, cancellationToken);
+                var toolCallsWork = await RunWork(new ToolCalls(this), assistantWork, cancellationToken);
 
             }
         }, cancellationToken);

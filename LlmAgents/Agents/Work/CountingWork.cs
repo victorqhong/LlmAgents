@@ -2,7 +2,7 @@ using Newtonsoft.Json.Linq;
 
 namespace LlmAgents.Agents.Work;
 
-public class CountingWork : LlmAgentWork<ICollection<JObject>>
+public class CountingWork : LlmAgentWork
 {
     private volatile int index;
 
@@ -11,25 +11,19 @@ public class CountingWork : LlmAgentWork<ICollection<JObject>>
     {
     }
 
-    public override ICollection<JObject>? Messages { get; protected set; } 
-
     public override Task<ICollection<JObject>?> GetState(CancellationToken ct)
     {
         return Task.FromResult<ICollection<JObject>?>([JObject.FromObject(new { role = "assistant", content = $"i've counted to {index}" })]);
     }
 
-    public override Task OnCompleted(ICollection<JObject>? messages, CancellationToken ct)
-    {
-        return Task.CompletedTask;
-    }
-
-    public override async Task<ICollection<JObject>?> Work(CancellationToken ct)
+    public async override Task Run(CancellationToken cancellationToken)
     {
         for (index = 0; index < 100; index++)
         {
-            await Task.Delay(1000, ct);
+            await Task.Delay(1000, cancellationToken);
         }
 
-        return [JObject.FromObject(new { role = "assistant", content = "i've finished counting to 100" })];
+        ICollection<JObject>? messages = [JObject.FromObject(new { role = "assistant", content = "i've finished counting to 100" })];
+        Messages = messages;
     }
 }

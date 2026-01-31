@@ -4,50 +4,45 @@ using LlmAgents.LlmApi;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-public class ToolCalls : LlmAgentWork<LlmApiOpenAiStreamingCompletionParser>
+public class ToolCalls : LlmAgentWork
 {
+    public LlmApiOpenAiStreamingCompletionParser Parser { get; private set; }
+
     public ToolCalls(LlmAgent agent)
         : base(agent)
     {
     }
-
-    public override ICollection<JObject>? Messages { get; protected set; }
 
     public override Task<ICollection<JObject>?> GetState(CancellationToken ct)
     {
         return Task.FromResult<ICollection<JObject>?>(null);
     }
 
-    public override async Task OnCompleted(LlmApiOpenAiStreamingCompletionParser? result, CancellationToken ct)
+    public async override Task Run(CancellationToken cancellationToken)
     {
-        if (result == null || result.StreamingCompletion == null)
+        var conversation = agent.RenderConversation();
+        await ProcessToolCalls(conversation);
+
+        var parser = await agent.llmApi.GetStreamingCompletion(conversation, agent.GetToolDefinitions(), "auto", cancellationToken: cancellationToken);
+        if (parser == null)
+        {
+            return;
+        }
+
+        if (parser.StreamingCompletion == null)
         {
             return;
         }
 
         await agent.agentCommunication.SendMessage("Assistant: ", true);
-        await foreach (var chunk in result.StreamingCompletion)
+        await foreach (var chunk in parser.StreamingCompletion)
         {
             await agent.agentCommunication.SendMessage(chunk, false);
         }
 
         await agent.agentCommunication.SendMessage(string.Empty, true);
 
-        Messages = result.Messages;
-    }
-
-    public override async Task<LlmApiOpenAiStreamingCompletionParser?> Work(CancellationToken ct)
-    {
-        var conversation = agent.RenderConversation();
-        await ProcessToolCalls(conversation);
-
-        var parser = await agent.llmApi.GetStreamingCompletion(conversation, agent.GetToolDefinitions(), "auto", cancellationToken: ct);
-        if (parser == null)
-        {
-            return null;
-        }
-
-        return parser;
+        Messages = parser.Messages;
     }
 
     private async Task ProcessToolCalls(List<JObject> messages)
