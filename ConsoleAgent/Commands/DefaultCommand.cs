@@ -86,9 +86,14 @@ internal class DefaultCommand : RootCommand
         var consoleCommunication = new ConsoleCommunication();
 
         var agent = await LlmAgentFactory.CreateAgent(loggerFactory, consoleCommunication, apiParameters, agentParameters, toolParameters, sessionParameters);
-
-        agent.PreWaitForContent = () => { Console.Write("> "); };
-        agent.llmApi.PostParseUsage += (usage) => { Console.WriteLine(); logger.LogInformation("PromptTokens: {PromptTokens}, CompletionTokens: {UsageCompletionTokens}, TotalTokens: {UsageTotalTokens}, Context Used: {ContextUsedPercent}", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, ((double)usage.TotalTokens / agent.llmApi.ContextSize).ToString("P")); };
+        agent.PreWaitForContent = async () =>
+        {
+            await consoleCommunication.SendMessage("> ", false);
+        };
+        agent.PostParseUsage += async (usage) =>
+        {
+            await consoleCommunication.SendMessage(string.Format("PromptTokens: {0}, CompletionTokens: {1}, TotalTokens: {2}, Context Used: {3}", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, ((double)usage.TotalTokens / agent.llmApi.ContextSize).ToString("P"), true));
+        };
 
         var cancellationToken = context.GetCancellationToken();
 

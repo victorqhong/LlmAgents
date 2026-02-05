@@ -1,5 +1,6 @@
 namespace LlmAgents.Agents;
 
+using LlmAgents.Agents.Work;
 using LlmAgents.Communication;
 using LlmAgents.LlmApi;
 using LlmAgents.State;
@@ -17,6 +18,8 @@ public class LlmAgent
 
     public readonly IAgentCommunication agentCommunication;
 
+    private readonly List<LlmAgentWork> tasks = [];
+
     public readonly string Id;
 
     public bool Persistent { get; set; }
@@ -30,6 +33,8 @@ public class LlmAgent
     public Action? PostReceiveContent { get; set; }
 
     public Action? PostSendMessage { get; set; }
+
+    public Action<TokenUsage>? PostParseUsage { get; set; }
 
     public IToolEventBus? ToolEventBus { get; set; }
 
@@ -50,8 +55,6 @@ public class LlmAgent
         Id = id;
         this.llmApi = llmApi;
         this.agentCommunication = agentCommunication;
-
-        this.llmApi.Agent = this;
     }
 
     public void AddTool(params Tool[] tools)
@@ -88,58 +91,68 @@ public class LlmAgent
         return result;
     }
 
-    public IReadOnlyList<JObject> GetToolDefinitions()
+    public IList<JObject> GetToolDefinitions()
     {
         return ToolDefinitions;
     }
 
-    public async Task Run(CancellationToken cancellationToken = default)
+    public List<JObject> RenderConversation()
     {
-        while (!cancellationToken.IsCancellationRequested)
+        return tasks.SelectMany((work, selector) =>
         {
-            PreWaitForContent?.Invoke();
-
-            var messageContent = await agentCommunication.WaitForContent(cancellationToken);
-            if (cancellationToken.IsCancellationRequested || messageContent == null)
+            if (work.Messages != null)
             {
-                break;
+                return work.Messages;
             }
 
-            PostReceiveContent?.Invoke();
-
-            if (StreamOutput)
+            var state = work.GetState(default).ConfigureAwait(false).GetAwaiter().GetResult();
+            if (state != null)
             {
-                var response = await llmApi.GenerateStreamingCompletion(messageContent, cancellationToken);
-                if (response == null)
+                return state;
+            }
+
+            return [];
+        }).ToList();
+    }
+
+    public async Task<T> RunWork<T>(T work, LlmAgentWork? predecessor, CancellationToken cancellationToken) where T : LlmAgentWork
+    {
+        AddWorkToTasks(work, predecessor);
+        await work.Run(cancellationToken);
+
+        return work;
+    }
+
+    public async Task Run(CancellationToken cancellationToken)
+    {
+        _ = Task.Run(async () =>
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var userInputWork = await RunWork(new GetUserInputWork(this), null, cancellationToken);
+
+                var assistantWork = await RunWork(new GetAssistantResponseWork(this), userInputWork, cancellationToken);
+                if (assistantWork.Parser == null || !string.Equals(assistantWork.Parser.FinishReason, "tool_calls"))
                 {
                     continue;
                 }
 
-                await foreach (var chunk in response)
+                var toolCallsWork = await RunWork(new ToolCalls(this), assistantWork, cancellationToken);
+                await RunWork(new GetAssistantResponseWork(this), toolCallsWork, cancellationToken);
+
+                if (Persistent)
                 {
-                    await agentCommunication.SendMessage(chunk, false);
+                    SaveMessages();
                 }
-
-                await agentCommunication.SendMessage(string.Empty, true);
             }
-            else
-            {
-                var response = await llmApi.GenerateCompletion(messageContent, cancellationToken);
-                if (response == null)
-                {
-                    continue;
-                }
+        }, cancellationToken);
 
-                await agentCommunication.SendMessage(response, true);
-            }
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+    }
 
-            PostSendMessage?.Invoke();
-
-            if (Persistent)
-            {
-                SaveMessages();
-            }
-        }
+    public void AddMessages(ICollection<JObject> messages)
+    {
+        AddWorkToTasks(new StaticMessages(messages, this), null);
     }
 
     public void LoadMessages()
@@ -158,8 +171,7 @@ public class LlmAgent
             return;
         }
 
-        llmApi.Messages.Clear();
-        llmApi.Messages.AddRange(messages);
+        AddMessages(messages);
     }
 
     public void SaveMessages()
@@ -167,7 +179,27 @@ public class LlmAgent
         var messagesFileName = GetMessagesFilename(Id);
         var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
 
-        File.WriteAllText(messagesFilePath, JsonConvert.SerializeObject(llmApi.Messages));
+        File.WriteAllText(messagesFilePath, JsonConvert.SerializeObject(RenderConversation()));
+    }
+
+    private void AddWorkToTasks(LlmAgentWork work, LlmAgentWork? predecessor)
+    {
+        if (predecessor == null)
+        {
+            tasks.Add(work);
+        }
+        else
+        {
+            var index = tasks.IndexOf(predecessor);
+            if (index == -1 || index == tasks.Count - 1)
+            {
+                tasks.Add(work);
+            }
+            else
+            {
+                tasks.Insert(index + 1, work);
+            }
+        }
     }
 
     private static string GetMessagesFilename(string agentId)

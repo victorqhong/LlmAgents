@@ -56,7 +56,7 @@ public static class LlmAgentFactory
             }
         }
 
-        List<Tool> tools = new List<Tool>();
+        List<Tool> tools = [];
 
         if (Uri.TryCreate($"http://{toolParameters.ToolServerAddress}:{toolParameters.ToolServerPort}", UriKind.Absolute, out var toolServerUri))
         {
@@ -79,7 +79,6 @@ public static class LlmAgentFactory
 
             toolFactory.Register(agentCommunication);
             toolFactory.Register(loggerFactory);
-            toolFactory.Register<ILlmApiMessageProvider>(llmApi);
             toolFactory.Register<IToolEventBus>(toolEventBus);
             toolFactory.Register(stateDatabase);
 
@@ -105,9 +104,9 @@ public static class LlmAgentFactory
             agent.LoadMessages();
         }
 
-        if (agent.llmApi.Messages.Count == 0 && !string.IsNullOrEmpty(sessionParameters.SystemPromptFile))
+        if (agent.RenderConversation().Count == 0 && !string.IsNullOrEmpty(sessionParameters.SystemPromptFile))
         {
-            agent.llmApi.Messages.Add(JObject.FromObject(new { role = "system", content = sessionParameters.SystemPromptFile }));
+            agent.AddMessages([JObject.FromObject(new { role = "system", content = sessionParameters.SystemPromptFile })]);
         }
 
         return agent;
