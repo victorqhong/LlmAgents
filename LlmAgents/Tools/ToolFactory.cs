@@ -81,9 +81,17 @@ public class ToolFactory
         container.Add(typeof(T), value);
     }
 
-    public T Resolve<T>()
+    public T? Resolve<T>() where T : class
     {
-        return (T)container[typeof(T)];
+        var key = typeof(T);
+        if (container.ContainsKey(key))
+        {
+            return (T)container[typeof(T)];
+        }
+        else
+        {
+            return null;
+        }
     }
 
     public void AddParameter(string key, string value)

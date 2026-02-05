@@ -108,7 +108,7 @@ public class Shell : Tool
         Process.StandardInput.WriteLine("$PSStyle.OutputRendering='Plain'");
 
         var toolEventBus = toolFactory.Resolve<IToolEventBus>();
-        toolEventBus.SubscribeToolEvent<DirectoryChange>(OnChangeDirectory);
+        toolEventBus?.SubscribeToolEvent<DirectoryChange>(OnChangeDirectory);
     }
 
     public Process Process { get; private set; }

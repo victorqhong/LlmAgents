@@ -1,6 +1,7 @@
 ﻿using LlmAgents.Agents;
 using LlmAgents.Agents.Work;
 using LlmAgents.LlmApi;
+using LlmAgents.tests;
 using LlmAgents.Tests.Communication;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
@@ -40,6 +41,7 @@ public sealed class TestLlmAgent
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Integration)]
     public async Task TestAgent_RunWork()
     {
         var cts = new CancellationTokenSource();
@@ -63,6 +65,7 @@ public sealed class TestLlmAgent
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Integration)]
     public async Task TestAgent_ToolCall()
     {
         var cts = new CancellationTokenSource();
@@ -70,6 +73,7 @@ public sealed class TestLlmAgent
 
         var loggerFactory = new LoggerFactory();
         var toolFactory = new ToolFactory(loggerFactory);
+        toolFactory.Register<ILoggerFactory>(loggerFactory);
         var agent = CreateAgent(out var communication);
         agent.AddTool(new Shell(toolFactory));
 
