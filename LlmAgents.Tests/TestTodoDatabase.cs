@@ -3,7 +3,7 @@ using LlmAgents.Tools.Todo;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace Simulation.Tests;
+namespace LlmAgents.Tests;
 
 [TestClass]
 public sealed class TestTodoDatabase

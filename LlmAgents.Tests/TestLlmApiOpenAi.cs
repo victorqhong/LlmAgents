@@ -6,7 +6,7 @@ using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace Simulation.Tests;
+namespace LlmAgents.Tests;
 
 [TestClass]
 public sealed class TestLlmApiOpenAi

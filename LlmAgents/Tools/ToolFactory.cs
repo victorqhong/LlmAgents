@@ -81,17 +81,26 @@ public class ToolFactory
         container.Add(typeof(T), value);
     }
 
-    public T? Resolve<T>() where T : class
+    public T Resolve<T>() where T : class
     {
         var key = typeof(T);
-        if (container.ContainsKey(key))
+        if (container.TryGetValue(key, out var value))
         {
-            return (T)container[typeof(T)];
+            return (T)value;
         }
-        else
+
+        throw new KeyNotFoundException($"ToolFactory does not contain key of type: {key.Name}");
+    }
+
+    public T? ResolveWithDefault<T>(T? @default = null) where T : class
+    {
+        var key = typeof(T);
+        if (container.TryGetValue(key, out var value))
         {
-            return null;
+            return (T)value;
         }
+
+        return @default;
     }
 
     public void AddParameter(string key, string value)
