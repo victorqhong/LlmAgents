@@ -68,7 +68,9 @@ public static class LlmAgentFactory
             var client = await McpClientFactory.CreateAsync(clientTransport);
             var mcpTools = await client.ListToolsAsync();
 
-            tools.AddRange(mcpTools.Select(mcpClientTool => new McpTool(mcpClientTool, client)).ToArray());
+            var toolFactory = new ToolFactory(loggerFactory);
+
+            tools.AddRange(mcpTools.Select(mcpClientTool => new McpTool(mcpClientTool, client, toolFactory)).ToArray());
         }
 
         if (!string.IsNullOrEmpty(toolParameters.ToolsConfig) && File.Exists(toolParameters.ToolsConfig))

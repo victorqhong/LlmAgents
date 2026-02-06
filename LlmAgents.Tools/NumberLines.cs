@@ -21,8 +21,8 @@ public class NumberLines : Tool
 
         currentDirectory = basePath;
 
-        var toolEventBus = toolFactory.Resolve<IToolEventBus>();
-        toolEventBus.SubscribeToolEvent<DirectoryChange>(OnChangeDirectory);
+        var toolEventBus = toolFactory.ResolveWithDefault<IToolEventBus>();
+        toolEventBus?.SubscribeToolEvent<DirectoryChange>(OnChangeDirectory);
     }
 
     private Task OnChangeDirectory(ToolEvent e)

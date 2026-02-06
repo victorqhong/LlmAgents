@@ -6,7 +6,7 @@ using System.IO;
 
 public class DirectoryChange : Tool
 {
-    private readonly IToolEventBus toolEventBus;
+    private readonly IToolEventBus? toolEventBus;
 
     private readonly string basePath;
     private readonly bool restrictToBasePath;
@@ -14,7 +14,7 @@ public class DirectoryChange : Tool
     public DirectoryChange(ToolFactory toolFactory)
         : base(toolFactory)
     {
-        toolEventBus = toolFactory.Resolve<IToolEventBus>();
+        toolEventBus = toolFactory.ResolveWithDefault<IToolEventBus>();
 
         basePath = Path.GetFullPath(toolFactory.GetParameter(nameof(basePath)) ?? Environment.CurrentDirectory);
         restrictToBasePath = bool.TryParse(toolFactory.GetParameter(nameof(restrictToBasePath)), out restrictToBasePath) ? restrictToBasePath : true;
@@ -100,7 +100,7 @@ public class DirectoryChange : Tool
     public override void Load(string sessionId, State.StateDatabase stateDatabase)
     {
         CurrentDirectory = stateDatabase.GetSessionState(sessionId, $"{nameof(DirectoryChange)}:{nameof(CurrentDirectory)}") ?? CurrentDirectory;
-        toolEventBus.PostToolEvent(new Events.ChangeDirectoryEvent { Sender = this, Directory = CurrentDirectory });
+        toolEventBus?.PostToolEvent(new Events.ChangeDirectoryEvent { Sender = this, Directory = CurrentDirectory });
     }
 }
 

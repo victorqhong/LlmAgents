@@ -11,8 +11,6 @@ public class AgentContextCount : Tool
         : base(toolFactory)
     {
         messageProvider = toolFactory.Resolve<ILlmApiMessageProvider>();
-
-        ArgumentNullException.ThrowIfNull(messageProvider);
     }
 
     public override JObject Schema { get; protected set; } = JObject.FromObject(new
