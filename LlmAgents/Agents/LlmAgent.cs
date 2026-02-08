@@ -130,20 +130,19 @@ public class LlmAgent
             while (!cancellationToken.IsCancellationRequested)
             {
                 var userInputWork = await RunWork(new GetUserInputWork(this), null, cancellationToken);
-
                 var assistantWork = await RunWork(new GetAssistantResponseWork(this), userInputWork, cancellationToken);
-                if (assistantWork.Parser == null || !string.Equals(assistantWork.Parser.FinishReason, "tool_calls"))
+
+                while (assistantWork.Parser != null && string.Equals(assistantWork.Parser.FinishReason, "tool_calls"))
                 {
-                    continue;
+                    var toolCallsWork = await RunWork(new ToolCalls(this), assistantWork, cancellationToken);
+                    assistantWork = await RunWork(new GetAssistantResponseWork(this), toolCallsWork, cancellationToken);
+
+                    if (Persistent)
+                    {
+                        SaveMessages();
+                    }
                 }
 
-                var toolCallsWork = await RunWork(new ToolCalls(this), assistantWork, cancellationToken);
-                await RunWork(new GetAssistantResponseWork(this), toolCallsWork, cancellationToken);
-
-                if (Persistent)
-                {
-                    SaveMessages();
-                }
             }
         }, cancellationToken);
 

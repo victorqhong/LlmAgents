@@ -150,12 +150,13 @@ public class TodoDatabase
 
             stateDatabase.Write(command =>
             {
-                command.CommandText = "UPDATE todo_items SET title = $newTitle, description = $newDescription, due_date = $newDueDate, completed = $newCompleted WHERE title = $title AND session_id = $sessionId;";
+                command.CommandText = "UPDATE todo_items SET title = $newTitle, description = $newDescription, due_date = $newDueDate, completed = $newCompleted, group_id = $newGroupId WHERE title = $title AND session_id = $sessionId;";
                 command.Parameters.AddWithValue("$title", title);
                 command.Parameters.AddWithValue("$newTitle", newTitle ?? todo.title);
                 command.Parameters.AddWithValue("$newDescription", newDescription ?? todo.description);
                 command.Parameters.AddWithValue("$newDueDate", newDueDate ?? todo.dueDate);
                 command.Parameters.AddWithValue("$newCompleted", newCompleted ?? todo.completed);
+                command.Parameters.AddWithValue("$newGroupId", newTodoGroup.id);
                 command.Parameters.AddWithValue("$sessionId", session.SessionId);
                 command.ExecuteNonQuery();
             });

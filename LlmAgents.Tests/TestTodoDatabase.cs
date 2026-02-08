@@ -45,6 +45,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Unit)]
     public void TestCreateGroup()
     {
         var result = db.CreateGroup(session, "test");
@@ -52,6 +53,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Unit)]
     public void TestGetGroup()
     {
         db.CreateGroup(session, "test");
@@ -63,6 +65,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Unit)]
     public void TestGetGroup_WithTodos()
     {
         db.CreateGroup(session, "test");
@@ -75,6 +78,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Unit)]
     public void TestUpdateGroup()
     {
         db.CreateGroup(session, "test");
@@ -89,6 +93,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Unit)]
     public void TestDeleteGroup()
     {
         db.CreateGroup(session, "test");
@@ -102,6 +107,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Unit)]
     public void TestListGroups_WithTodos()
     {
         try
@@ -122,6 +128,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Unit)]
     public void TestCreateTodo()
     {
         db.CreateGroup(session, "test");
@@ -134,6 +141,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Unit)]
     public void TestGetTodo()
     {
         db.CreateGroup(session, "test");
@@ -147,6 +155,7 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Unit)]
     public void TestUpdateTodo()
     {
         db.CreateGroup(session, "test");
@@ -163,6 +172,29 @@ public sealed class TestTodoDatabase
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Unit)]
+    public void TestUpdateTodo_Group()
+    {
+        db.CreateGroup(session, "test");
+        db.CreateGroup(session, "test2");
+
+        var newGroup = db.GetGroup(session, "test2");
+        Assert.IsNotNull(newGroup);
+
+        var result = db.CreateTodo(session, "testtodo", "test", "this is a test");
+        Assert.IsTrue(result);
+
+        var result2 = db.UpdateTodo(session, "testtodo", "test", "newtitle", "test2");
+        Assert.IsTrue(result2);
+
+        var todo = db.GetTodo(session, "newtitle", "test2");
+        Assert.IsNotNull(todo);
+        Assert.AreEqual("newtitle", todo.title);
+        Assert.AreEqual(newGroup.id, todo.groupId);
+    }
+
+    [TestMethod]
+    [TestCategory(Constants.TestCategory_Unit)]
     public void TestDeleteTodo()
     {
         db.CreateGroup(session, "test");

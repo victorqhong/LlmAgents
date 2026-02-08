@@ -1,7 +1,6 @@
 ﻿using LlmAgents.Agents;
 using LlmAgents.Agents.Work;
 using LlmAgents.LlmApi;
-using LlmAgents.tests;
 using LlmAgents.Tests.Communication;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
