@@ -152,6 +152,34 @@ public class StateDatabase : IDisposable
         return [];
     }
 
+    public Session? GetLatestSession()
+    {
+        try
+        {
+            using var command = readConnection.CreateCommand();
+            command.CommandText = "SELECT session_id, start_time, last_active, status, metadata FROM sessions ORDER BY last_active DESC LIMIT 1";
+
+            using var reader = command.ExecuteReader();
+            if (reader.Read())
+            {
+                return new Session
+                {
+                    SessionId = reader.GetString(0),
+                    StartTime = reader.GetDateTime(1),
+                    LastActive = reader.GetDateTime(2),
+                    Status = reader.GetString(3),
+                    Metadata = reader.IsDBNull(4) ? string.Empty : reader.GetString(4)
+                };
+            }
+        }
+        catch (Exception e)
+        {
+            Log.LogError(e, "Exception while getting latest session");
+        }
+
+        return null;
+    }
+
     public void SetState(string sessionId, string key, string value)
     {
         try

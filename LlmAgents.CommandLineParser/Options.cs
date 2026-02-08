@@ -30,7 +30,7 @@ public static class Options
         description: "Maximum number of tokens in a completion",
         getDefaultValue: () => 8192);
 
-    public readonly static Option<string> ApiConfig = new Option<string>(
+    public readonly static Option<string?> ApiConfig = new Option<string?>(
         name: "--apiConfig",
         description: "Path to a JSON file with configuration for api values",
         getDefaultValue: () => Config.GetConfigOptionDefaultValue("api.json", "LLMAGENTS_API_CONFIG"));
@@ -55,12 +55,12 @@ public static class Options
         description: "Directory used to store agent related data",
         getDefaultValue: () => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LlmAgents"));
 
-    public readonly static Option<string> SessionId = new Option<string>(
+    public readonly static Option<string?> SessionId = new Option<string?>(
         name: "--sessionId",
         description: "Session id used to load state",
         getDefaultValue: () => Config.GetConfigOptionDefaultValue(".llmagents-session", "LLMAGENTS_SESSION"));
 
-    public readonly static Option<string> ToolsConfig = new Option<string>(
+    public readonly static Option<string?> ToolsConfig = new Option<string?>(
         name: "--toolsConfig",
         description: "Path to a JSON file with configuration for tool values",
         getDefaultValue: () => Config.GetConfigOptionDefaultValue("tools.json", "LLMAGENTS_TOOLS_CONFIG"));

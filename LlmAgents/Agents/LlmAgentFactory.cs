@@ -46,12 +46,16 @@ public static class LlmAgentFactory
             session = stateDatabase.GetSession(sessionParameters.SessionId);
             if (session == null)
             {
-                session = new Session
-                {
-                    SessionId = sessionParameters.SessionId,
-                    Status = "New"
-                };
-
+                session = Session.New(sessionParameters.SessionId);
+                stateDatabase.CreateSession(session);
+            }
+        }
+        else
+        {
+            session = stateDatabase.GetLatestSession();
+            if (session == null)
+            {
+                session = Session.New();
                 stateDatabase.CreateSession(session);
             }
         }

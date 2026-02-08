@@ -13,7 +13,7 @@ public static class Config
         return Path.Combine(home, ".llmagents", file);
     }
 
-    public static string GetConfigOptionDefaultValue(string fileName, string environmentVariableName)
+    public static string? GetConfigOptionDefaultValue(string fileName, string environmentVariableName)
     {
         if (File.Exists(fileName))
         {
@@ -33,7 +33,7 @@ public static class Config
             return environmentVariable;
         }
 
-        return string.Empty;
+        return null;
     }
 
     public static void EnsureConfigDirectoryExists()
