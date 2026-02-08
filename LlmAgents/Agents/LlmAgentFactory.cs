@@ -60,8 +60,6 @@ public static class LlmAgentFactory
             }
         }
 
-        Console.WriteLine($"{session.SessionId}");
-
         List<Tool> tools = [];
 
         if (Uri.TryCreate($"http://{toolParameters.ToolServerAddress}:{toolParameters.ToolServerPort}", UriKind.Absolute, out var toolServerUri))
