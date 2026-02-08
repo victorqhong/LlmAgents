@@ -10,11 +10,13 @@ public class Session
     public required string Status { get; set; }
     public string Metadata { get; set; } = string.Empty;
 
-    public static Session New()
+    public static Session New(string? sessionId = null)
     {
+        sessionId ??= Guid.NewGuid().ToString();
+
         return new Session
         {
-            SessionId = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
             Status = "New"
         };
     }

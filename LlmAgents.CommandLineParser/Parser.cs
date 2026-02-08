@@ -54,7 +54,7 @@ public static class Parser
 
     public static LlmAgentParameters? ParseAgentParameters(InvocationContext invocationContext)
     {
-        string? agentId = invocationContext.ParseResult.GetValueForOption(Options.AgentId);
+        string? agentId = invocationContext.ParseResult.GetValueForOption(Options.AgentId) ?? Environment.MachineName;
         bool persistent = invocationContext.ParseResult.GetValueForOption(Options.Persistent);
         string? storageDirectory = invocationContext.ParseResult.GetValueForOption(Options.StorageDirectory);
         bool streamOutput = invocationContext.ParseResult.GetValueForOption(Options.StreamOutput);
