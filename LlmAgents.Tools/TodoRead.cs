@@ -65,7 +65,7 @@ public class TodoRead : Tool
             var todo = todoDatabase.GetTodo(toolFactory.Session, title, group);
             if (todo == null)
             {
-                result.Add("error", $"could not find todo with tile '{title}' in group '{group}'");
+                result.Add("error", $"could not find todo with title '{title}' in group '{group}'");
             }
             else
             {

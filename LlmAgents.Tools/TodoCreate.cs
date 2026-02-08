@@ -26,10 +26,10 @@ public class TodoCreate : Tool
                 type = "object",
                 properties = new
                 {
-                    name = new
+                    title = new
                     {
                         type = "string",
-                        description = "Name of the todo"
+                        description = "Title of the todo"
                     },
                     group = new
                     {
@@ -42,7 +42,7 @@ public class TodoCreate : Tool
                         description = "Description of the todo (optional)"
                     }
                 },
-                required = new[] { "name", "group" }
+                required = new[] { "title", "group" }
             }
         }
     });
@@ -51,10 +51,10 @@ public class TodoCreate : Tool
     {
         var result = new JObject();
 
-        var name = parameters["name"]?.ToString();
-        if (string.IsNullOrEmpty(name))
+        var title = parameters["title"]?.ToString();
+        if (string.IsNullOrEmpty(title))
         {
-            result.Add("error", "name is null or empty");
+            result.Add("error", "title is null or empty");
             return Task.FromResult<JToken>(result);
         }
 
@@ -69,7 +69,7 @@ public class TodoCreate : Tool
 
         try
         {
-            var todoResult = todoDatabase.CreateTodo(toolFactory.Session, name, group, description);
+            var todoResult = todoDatabase.CreateTodo(toolFactory.Session, title, group, description);
             result.Add("result", todoResult);
         }
         catch (Exception e)

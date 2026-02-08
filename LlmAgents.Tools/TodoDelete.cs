@@ -26,10 +26,10 @@ public class TodoDelete : Tool
                 type = "object",
                 properties = new
                 {
-                    name = new
+                    title = new
                     {
                         type = "string",
-                        description = "Name of the todo"
+                        description = "Title of the todo"
                     },
                     group = new
                     {
@@ -37,7 +37,7 @@ public class TodoDelete : Tool
                         description = "Name of the that contains this todo"
                     }
                 },
-                required = new[] { "name", "group" }
+                required = new[] { "title", "group" }
             }
         }
     });
@@ -46,10 +46,10 @@ public class TodoDelete : Tool
     {
         var result = new JObject();
 
-        var name = parameters["name"]?.ToString();
-        if (string.IsNullOrEmpty(name))
+        var title = parameters["title"]?.ToString();
+        if (string.IsNullOrEmpty(title))
         {
-            result.Add("error", "name is null or empty");
+            result.Add("error", "title is null or empty");
             return Task.FromResult<JToken>(result);
         }
 
@@ -62,7 +62,7 @@ public class TodoDelete : Tool
 
         try
         {
-            var todoResult = todoDatabase.DeleteTodo(toolFactory.Session, name, group);
+            var todoResult = todoDatabase.DeleteTodo(toolFactory.Session, title, group);
             result.Add("result", todoResult);
         }
         catch (Exception e)
