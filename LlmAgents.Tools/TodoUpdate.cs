@@ -3,6 +3,7 @@ namespace LlmAgents.Tools;
 using Newtonsoft.Json.Linq;
 using LlmAgents.Tools.Todo;
 using System;
+using LlmAgents.State;
 
 public class TodoUpdate : Tool
 {
@@ -67,7 +68,7 @@ public class TodoUpdate : Tool
         }
     });
 
-    public override Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 
@@ -93,7 +94,7 @@ public class TodoUpdate : Tool
             string? newDueDate = parameters.Value<string>("newDueDate");
             bool? newCompleted = parameters.Value<bool>("newCompleted");
 
-            var success = todoDatabase.UpdateTodo(toolFactory.Session, title, group, newTitle, newGroup, newDescription, newDueDate, newCompleted);
+            var success = todoDatabase.UpdateTodo(session, title, group, newTitle, newGroup, newDescription, newDueDate, newCompleted);
             result.Add("success", success);
         }
         catch (Exception e)

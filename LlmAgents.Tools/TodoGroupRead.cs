@@ -4,7 +4,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using LlmAgents.Tools.Todo;
 using System;
-
+using LlmAgents.State;
 public class TodoGroupRead : Tool
 {
     private readonly TodoDatabase todoDatabase;
@@ -38,7 +38,7 @@ public class TodoGroupRead : Tool
         }
     });
 
-    public override Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 
@@ -51,7 +51,7 @@ public class TodoGroupRead : Tool
 
         try
         {
-            var todoContainer = todoDatabase.GetGroup(toolFactory.Session, name);
+            var todoContainer = todoDatabase.GetGroup(session, name);
             if (todoContainer == null)
             {
                 result.Add("error", "could not find group");

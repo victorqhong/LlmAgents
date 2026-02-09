@@ -1,5 +1,6 @@
 namespace LlmAgents.Tools;
 
+using LlmAgents.State;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System;
@@ -138,7 +139,7 @@ public class Shell : Tool
         }
     });
 
-    public override Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 

@@ -1,5 +1,6 @@
 namespace LlmAgents.Tools;
 
+using LlmAgents.State;
 using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
@@ -47,7 +48,7 @@ public class DirectoryChange : Tool
         }
     });
 
-    public override Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 
@@ -92,14 +93,14 @@ public class DirectoryChange : Tool
         return Task.FromResult<JToken>(result);
     }
 
-    public override void Save(string sessionId, State.StateDatabase stateDatabase)
+    public override void Save(Session session, StateDatabase stateDatabase)
     {
-        stateDatabase.SetState(sessionId, $"{nameof(DirectoryChange)}:{nameof(CurrentDirectory)}", CurrentDirectory);
+        stateDatabase.SetState(session.SessionId, $"{nameof(DirectoryChange)}:{nameof(CurrentDirectory)}", CurrentDirectory);
     }
 
-    public override void Load(string sessionId, State.StateDatabase stateDatabase)
+    public override void Load(Session session, StateDatabase stateDatabase)
     {
-        CurrentDirectory = stateDatabase.GetSessionState(sessionId, $"{nameof(DirectoryChange)}:{nameof(CurrentDirectory)}") ?? CurrentDirectory;
+        CurrentDirectory = stateDatabase.GetSessionState(session.SessionId, $"{nameof(DirectoryChange)}:{nameof(CurrentDirectory)}") ?? CurrentDirectory;
         toolEventBus?.PostToolEvent(new Events.ChangeDirectoryEvent { Sender = this, Directory = CurrentDirectory });
     }
 }

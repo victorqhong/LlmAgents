@@ -1,5 +1,6 @@
 namespace LlmAgents.Tools;
 
+using LlmAgents.State;
 using Newtonsoft.Json.Linq;
 
 public abstract class Command : Tool
@@ -16,7 +17,7 @@ public abstract class Command : Tool
 
     public required Func<JObject, string?> Arguments { get; set; }
 
-    public override Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 

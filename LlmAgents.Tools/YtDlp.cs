@@ -1,5 +1,6 @@
 namespace LlmAgents.Tools;
 
+using LlmAgents.State;
 using Newtonsoft.Json.Linq;
 
 public class YtDlp : Tool
@@ -35,7 +36,7 @@ public class YtDlp : Tool
         }
     });
 
-    public override Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(Session? session, JObject parameters)
     {
         var result = new JObject();
 

@@ -3,7 +3,7 @@ namespace LlmAgents.Tools;
 using Newtonsoft.Json.Linq;
 using LlmAgents.Tools.Todo;
 using System;
-
+using LlmAgents.State;
 public class TodoGroupList : Tool
 {
     private readonly TodoDatabase todoDatabase;
@@ -29,13 +29,13 @@ public class TodoGroupList : Tool
         }
     });
 
-    public override Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 
         try
         {
-            var todoContainers = todoDatabase.ListGroups(toolFactory.Session, true);
+            var todoContainers = todoDatabase.ListGroups(session, true);
             if (todoContainers == null)
             {
                 result.Add("error", "could not list groups");

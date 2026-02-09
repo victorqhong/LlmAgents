@@ -1,5 +1,6 @@
 namespace LlmAgents.Tools;
 
+using LlmAgents.State;
 using ModelContextProtocol.Client;
 using Newtonsoft.Json.Linq;
 
@@ -30,7 +31,7 @@ public class McpTool : Tool
 
     public override JObject Schema { get; protected set; }
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override async Task<JToken> Function(Session session, JObject parameters)
     {
         var arguments = parameters.ToObject<IReadOnlyDictionary<string, object?>>();
         var toolCallResult = await mcpClient.CallToolAsync(mcpClientTool.Name, arguments);

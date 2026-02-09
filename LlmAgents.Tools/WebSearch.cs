@@ -1,5 +1,6 @@
 ﻿namespace LlmAgents.Tools;
 
+using LlmAgents.State;
 using Newtonsoft.Json.Linq;
 using System;
 
@@ -44,7 +45,7 @@ public class WebSearch : Tool
         }
     });
 
-    public async override Task<JToken> Function(JObject parameters)
+    public async override Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 
