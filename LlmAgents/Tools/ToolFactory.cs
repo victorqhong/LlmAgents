@@ -19,17 +19,6 @@ public class ToolFactory
 
     private readonly Dictionary<string, string> parameters = new Dictionary<string, string>();
 
-    private Session? session;
-
-    public Session Session
-    {
-        get
-        {
-            session ??= Session.New();
-            return session;
-        }
-    }
-
     public ToolFactory(ILoggerFactory loggerFactory, JObject? toolDefinitions = null)
     {
         log = loggerFactory.CreateLogger(nameof(ToolFactory));
@@ -233,15 +222,13 @@ public class ToolFactory
             tools.Add(tool);
         }
 
-        if (!string.IsNullOrEmpty(session?.SessionId) && stateDatabase != null)
+        if (session != null && stateDatabase != null)
         {
             foreach (var tool in tools)
             {
-                tool.Load(session.SessionId, stateDatabase);
+                tool.Load(session, stateDatabase);
                 log.LogInformation("Loaded tool: {tool}", tool.GetType().Name);
             }
-
-            this.session = session;
         }
 
         return tools.ToArray();

@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-
+using LlmAgents.State;
 public class FileList : Tool
 {
     private readonly string basePath;
@@ -79,7 +79,7 @@ public class FileList : Tool
         }
     });
 
-    public override Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 

@@ -3,6 +3,7 @@ namespace LlmAgents.Tools;
 using Newtonsoft.Json.Linq;
 using LlmAgents.Tools.Todo;
 using System;
+using LlmAgents.State;
 
 public class TodoGroupCreate : Tool
 {
@@ -42,7 +43,7 @@ public class TodoGroupCreate : Tool
         }
     });
 
-    public override Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 
@@ -57,7 +58,7 @@ public class TodoGroupCreate : Tool
 
         try
         {
-            var todoResult = todoDatabase.CreateGroup(toolFactory.Session, name, description);
+            var todoResult = todoDatabase.CreateGroup(session, name, description);
             result.Add("result", todoResult);
         }
         catch (Exception e)

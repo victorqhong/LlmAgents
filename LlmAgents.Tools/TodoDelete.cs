@@ -3,7 +3,7 @@ namespace LlmAgents.Tools;
 using Newtonsoft.Json.Linq;
 using LlmAgents.Tools.Todo;
 using System;
-
+using LlmAgents.State;
 public class TodoDelete : Tool
 {
     private readonly TodoDatabase todoDatabase;
@@ -42,7 +42,7 @@ public class TodoDelete : Tool
         }
     });
 
-    public override Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 
@@ -62,7 +62,7 @@ public class TodoDelete : Tool
 
         try
         {
-            var todoResult = todoDatabase.DeleteTodo(toolFactory.Session, title, group);
+            var todoResult = todoDatabase.DeleteTodo(session, title, group);
             result.Add("result", todoResult);
         }
         catch (Exception e)

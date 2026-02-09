@@ -3,6 +3,7 @@ namespace LlmAgents.Tools;
 using Newtonsoft.Json.Linq;
 using LlmAgents.Tools.Todo;
 using System;
+using LlmAgents.State;
 
 public class TodoRead : Tool
 {
@@ -42,7 +43,7 @@ public class TodoRead : Tool
         }
     });
 
-    public override Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 
@@ -62,7 +63,7 @@ public class TodoRead : Tool
 
         try
         {
-            var todo = todoDatabase.GetTodo(toolFactory.Session, title, group);
+            var todo = todoDatabase.GetTodo(session, title, group);
             if (todo == null)
             {
                 result.Add("error", $"could not find todo with title '{title}' in group '{group}'");

@@ -1,5 +1,6 @@
 namespace LlmAgents.Tools;
 
+using LlmAgents.State;
 using LlmAgents.Tools.Todo;
 using Newtonsoft.Json.Linq;
 using System;
@@ -47,7 +48,7 @@ public class TodoCreate : Tool
         }
     });
 
-    public override Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 
@@ -69,7 +70,7 @@ public class TodoCreate : Tool
 
         try
         {
-            var todoResult = todoDatabase.CreateTodo(toolFactory.Session, title, group, description);
+            var todoResult = todoDatabase.CreateTodo(session, title, group, description);
             result.Add("result", todoResult);
         }
         catch (Exception e)

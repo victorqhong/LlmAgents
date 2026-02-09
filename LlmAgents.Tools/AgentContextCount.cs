@@ -1,4 +1,5 @@
 ﻿using LlmAgents.LlmApi;
+using LlmAgents.State;
 using Newtonsoft.Json.Linq;
 
 namespace LlmAgents.Tools;
@@ -28,7 +29,7 @@ public class AgentContextCount : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override async Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 

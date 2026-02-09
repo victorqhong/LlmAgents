@@ -1,5 +1,6 @@
 ﻿namespace LlmAgents.Tools;
 
+using LlmAgents.State;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
@@ -62,7 +63,7 @@ public class NumberLines : Tool
         }
     });
 
-    public override Task<JToken> Function(JObject parameters)
+    public override Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 

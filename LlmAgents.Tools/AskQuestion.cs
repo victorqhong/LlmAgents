@@ -2,6 +2,7 @@ namespace LlmAgents.Tools;
 
 using LlmAgents.Communication;
 using LlmAgents.LlmApi.Content;
+using LlmAgents.State;
 using Newtonsoft.Json.Linq;
 using System;
 
@@ -38,7 +39,7 @@ public class AskQuestion : Tool
         }
     });
 
-    public override async Task<JToken> Function(JObject parameters)
+    public override async Task<JToken> Function(Session session, JObject parameters)
     {
         var result = new JObject();
 

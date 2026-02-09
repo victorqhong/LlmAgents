@@ -1,5 +1,3 @@
-﻿namespace LlmAgents.Agents;
-
 using LlmAgents.Communication;
 using LlmAgents.LlmApi;
 using LlmAgents.State;
@@ -7,6 +5,8 @@ using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using Newtonsoft.Json.Linq;
+
+namespace LlmAgents.Agents;
 
 public static class LlmAgentFactory
 {
@@ -18,10 +18,7 @@ public static class LlmAgentFactory
         SessionParameters sessionParameters)
     {
         var llmApi = new LlmApiOpenAi(loggerFactory, llmApiParameters);
-        var agent = new LlmAgent(llmAgentParameters, llmApi, agentCommunication)
-        {
-            SessionId = sessionParameters.SessionId,
-        };
+        var agent = new LlmAgent(llmAgentParameters, llmApi, agentCommunication);
 
         if (string.IsNullOrEmpty(sessionParameters.WorkingDirectory))
         {
@@ -60,14 +57,20 @@ public static class LlmAgentFactory
             }
         }
 
+        agent.Session = session;
+
         List<Tool> tools = [];
 
         if (Uri.TryCreate($"http://{toolParameters.ToolServerAddress}:{toolParameters.ToolServerPort}", UriKind.Absolute, out var toolServerUri))
         {
-            var clientTransport = new SseClientTransport(new SseClientTransportOptions()
-            {
-                Endpoint = toolServerUri
-            });
+            var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Add("X-Session-Id", session.SessionId);
+            httpClient.DefaultRequestHeaders.Add("X-Agent-Id", agent.Id);
+
+            var clientTransport = new SseClientTransport(
+                new SseClientTransportOptions { Endpoint = toolServerUri },
+                httpClient
+            );
 
             var client = await McpClientFactory.CreateAsync(clientTransport);
             var mcpTools = await client.ListToolsAsync();

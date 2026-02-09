@@ -29,9 +29,9 @@ public abstract class Tool
         }
     }
 
-    public abstract Task<JToken> Function(JObject parameters);
+    public abstract Task<JToken> Function(Session session, JObject parameters);
 
-    public virtual void Save(string sessionId, StateDatabase stateDatabase) { }
+    public virtual void Save(Session session, StateDatabase stateDatabase) { }
 
-    public virtual void Load(string sessionId, StateDatabase stateDatabase) { }
+    public virtual void Load(Session session, StateDatabase stateDatabase) { }
 }
