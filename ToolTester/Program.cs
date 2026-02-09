@@ -88,6 +88,8 @@ async Task RootCommandHandler(InvocationContext context)
         return;
     }
 
+    var session = Session.New();
+
     var cancellationToken = context.GetCancellationToken();
 
     while (!cancellationToken.IsCancellationRequested)
@@ -125,7 +127,7 @@ async Task RootCommandHandler(InvocationContext context)
         if (!string.IsNullOrEmpty(toolParametersInput))
         {
             var toolParameters = JObject.Parse(toolParametersInput);
-            var toolOutput = await tools[toolChoice].Function(toolParameters);
+            var toolOutput = await tools[toolChoice].Function(session, toolParameters);
             Console.WriteLine(toolOutput);
         }
     }
