@@ -38,7 +38,7 @@ public class LlmAgent
 
     public IToolEventBus? ToolEventBus { get; set; }
 
-    public string? SessionId { get; set; }
+    public Session? Session { get; set; }
 
     public StateDatabase? StateDatabase { get; set; }
 
@@ -80,12 +80,12 @@ public class LlmAgent
             return null;
         }
 
-        var result = await tool.Function(arguments);
+        var result = await tool.Function(Session, arguments);
         ToolEventBus?.PostCallToolEvent(tool, arguments, result);
 
-        if (!string.IsNullOrEmpty(SessionId) && StateDatabase != null)
+        if (Session != null && StateDatabase != null)
         {
-            tool.Save(SessionId, StateDatabase);
+            tool.Save(Session, StateDatabase);
         }
 
         return result;
