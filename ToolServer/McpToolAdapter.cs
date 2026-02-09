@@ -1,4 +1,5 @@
-﻿using ModelContextProtocol.Protocol;
+﻿using LlmAgents.State;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Newtonsoft.Json.Linq;
 using System.Text.Json;
@@ -46,10 +47,33 @@ public class McpToolAdapter : McpServerTool
             return result;
         }
 
+        Session? session = null;
+        var httpContextAccessor = request.Services?.GetService<IHttpContextAccessor>();
+        var stateDatabase = request.Services?.GetService<StateDatabase>();
+        if (httpContextAccessor != null && stateDatabase != null)
+        {
+            var headers = httpContextAccessor.HttpContext?.Request.Headers;
+            if (headers != null)
+            {
+                var sessionId = headers["X-Session-Id"].FirstOrDefault();
+                if (!string.IsNullOrEmpty(sessionId))
+                {
+                    session = stateDatabase.GetSession(sessionId);
+                    if (session == null)
+                    {
+                        session = Session.New(sessionId);
+                        stateDatabase.CreateSession(session);
+                    }
+                }
+            }
+        }
+
+        session ??= Session.New();
+
         try
         {
             var arguments = JObject.Parse(JsonSerializer.Serialize(request.Params.Arguments));
-            var toolResult = await tool.Function(arguments);
+            var toolResult = await tool.Function(session, arguments);
             var toolResultJson = JsonDocument.Parse(toolResult.ToString());
 
             result.StructuredContent = JsonNode.Parse(JsonSerializer.Serialize(toolResultJson.RootElement));

@@ -1,4 +1,4 @@
-﻿using LlmAgents.Communication;
+using LlmAgents.Communication;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Newtonsoft.Json.Linq;
@@ -80,8 +80,12 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
     builder.WebHost
         .UseUrls($"http://{listenAddress}:{listenPort}");
 
+    // Add services
+    builder.Services.AddSingleton(stateDatabase);
+    builder.Services.AddHttpContextAccessor();
+
     builder.Services
-        .AddMcpServer(options => { })
+        .AddMcpServer()
         .WithHttpTransport()
         .WithStdioServerTransport()
         .WithTools(mcpTools);
