@@ -28,7 +28,7 @@ internal class AgentCommand : Command
         AddOption(LlmAgentsOptions.Persistent);
         AddOption(LlmAgentsOptions.SystemPromptFile);
         AddOption(LlmAgentsOptions.ToolsConfig);
-        AddOption(LlmAgentsOptions.ToolServerAddress);
+        AddOption(LlmAgentsOptions.McpConfigPath);
         AddOption(LlmAgentsOptions.WorkingDirectory);
         AddOption(LlmAgentsOptions.StorageDirectory);
         AddOption(LlmAgentsOptions.AgentId);

@@ -76,14 +76,12 @@ public static class Parser
     public static ToolParameters ParseToolParameters(InvocationContext invocationContext)
     {
         var toolsConfigValue = invocationContext.ParseResult.GetValueForOption(Options.ToolsConfig);
-        var toolServerAddressValue = invocationContext.ParseResult.GetValueForOption(Options.ToolServerAddress);
-        var toolServerPortValue = invocationContext.ParseResult.GetValueForOption(Options.ToolServerPort);
+        var mcpConfigPathValue = invocationContext.ParseResult.GetValueForOption(Options.McpConfigPath);
 
         return new ToolParameters
         {
             ToolsConfig = toolsConfigValue,
-            ToolServerAddress = toolServerAddressValue,
-            ToolServerPort = toolServerPortValue
+            McpConfigPath = mcpConfigPathValue
         };
     }
 

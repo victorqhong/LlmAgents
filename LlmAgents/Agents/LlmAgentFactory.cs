@@ -61,23 +61,52 @@ public static class LlmAgentFactory
 
         List<Tool> tools = [];
 
-        if (Uri.TryCreate($"http://{toolParameters.ToolServerAddress}:{toolParameters.ToolServerPort}", UriKind.Absolute, out var toolServerUri))
+        if (File.Exists(toolParameters.McpConfigPath))
         {
-            var httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.Add("X-Session-Id", session.SessionId);
-            httpClient.DefaultRequestHeaders.Add("X-Agent-Id", agent.Id);
+            var mcpJson = JObject.Parse(File.ReadAllText(toolParameters.McpConfigPath));
+            if (mcpJson.ContainsKey("servers") && mcpJson.Value<JObject>("servers") is JObject servers)
+            {
+                foreach (var property in servers.Properties())
+                {
+                    if (property.Value is not JObject server)
+                    {
+                        continue;
+                    }
 
-            var clientTransport = new SseClientTransport(
-                new SseClientTransportOptions { Endpoint = toolServerUri },
-                httpClient
-            );
+                    var type = server.Value<string>("type");
+                    if (string.Equals(type, "http") && server.ContainsKey("url") && server.Value<string>("url") is string url)
+                    {
+                        if (!Uri.TryCreate(url, UriKind.Absolute, out var toolServerUri))
+                        {
+                            continue;
+                        }
 
-            var client = await McpClientFactory.CreateAsync(clientTransport);
-            var mcpTools = await client.ListToolsAsync();
+                        var httpClient = new HttpClient();
+                        httpClient.DefaultRequestHeaders.Add("X-Session-Id", session.SessionId);
+                        httpClient.DefaultRequestHeaders.Add("X-Agent-Id", agent.Id);
 
-            var toolFactory = new ToolFactory(loggerFactory);
+                        var clientTransport = new SseClientTransport(
+                            new SseClientTransportOptions { Endpoint = toolServerUri },
+                            httpClient
+                        );
 
-            tools.AddRange(mcpTools.Select(mcpClientTool => new McpTool(mcpClientTool, client, toolFactory)).ToArray());
+                        var toolFactory = new ToolFactory(loggerFactory);
+                        tools.AddRange(await CreateMcpTools(clientTransport, toolFactory));
+                    }
+                    else if (string.Equals(type, "stdio") && server.Value<string>("command") is string command && server.Value<JArray>("args") is JArray args)
+                    {
+                        var arguments = args.Select(token => token.Value<string>() ?? "").ToList();
+                        var stdioTransport = new StdioClientTransport(new StdioClientTransportOptions
+                        {
+                            Command = command,
+                            Arguments = arguments
+                        });
+
+                        var toolFactory = new ToolFactory(loggerFactory);
+                        tools.AddRange(await CreateMcpTools(stdioTransport, toolFactory));
+                    }
+                }
+            }
         }
 
         if (!string.IsNullOrEmpty(toolParameters.ToolsConfig) && File.Exists(toolParameters.ToolsConfig))
@@ -119,5 +148,12 @@ public static class LlmAgentFactory
         }
 
         return agent;
+    }
+
+    private static async Task<IEnumerable<Tool>> CreateMcpTools(IClientTransport clientTransport, ToolFactory toolFactory)
+    {
+        var client = await McpClientFactory.CreateAsync(clientTransport);
+        var tools = await client.ListToolsAsync();
+        return tools.Select(tool => new McpTool(tool, client, toolFactory));
     }
 }
