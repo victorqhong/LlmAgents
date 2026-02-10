@@ -1,4 +1,5 @@
 using LlmAgents.State;
+using LlmAgents.Tools.BackgroundJob;
 using LlmAgents.Tools.Todo;
 using Microsoft.Extensions.Logging;
 
@@ -13,5 +14,7 @@ public class ToolAssemblyInitializer : IToolAssemblyInitializer
         var stateDatabase = toolFactory.Resolve<StateDatabase>();
         var todoDatabase = new TodoDatabase(loggerFactory, stateDatabase);
         toolFactory.Register(todoDatabase);
+
+        toolFactory.Register(new JobManager());
     }
 }

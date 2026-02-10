@@ -142,9 +142,9 @@ public static class LlmAgentFactory
             agent.LoadMessages();
         }
 
-        if (agent.RenderConversation().Count == 0 && !string.IsNullOrEmpty(sessionParameters.SystemPromptFile))
+        if (agent.RenderConversation().Count == 0 && !string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
         {
-            agent.AddMessages([JObject.FromObject(new { role = "system", content = sessionParameters.SystemPromptFile })]);
+            agent.AddMessages([JObject.FromObject(new { role = "system", content = File.ReadAllText(sessionParameters.SystemPromptFile) })]);
         }
 
         return agent;
