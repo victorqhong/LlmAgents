@@ -23,8 +23,7 @@ internal class DefaultCommand : RootCommand
 
         this.SetHandler(CommandHandler);
         AddOption(XmppOptions.AgentsConfig);
-        AddOption(LlmAgentsOptions.ToolServerAddress);
-        AddOption(LlmAgentsOptions.ToolServerPort);
+        AddOption(LlmAgentsOptions.McpConfigPath);
     }
 
     private async Task CommandHandler(InvocationContext context)

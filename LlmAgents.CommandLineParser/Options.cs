@@ -65,15 +65,10 @@ public static class Options
         description: "Path to a JSON file with configuration for tool values",
         getDefaultValue: () => Config.GetConfigOptionDefaultValue("tools.json", "LLMAGENTS_TOOLS_CONFIG"));
 
-    public readonly static Option<string> ToolServerAddress = new Option<string>(
-        name: "--toolServerAddress",
-        description: "The IP address of the tool server",
-        getDefaultValue: () => "");
-
-    public readonly static Option<int> ToolServerPort = new Option<int>(
-        name: "--toolServerPort",
-        description: "The port of the tool server",
-        getDefaultValue: () => 5000);
+    public readonly static Option<string?> McpConfigPath = new Option<string?>(
+        name: "--mcpConfigPath",
+        description: "Path to the MCP config JSON",
+        getDefaultValue: () => Config.GetConfigOptionDefaultValue("mcp.json", "LLMAGENTS_MCP_CONFIG"));
 
     public readonly static Option<bool> StreamOutput = new Option<bool>(
         name: "--streamOutput",

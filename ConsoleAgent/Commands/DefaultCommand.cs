@@ -35,8 +35,7 @@ internal class DefaultCommand : RootCommand
         AddOption(LlmAgentsOptions.SessionId);
         AddOption(LlmAgentsOptions.StreamOutput);
         AddOption(LlmAgentsOptions.ToolsConfig);
-        AddOption(LlmAgentsOptions.ToolServerAddress);
-        AddOption(LlmAgentsOptions.ToolServerPort);
+        AddOption(LlmAgentsOptions.McpConfigPath);
     }
 
     private async Task CommandHandler(InvocationContext context)
