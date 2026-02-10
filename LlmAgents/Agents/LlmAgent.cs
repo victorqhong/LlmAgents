@@ -38,7 +38,7 @@ public class LlmAgent
 
     public IToolEventBus? ToolEventBus { get; set; }
 
-    public Session? Session { get; set; }
+    public Session Session { get; set; } = Session.New();
 
     public StateDatabase? StateDatabase { get; set; }
 
