@@ -37,6 +37,7 @@ public class JobManager : IDisposable
             Arguments = string.Join(' ', args),
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
