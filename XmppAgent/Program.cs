@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-using System.CommandLine;
 using XmppAgent.Commands;
 
 using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
@@ -7,6 +6,6 @@ using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 var agentCommand = new AgentCommand(loggerFactory);
 
 var defaultCommand = new DefaultCommand(loggerFactory);
-defaultCommand.AddCommand(agentCommand);
+defaultCommand.Add(agentCommand);
 
-return await defaultCommand.InvokeAsync(args);
+return await defaultCommand.Parse(args).InvokeAsync();

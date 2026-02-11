@@ -4,7 +4,6 @@ using LlmAgents.CommandLineParser;
 using LlmAgents.Communication;
 using Microsoft.Extensions.Logging;
 using System.CommandLine;
-using System.CommandLine.Invocation;
 
 using LlmAgentsOptions = LlmAgents.CommandLineParser.Options;
 using Parser = LlmAgents.CommandLineParser.Parser;
@@ -20,29 +19,29 @@ internal class DefaultCommand : RootCommand
     {
         this.loggerFactory = loggerFactory;
 
-        this.SetHandler(CommandHandler);
-        AddOption(LlmAgentsOptions.AgentId);
-        AddOption(LlmAgentsOptions.ApiEndpoint);
-        AddOption(LlmAgentsOptions.ApiKey);
-        AddOption(LlmAgentsOptions.ApiModel);
-        AddOption(LlmAgentsOptions.ContextSize);
-        AddOption(LlmAgentsOptions.MaxCompletionTokens);
-        AddOption(LlmAgentsOptions.ApiConfig);
-        AddOption(LlmAgentsOptions.Persistent);
-        AddOption(LlmAgentsOptions.SystemPromptFile);
-        AddOption(LlmAgentsOptions.WorkingDirectory);
-        AddOption(LlmAgentsOptions.StorageDirectory);
-        AddOption(LlmAgentsOptions.SessionId);
-        AddOption(LlmAgentsOptions.StreamOutput);
-        AddOption(LlmAgentsOptions.ToolsConfig);
-        AddOption(LlmAgentsOptions.McpConfigPath);
+        SetAction(CommandHandler);
+        Options.Add(LlmAgentsOptions.AgentId);
+        Options.Add(LlmAgentsOptions.ApiEndpoint);
+        Options.Add(LlmAgentsOptions.ApiKey);
+        Options.Add(LlmAgentsOptions.ApiModel);
+        Options.Add(LlmAgentsOptions.ContextSize);
+        Options.Add(LlmAgentsOptions.MaxCompletionTokens);
+        Options.Add(LlmAgentsOptions.ApiConfig);
+        Options.Add(LlmAgentsOptions.Persistent);
+        Options.Add(LlmAgentsOptions.SystemPromptFile);
+        Options.Add(LlmAgentsOptions.WorkingDirectory);
+        Options.Add(LlmAgentsOptions.StorageDirectory);
+        Options.Add(LlmAgentsOptions.SessionId);
+        Options.Add(LlmAgentsOptions.StreamOutput);
+        Options.Add(LlmAgentsOptions.ToolsConfig);
+        Options.Add(LlmAgentsOptions.McpConfigPath);
     }
 
-    private async Task CommandHandler(InvocationContext context)
+    private async Task CommandHandler(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var logger = loggerFactory.CreateLogger(nameof(ConsoleAgent));
 
-        var apiParameters = Parser.ParseApiParameters(context) ?? Config.InteractiveApiConfigSetup();
+        var apiParameters = Parser.ParseApiParameters(parseResult) ?? Config.InteractiveApiConfigSetup();
         if (apiParameters == null)
         {
             Console.Error.WriteLine("apiEndpoint, apiKey, and/or apiModel is null or empty.");
@@ -61,20 +60,20 @@ internal class DefaultCommand : RootCommand
             apiParameters.MaxCompletionTokens = 8192;
         }
 
-        var agentParameters = Parser.ParseAgentParameters(context);
+        var agentParameters = Parser.ParseAgentParameters(parseResult);
         if (agentParameters == null)
         {
             logger.LogError("agentParameters not configured correctly");
             return;
         }
 
-        var toolParameters = Parser.ParseToolParameters(context);
+        var toolParameters = Parser.ParseToolParameters(parseResult);
         if (string.IsNullOrEmpty(toolParameters.ToolsConfig) || !File.Exists(toolParameters.ToolsConfig))
         {
             toolParameters.ToolsConfig = Config.InteractiveToolsConfigSetup();
         }
 
-        var sessionParameters = Parser.ParseSessionParameters(context);
+        var sessionParameters = Parser.ParseSessionParameters(parseResult);
 
         string? systemPrompt = Prompts.DefaultSystemPrompt;
         if (!string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
@@ -93,8 +92,6 @@ internal class DefaultCommand : RootCommand
         {
             await consoleCommunication.SendMessage(string.Format("PromptTokens: {0}, CompletionTokens: {1}, TotalTokens: {2}, Context Used: {3}", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, ((double)usage.TotalTokens / agent.llmApi.ContextSize).ToString("P"), true));
         };
-
-        var cancellationToken = context.GetCancellationToken();
 
         await agent.Run(cancellationToken);
     }

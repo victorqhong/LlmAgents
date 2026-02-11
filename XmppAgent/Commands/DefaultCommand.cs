@@ -5,7 +5,6 @@ using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.CommandLine;
-using System.CommandLine.Invocation;
 
 using LlmAgentsOptions = LlmAgents.CommandLineParser.Options;
 using XmppOptions = XmppAgent.Options;
@@ -21,16 +20,16 @@ internal class DefaultCommand : RootCommand
     {
         this.loggerFactory = loggerFactory;
 
-        this.SetHandler(CommandHandler);
-        AddOption(XmppOptions.AgentsConfig);
-        AddOption(LlmAgentsOptions.McpConfigPath);
+        SetAction(CommandHandler);
+        Options.Add(XmppOptions.AgentsConfig);
+        Options.Add(LlmAgentsOptions.McpConfigPath);
     }
 
-    private async Task CommandHandler(InvocationContext context)
+    private async Task CommandHandler(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var logger = loggerFactory.CreateLogger(nameof(XmppAgent));
 
-        var agentsConfigValue = context.ParseResult.GetValueForOption(XmppOptions.AgentsConfig);
+        var agentsConfigValue = parseResult.GetValue(XmppOptions.AgentsConfig);
         if (string.IsNullOrEmpty(agentsConfigValue) || !File.Exists(agentsConfigValue))
         {
             Console.WriteLine("agentsConfig is invalid or does not exist");
@@ -121,7 +120,7 @@ internal class DefaultCommand : RootCommand
                 XmppTargetJid = xmppTargetJid,
             };
 
-            agentTasks.Add(AgentFactory.RunAgent(apiParameters, agentParameters, toolParameters, sessionParameters, xmppParameters, context.GetCancellationToken()));
+            agentTasks.Add(AgentFactory.RunAgent(apiParameters, agentParameters, toolParameters, sessionParameters, xmppParameters, cancellationToken));
         }
 
         if (agentTasks.Count < 1)

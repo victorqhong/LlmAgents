@@ -1,6 +1,5 @@
 ﻿using Newtonsoft.Json.Linq;
-using System.CommandLine.Invocation;
-
+using System.CommandLine;
 namespace XmppAgent;
 
 public class XmppParameters
@@ -11,7 +10,7 @@ public class XmppParameters
     public required string XmppPassword;
     public bool XmppTrustHost = false;
 
-    public static XmppParameters? ParseXmppParameters(InvocationContext invocationContext)
+    public static XmppParameters? ParseXmppParameters(ParseResult parseResult)
     {
         string? xmppDomain = null;
         string? xmppUsername = null;
@@ -19,7 +18,7 @@ public class XmppParameters
         string? xmppTargetJid = null;
         bool xmppTrustHost = false;
 
-        var xmppConfigValue = invocationContext.ParseResult.GetValueForOption(Options.XmppConfig);
+        var xmppConfigValue = parseResult.GetValue(Options.XmppConfig);
         if (!string.IsNullOrEmpty(xmppConfigValue) && File.Exists(xmppConfigValue))
         {
             var xmppConfig = JObject.Parse(File.ReadAllText(xmppConfigValue));
@@ -34,11 +33,11 @@ public class XmppParameters
         }
         else
         {
-            xmppDomain = invocationContext.ParseResult.GetValueForOption(Options.XmppDomain);
-            xmppUsername = invocationContext.ParseResult.GetValueForOption(Options.XmppUsername);
-            xmppPassword = invocationContext.ParseResult.GetValueForOption(Options.XmppPassword);
-            xmppTargetJid = invocationContext.ParseResult.GetValueForOption(Options.XmppTargetJid);
-            xmppTrustHost = invocationContext.ParseResult.GetValueForOption(Options.XmppTrustHost);
+            xmppDomain = parseResult.GetValue(Options.XmppDomain);
+            xmppUsername = parseResult.GetValue(Options.XmppUsername);
+            xmppPassword = parseResult.GetValue(Options.XmppPassword);
+            xmppTargetJid = parseResult.GetValue(Options.XmppTargetJid);
+            xmppTrustHost = parseResult.GetValue(Options.XmppTrustHost);
         }
 
         if (string.IsNullOrEmpty(xmppDomain) || string.IsNullOrEmpty(xmppUsername) || string.IsNullOrEmpty(xmppPassword) || string.IsNullOrEmpty(xmppTargetJid))
