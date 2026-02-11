@@ -3,13 +3,13 @@ using LlmAgents.LlmApi;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Newtonsoft.Json.Linq;
-using System.CommandLine.Invocation;
+using System.CommandLine;
 
 namespace LlmAgents.CommandLineParser;
 
 public static class Parser
 {
-    public static LlmApiOpenAiParameters? ParseApiParameters(InvocationContext context)
+    public static LlmApiOpenAiParameters? ParseApiParameters(ParseResult parseResult)
     {
         string? apiEndpoint;
         string? apiKey;
@@ -17,7 +17,7 @@ public static class Parser
         int maxCompletionTokens;
         string? apiModel;
 
-        var apiConfigValue = context.ParseResult.GetValueForOption(Options.ApiConfig);
+        var apiConfigValue = parseResult.GetValue(Options.ApiConfig);
         if (!string.IsNullOrEmpty(apiConfigValue) && File.Exists(apiConfigValue))
         {
             var apiConfig = JObject.Parse(File.ReadAllText(apiConfigValue));
@@ -30,11 +30,11 @@ public static class Parser
         }
         else
         {
-            apiEndpoint = context.ParseResult.GetValueForOption(Options.ApiEndpoint);
-            apiKey = context.ParseResult.GetValueForOption(Options.ApiKey);
-            apiModel = context.ParseResult.GetValueForOption(Options.ApiModel);
-            contextSize = context.ParseResult.GetValueForOption(Options.ContextSize);
-            maxCompletionTokens = context.ParseResult.GetValueForOption(Options.MaxCompletionTokens);
+            apiEndpoint = parseResult.GetValue(Options.ApiEndpoint);
+            apiKey = parseResult.GetValue(Options.ApiKey);
+            apiModel = parseResult.GetValue(Options.ApiModel);
+            contextSize = parseResult.GetValue(Options.ContextSize);
+            maxCompletionTokens = parseResult.GetValue(Options.MaxCompletionTokens);
         }
 
         if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(apiModel))
@@ -52,12 +52,12 @@ public static class Parser
         };
     }
 
-    public static LlmAgentParameters? ParseAgentParameters(InvocationContext invocationContext)
+    public static LlmAgentParameters? ParseAgentParameters(ParseResult parseResult)
     {
-        string? agentId = invocationContext.ParseResult.GetValueForOption(Options.AgentId) ?? Environment.MachineName;
-        bool persistent = invocationContext.ParseResult.GetValueForOption(Options.Persistent);
-        string? storageDirectory = invocationContext.ParseResult.GetValueForOption(Options.StorageDirectory);
-        bool streamOutput = invocationContext.ParseResult.GetValueForOption(Options.StreamOutput);
+        string? agentId = parseResult.GetValue(Options.AgentId) ?? Environment.MachineName;
+        bool persistent = parseResult.GetValue(Options.Persistent);
+        string? storageDirectory = parseResult.GetValue(Options.StorageDirectory);
+        bool streamOutput = parseResult.GetValue(Options.StreamOutput);
 
         if (string.IsNullOrEmpty(agentId) || string.IsNullOrEmpty(storageDirectory))
         {
@@ -73,10 +73,10 @@ public static class Parser
         };
     }
 
-    public static ToolParameters ParseToolParameters(InvocationContext invocationContext)
+    public static ToolParameters ParseToolParameters(ParseResult parseResult)
     {
-        var toolsConfigValue = invocationContext.ParseResult.GetValueForOption(Options.ToolsConfig);
-        var mcpConfigPathValue = invocationContext.ParseResult.GetValueForOption(Options.McpConfigPath);
+        var toolsConfigValue = parseResult.GetValue(Options.ToolsConfig);
+        var mcpConfigPathValue = parseResult.GetValue(Options.McpConfigPath);
 
         return new ToolParameters
         {
@@ -85,11 +85,11 @@ public static class Parser
         };
     }
 
-    public static SessionParameters ParseSessionParameters(InvocationContext invocationContext)
+    public static SessionParameters ParseSessionParameters(ParseResult parseResult)
     {
-        string? sessionId = invocationContext.ParseResult.GetValueForOption(Options.SessionId);
-        string? workingDirectoryValue = invocationContext.ParseResult.GetValueForOption(Options.WorkingDirectory);
-        string? systemPromptFileValue = invocationContext.ParseResult.GetValueForOption(Options.SystemPromptFile);
+        string? sessionId = parseResult.GetValue(Options.SessionId);
+        string? workingDirectoryValue = parseResult.GetValue(Options.WorkingDirectory);
+        string? systemPromptFileValue = parseResult.GetValue(Options.SystemPromptFile);
 
         return new SessionParameters
         {

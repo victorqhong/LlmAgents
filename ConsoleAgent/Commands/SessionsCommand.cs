@@ -1,15 +1,16 @@
 ﻿using LlmAgents.State;
 using Microsoft.Extensions.Logging;
 using System.CommandLine;
-using System.CommandLine.Invocation;
-
 using LlmAgentsOptions = LlmAgents.CommandLineParser.Options;
 
 namespace ConsoleAgent.Commands;
 
 internal class SessionsCommand : Command
 {
-    private readonly Argument<string> sessionsAgentIdArgument = new("agentId", "The agent identifier");
+    private readonly Argument<string> sessionsAgentIdArgument = new("agentId")
+    {
+        Description = "The agent identifier"
+    };
 
     private readonly ILoggerFactory loggerFactory;
 
@@ -18,15 +19,15 @@ internal class SessionsCommand : Command
     {
         this.loggerFactory = loggerFactory;
 
-        this.SetHandler(CommandHandler);
-        AddArgument(sessionsAgentIdArgument);
-        AddOption(LlmAgentsOptions.StorageDirectory);
+        SetAction(CommandHandler);
+        Arguments.Add(sessionsAgentIdArgument);
+        Options.Add(LlmAgentsOptions.StorageDirectory);
     }
 
-    private void CommandHandler(InvocationContext context)
+    private void CommandHandler(ParseResult parseResult)
     {
-        var agentId = context.ParseResult.GetValueForArgument(sessionsAgentIdArgument);
-        var storageDirectory = context.ParseResult.GetValueForOption(LlmAgentsOptions.StorageDirectory);
+        var agentId = parseResult.GetValue(sessionsAgentIdArgument);
+        var storageDirectory = parseResult.GetValue(LlmAgentsOptions.StorageDirectory);
 
         if (storageDirectory == null)
         {

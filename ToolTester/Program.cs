@@ -5,65 +5,25 @@ using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.CommandLine;
-using System.CommandLine.Invocation;
-using System.Runtime.InteropServices;
 
-string GetProfileConfig(string file)
-{
-    string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-    return Path.Combine(home, ".llmagents", file);
-}
-
-string? GetConfigOptionDefaultValue(string fileName, string environmentVariableName, EnvironmentVariableTarget environmentVariableTarget)
-{
-    if (File.Exists(fileName))
-    {
-        return fileName;
-    }
-
-    var profileConfig = GetProfileConfig(fileName);
-    if (File.Exists(profileConfig))
-    {
-        return profileConfig;
-    }
-
-    var environmentVariable = Environment.GetEnvironmentVariable(environmentVariableName, environmentVariableTarget);
-    if (File.Exists(environmentVariable))
-    {
-        return environmentVariable;
-    }
-
-    return null;
-}
-
-var environmentVariableTarget = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? EnvironmentVariableTarget.User : EnvironmentVariableTarget.Process;
-
-var toolsConfigOption = new Option<string?>(
-    name: "--toolsConfig",
-    description: "Path to a JSON file with configuration for tool values",
-    getDefaultValue: () => GetConfigOptionDefaultValue("tools.json", "LLMAGENTS_TOOLS_CONFIG", environmentVariableTarget));
-
-var workingDirectoryOption = new Option<string>(
-    name: "--workingDirectory",
-    description: "",
-    getDefaultValue: () => Environment.CurrentDirectory);
+using Options = LlmAgents.CommandLineParser.Options;
 
 var rootCommand = new RootCommand("XmppAgent");
-rootCommand.SetHandler(RootCommandHandler);
-rootCommand.AddOption(toolsConfigOption);
-rootCommand.AddOption(workingDirectoryOption);
-return await rootCommand.InvokeAsync(args);
+rootCommand.SetAction(RootCommandHandler);
+rootCommand.Options.Add(Options.ToolsConfig);
+rootCommand.Options.Add(Options.WorkingDirectory);
+return await rootCommand.Parse(args).InvokeAsync();
 
-async Task RootCommandHandler(InvocationContext context)
+static async Task RootCommandHandler(ParseResult parseResult, CancellationToken cancellationToken)
 {
-    var toolsConfigValue = context.ParseResult.GetValueForOption(toolsConfigOption);
+    var toolsConfigValue = parseResult.GetValue(Options.ToolsConfig);
     if (string.IsNullOrEmpty(toolsConfigValue) || !File.Exists(toolsConfigValue))
     {
         Console.Error.WriteLine("toolsConfig is null or empty or file cannot be found.");
         return;
     }
 
-    var workingDirectoryValue = context.ParseResult.GetValueForOption(workingDirectoryOption) ?? Environment.CurrentDirectory;
+    var workingDirectoryValue = parseResult.GetValue(Options.WorkingDirectory) ?? Environment.CurrentDirectory;
 
     using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
@@ -89,8 +49,6 @@ async Task RootCommandHandler(InvocationContext context)
     }
 
     var session = Session.New();
-
-    var cancellationToken = context.GetCancellationToken();
 
     while (!cancellationToken.IsCancellationRequested)
     {

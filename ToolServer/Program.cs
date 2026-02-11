@@ -3,54 +3,45 @@ using LlmAgents.State;
 using LlmAgents.Tools;
 using Newtonsoft.Json.Linq;
 using System.CommandLine;
-using System.CommandLine.Invocation;
 using ToolServer;
+
+using Options = LlmAgents.CommandLineParser.Options;
 
 using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
-var listenAddressOption = new Option<string>(
-    name: "--host",
-    description: "The address to listen on",
-    getDefaultValue: () => "127.0.0.1");
+var listenAddressOption = new Option<string>(name: "--host")
+{
+    Description = "The address to listen on",
+    DefaultValueFactory = result => "127.0.0.1"
+};
 
-var listenPortOption = new Option<int>(
-    name: "--port",
-    description: "The port to listen on",
-    getDefaultValue: () => 5000);
-
-var toolsConfigOption = new Option<string>(
-    name: "--toolsConfig",
-    description: "Path to a JSON file with configuration for tool values",
-    getDefaultValue: () => "tools.json");
-
-var workingDirectory = new Option<string>(
-    name: "--workingDirectory",
-    description: "Directory which tools will be run by default",
-    getDefaultValue: () => Environment.CurrentDirectory);
+var listenPortOption = new Option<int>(name: "--port")
+{
+    Description = "The port to listen on",
+    DefaultValueFactory = result => 5000
+};
 
 var rootCommand = new RootCommand("ToolServer");
-rootCommand.AddOption(listenAddressOption);
-rootCommand.AddOption(listenPortOption);
-rootCommand.AddOption(toolsConfigOption);
-rootCommand.AddOption(workingDirectory);
-rootCommand.SetHandler(RootCommandHandler);
+rootCommand.Options.Add(listenAddressOption);
+rootCommand.Options.Add(listenPortOption);
+rootCommand.Options.Add(Options.ToolsConfig);
+rootCommand.Options.Add(Options.WorkingDirectory);
+rootCommand.SetAction(RootCommandHandler);
 
-async Task RootCommandHandler(InvocationContext context)
+async Task RootCommandHandler(ParseResult parseResult, CancellationToken cancellationToken)
 {
-    var cancellationToken = context.GetCancellationToken();
-
-    var listenAddress = context.ParseResult.GetValueForOption(listenAddressOption);
-    var listenPort = context.ParseResult.GetValueForOption(listenPortOption);
-    var toolsConfigValue = context.ParseResult.GetValueForOption(toolsConfigOption);
-    var workingDirectoryValue = context.ParseResult.GetValueForOption(workingDirectory);
+    var listenAddress = parseResult.GetValue(listenAddressOption);
+    var listenPort = parseResult.GetValue(listenPortOption);
+    var toolsConfigValue = parseResult.GetValue(Options.ToolsConfig);
+    var workingDirectoryValue = parseResult.GetValue(Options.WorkingDirectory);
 
     ArgumentException.ThrowIfNullOrEmpty(listenAddress);
     ArgumentException.ThrowIfNullOrEmpty(toolsConfigValue);
 
-    await RunServer(listenAddress, listenPort, toolsConfigValue, workingDirectoryValue, new ConsoleCommunication());
+    await RunServer(listenAddress, listenPort, toolsConfigValue, workingDirectoryValue, new ConsoleCommunication(), cancellationToken);
 }
 
-return await rootCommand.InvokeAsync(args);
+return await rootCommand.Parse(args).InvokeAsync();
 
 async Task RunServer(string listenAddress, int listenPort, string toolsConfigPath, string? workingDirectory, IAgentCommunication agentCommunication, CancellationToken cancellationToken = default)
 {

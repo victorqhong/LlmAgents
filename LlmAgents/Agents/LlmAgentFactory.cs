@@ -82,6 +82,14 @@ public static class LlmAgentFactory
                         }
 
                         var httpClient = new HttpClient();
+                        if (server.ContainsKey("headers") && server.Value<JObject>("headers") is JObject headers)
+                        {
+                            foreach (var header in headers.Properties())
+                            {
+                                httpClient.DefaultRequestHeaders.Add(header.Name, header.Value.Value<string>());
+                            }
+                        }
+
                         httpClient.DefaultRequestHeaders.Add("X-Session-Id", session.SessionId);
                         httpClient.DefaultRequestHeaders.Add("X-Agent-Id", agent.Id);
 
