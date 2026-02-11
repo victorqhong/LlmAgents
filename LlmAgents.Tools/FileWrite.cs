@@ -99,7 +99,7 @@ public class FileWrite : Tool
                 return Task.FromResult<JToken>(result);
             }
 
-            File.WriteAllText(path, contents.Replace("\r\n", Environment.NewLine).Replace("\n", Environment.NewLine));
+            File.WriteAllText(path, contents.Replace(@"\""", @"""").Replace(@"\\", @"\").Replace(@"\r\n", Environment.NewLine).Replace(@"\n", Environment.NewLine));
             result.Add("result", "success");
         }
         catch (Exception e)
