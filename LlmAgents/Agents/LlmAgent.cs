@@ -123,13 +123,18 @@ public class LlmAgent
         return work;
     }
 
+    protected virtual LlmAgentWork CreateUserInputWork()
+    {
+        return new GetUserInputWork(this);
+    }
+
     public async Task Run(CancellationToken cancellationToken)
     {
         _ = Task.Run(async () =>
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var userInputWork = await RunWork(new GetUserInputWork(this), null, cancellationToken);
+                var userInputWork = await RunWork(CreateUserInputWork(), null, cancellationToken);
                 var assistantWork = await RunWork(new GetAssistantResponseWork(this), userInputWork, cancellationToken);
 
                 while (assistantWork.Parser != null && string.Equals(assistantWork.Parser.FinishReason, "tool_calls"))
