@@ -49,10 +49,10 @@ public class TestToolFactoryLoad
         var assemblyName = assembly.GetName().Name!;
         var typeName = typeof(DummyTool).FullName!;
         var definition = CreateToolDefinition(typeName, assemblyName, assembly.Location);
-        var factory = new ToolFactory(LoggerFactory, definition);
+        var factory = new ToolFactory(LoggerFactory);
 
         // Act
-        var tools = factory.Load();
+        var tools = factory.Load(definition);
 
         // Assert
         Assert.IsNotNull(tools);
@@ -71,10 +71,10 @@ public class TestToolFactoryLoad
         var assemblyName = assembly.GetName().Name!;
         var typeName = typeof(DummyTool).FullName!;
         var definition = CreateToolDefinition(typeName, assemblyName, "nonexistent.dll");
-        var factory = new ToolFactory(LoggerFactory, definition);
+        var factory = new ToolFactory(LoggerFactory);
 
         // Act
-        var tools = factory.Load();
+        var tools = factory.Load(definition);
 
         // Assert: Load should not throw and return an empty array.
         Assert.IsNotNull(tools);
@@ -88,10 +88,10 @@ public class TestToolFactoryLoad
         var assembly = typeof(DummyTool).Assembly;
         var assemblyName = assembly.GetName().Name!;
         var definition = CreateToolDefinition("NonExistent.Type", assemblyName, assembly.Location);
-        var factory = new ToolFactory(LoggerFactory, definition);
+        var factory = new ToolFactory(LoggerFactory);
 
         // Act
-        var tools = factory.Load();
+        var tools = factory.Load(definition);
 
         // Assert: Load should not throw and return an empty array.
         Assert.IsNotNull(tools);

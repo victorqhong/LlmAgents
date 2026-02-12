@@ -50,8 +50,14 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
         workingDirectory = Environment.CurrentDirectory;
     }
 
+    if (!File.Exists(toolsConfigPath))
+    {
+        Console.Error.WriteLine($"Tools config file does not exist: {toolsConfigPath}");
+        return;
+    }
+
     var toolsFile = JObject.Parse(File.ReadAllText(toolsConfigPath));
-    var toolFactory = new ToolFactory(loggerFactory, toolsFile);
+    var toolFactory = new ToolFactory(loggerFactory);
 
     var stateDatabase = new StateDatabase(loggerFactory, ":memory:");
     var toolEventBus = new ToolEventBus();
@@ -63,7 +69,7 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
 
     toolFactory.AddParameter("basePath", workingDirectory);
 
-    var tools = toolFactory.Load() ?? [];
+    var tools = toolFactory.Load(toolsFile) ?? [];
     var mcpTools = tools.Select(tool => new McpToolAdapter(tool));
 
     var builder = WebApplication.CreateBuilder(args);

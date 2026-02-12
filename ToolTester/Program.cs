@@ -29,7 +29,7 @@ static async Task RootCommandHandler(ParseResult parseResult, CancellationToken 
 
     var toolEventBus = new ToolEventBus();
     var toolsFile = JObject.Parse(File.ReadAllText(toolsConfigValue));
-    var toolFactory = new ToolFactory(loggerFactory, toolsFile);
+    var toolFactory = new ToolFactory(loggerFactory);
 
     var stateDatabase = new StateDatabase(loggerFactory, ":memory:");
 
@@ -41,7 +41,7 @@ static async Task RootCommandHandler(ParseResult parseResult, CancellationToken 
 
     toolFactory.AddParameter("basePath", workingDirectoryValue);
 
-    var tools = toolFactory.Load();
+    var tools = toolFactory.Load(toolsFile);
     if (tools == null || tools.Length == 0)
     {
         Console.Error.WriteLine("Tools could not be created");
