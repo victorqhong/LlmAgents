@@ -26,6 +26,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ToolTester", "ToolTester\To
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LlmAgents.CommandLineParser", "LlmAgents.CommandLineParser\LlmAgents.CommandLineParser.csproj", "{2E130061-E27D-4F02-8B03-BC62227D386C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GuiAgent", "GuiAgent\GuiAgent.csproj", "{E6D5BEF2-0F62-E36D-1997-FBD1E04B5191}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{47E51444-000F-4503-9C48-160313D1CFC3}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -64,6 +71,10 @@ Global
 		{2E130061-E27D-4F02-8B03-BC62227D386C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2E130061-E27D-4F02-8B03-BC62227D386C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2E130061-E27D-4F02-8B03-BC62227D386C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E6D5BEF2-0F62-E36D-1997-FBD1E04B5191}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E6D5BEF2-0F62-E36D-1997-FBD1E04B5191}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E6D5BEF2-0F62-E36D-1997-FBD1E04B5191}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E6D5BEF2-0F62-E36D-1997-FBD1E04B5191}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

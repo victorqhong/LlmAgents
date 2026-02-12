@@ -10,16 +10,17 @@ namespace LlmAgents.Agents;
 
 public static class LlmAgentFactory
 {
-    public static async Task<LlmAgent> CreateAgent(
-        ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
-        LlmApiOpenAiParameters llmApiParameters,
-        LlmAgentParameters llmAgentParameters,
-        ToolParameters toolParameters,
-        SessionParameters sessionParameters)
+    public static LlmAgent InstantiateAgent(ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
+        LlmApiOpenAiParameters llmApiParameters, LlmAgentParameters llmAgentParameters)
     {
         var llmApi = new LlmApiOpenAi(loggerFactory, llmApiParameters);
         var agent = new LlmAgent(llmAgentParameters, llmApi, agentCommunication);
 
+        return agent;
+    }
+
+    public static async Task ConfigureAgent(LlmAgent agent, ILoggerFactory loggerFactory, IAgentCommunication agentCommunication, LlmAgentParameters llmAgentParameters, ToolParameters toolParameters, SessionParameters sessionParameters)
+    {
         if (string.IsNullOrEmpty(sessionParameters.WorkingDirectory))
         {
             sessionParameters.WorkingDirectory = Environment.CurrentDirectory;
@@ -58,6 +59,8 @@ public static class LlmAgentFactory
         }
 
         agent.Session = session;
+
+        var toolFactory = new ToolFactory(loggerFactory);
 
         List<Tool> tools = [];
 
@@ -98,7 +101,6 @@ public static class LlmAgentFactory
                             httpClient
                         );
 
-                        var toolFactory = new ToolFactory(loggerFactory);
                         tools.AddRange(await CreateMcpTools(clientTransport, toolFactory));
                     }
                     else if (string.Equals(type, "stdio") && server.Value<string>("command") is string command && server.Value<JArray>("args") is JArray args)
@@ -110,7 +112,6 @@ public static class LlmAgentFactory
                             Arguments = arguments
                         });
 
-                        var toolFactory = new ToolFactory(loggerFactory);
                         tools.AddRange(await CreateMcpTools(stdioTransport, toolFactory));
                     }
                 }
@@ -154,6 +155,17 @@ public static class LlmAgentFactory
         {
             agent.AddMessages([JObject.FromObject(new { role = "system", content = File.ReadAllText(sessionParameters.SystemPromptFile) })]);
         }
+    }
+
+    public static async Task<LlmAgent> CreateAgent(
+        ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
+        LlmApiOpenAiParameters llmApiParameters,
+        LlmAgentParameters llmAgentParameters,
+        ToolParameters toolParameters,
+        SessionParameters sessionParameters)
+    {
+        var agent = InstantiateAgent(loggerFactory, agentCommunication, llmApiParameters, llmAgentParameters);
+        await ConfigureAgent(agent, loggerFactory, agentCommunication, llmAgentParameters, toolParameters, sessionParameters);
 
         return agent;
     }
