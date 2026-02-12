@@ -9,8 +9,6 @@ public class ToolFactory
 {
     private readonly ILogger log;
 
-    private readonly JObject? toolDefinitions;
-
     private readonly Dictionary<string, string> assemblyMap = new Dictionary<string, string>();
 
     private readonly Dictionary<string, Assembly> assemblies = new Dictionary<string, Assembly>();
@@ -19,48 +17,9 @@ public class ToolFactory
 
     private readonly Dictionary<string, string> parameters = new Dictionary<string, string>();
 
-    public ToolFactory(ILoggerFactory loggerFactory, JObject? toolDefinitions = null)
+    public ToolFactory(ILoggerFactory loggerFactory)
     {
         log = loggerFactory.CreateLogger(nameof(ToolFactory));
-
-        this.toolDefinitions = toolDefinitions;
-
-        if (this.toolDefinitions == null)
-        {
-            return;
-        }
-
-        var toolParameters = this.toolDefinitions.Value<JObject>("parameters");
-        if (toolParameters != null)
-        {
-            foreach (var property in toolParameters.Properties())
-            {
-                var value = property.Value.Value<string>();
-                if (string.IsNullOrEmpty(value))
-                {
-                    continue;
-                }
-
-                AddParameter(property.Name, value);
-            }
-        }
-
-        var assemblies = this.toolDefinitions.Value<JObject>("assemblies");
-        if (assemblies != null)
-        {
-            foreach (var assembly in assemblies.Properties())
-            {
-                var name = assembly.Name;
-                var path = assembly.Value.Value<string>();
-
-                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(path))
-                {
-                    continue;
-                }
-
-                assemblyMap.Add(name, path);
-            }
-        }
     }
 
     public void Register<T>(T value)
@@ -136,11 +95,43 @@ public class ToolFactory
         }
     }
 
-    public Tool[]? Load(Session? session = null, StateDatabase? stateDatabase = null)
+    public Tool[]? Load(JObject? toolDefinitions = null, Session? session = null, StateDatabase? stateDatabase = null)
     {
         if (toolDefinitions == null)
         {
             return null;
+        }
+
+        var toolParameters = toolDefinitions.Value<JObject>("parameters");
+        if (toolParameters != null)
+        {
+            foreach (var property in toolParameters.Properties())
+            {
+                var value = property.Value.Value<string>();
+                if (string.IsNullOrEmpty(value))
+                {
+                    continue;
+                }
+
+                AddParameter(property.Name, value);
+            }
+        }
+
+        var assemblies = toolDefinitions.Value<JObject>("assemblies");
+        if (assemblies != null)
+        {
+            foreach (var assembly in assemblies.Properties())
+            {
+                var name = assembly.Name;
+                var path = assembly.Value.Value<string>();
+
+                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(path))
+                {
+                    continue;
+                }
+
+                assemblyMap.Add(name, path);
+            }
         }
 
         var types = toolDefinitions.Value<JArray>("types");
@@ -163,7 +154,7 @@ public class ToolFactory
             typeName = parts[0].Trim();
             var assemblyName = parts[1].Trim();
 
-            if (!assemblies.ContainsKey(assemblyName))
+            if (!this.assemblies.ContainsKey(assemblyName))
             {
                 if (!assemblyMap.ContainsKey(assemblyName))
                 {
@@ -196,7 +187,7 @@ public class ToolFactory
                         methodInfo?.Invoke(toolAssemblyInit, [this]);
                     }
 
-                    assemblies[assemblyName] = assembly;
+                    this.assemblies[assemblyName] = assembly;
                 }
                 catch (Exception e)
                 {
@@ -205,7 +196,7 @@ public class ToolFactory
                 }
             }
 
-            var toolType = assemblies[assemblyName].GetType(typeName);
+            var toolType = this.assemblies[assemblyName].GetType(typeName);
             if (toolType == null)
             {
                 log.LogError("Could not load type from assembly: {typeName}", typeName);

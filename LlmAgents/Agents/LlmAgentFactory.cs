@@ -121,7 +121,7 @@ public static class LlmAgentFactory
         {
             var toolEventBus = new ToolEventBus();
             var toolsFile = JObject.Parse(File.ReadAllText(toolParameters.ToolsConfig));
-            var toolFactory = new ToolFactory(loggerFactory, toolsFile);
+            var toolFactory = new ToolFactory(loggerFactory);
 
             toolFactory.Register(agentCommunication);
             toolFactory.Register(loggerFactory);
@@ -131,7 +131,7 @@ public static class LlmAgentFactory
             toolFactory.AddParameter("basePath", sessionParameters.WorkingDirectory);
             toolFactory.AddParameter("storageDirectory", llmAgentParameters.StorageDirectory);
 
-            var localTools = toolFactory.Load(session, stateDatabase);
+            var localTools = toolFactory.Load(toolsFile, session, stateDatabase);
             if (localTools != null)
             {
                 tools.AddRange(localTools);
