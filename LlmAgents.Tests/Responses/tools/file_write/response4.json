@@ -1,0 +1,1 @@
+{"contents":"var value = \"hello world\";\nvar str = $\"\\\"{value}\\\"\";\nConsole.WriteLine(str);","path":"out4.cs"}
