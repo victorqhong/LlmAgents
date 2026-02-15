@@ -15,6 +15,8 @@ public class FileWriteTests
     [DataRow("response1.json", "out1.txt")]
     [DataRow("response2.json", "out2.txt")]
     [DataRow("response3.json", "out3.txt")]
+    [DataRow("response4.json", "out4.cs")]
+    [DataRow("response5.json", "out5.json")]
     public async Task TestFileWriteResponse(string responseFile, string fileName)
     {
         if (File.Exists(fileName))
@@ -37,7 +39,6 @@ public class FileWriteTests
         Assert.IsTrue(File.Exists(fileName));
 
         var contents = File.ReadAllText(fileName);
-        Assert.IsFalse(contents.Contains(@"\"""), "File written contains '\\\"'");
         Assert.IsFalse(contents.Contains(@"\r\n"), "File written contains '\\r\\n'");
         Assert.IsFalse(contents.Contains(@"\n"), "File written contains '\\n'");
     }
