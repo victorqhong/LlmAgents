@@ -4,15 +4,14 @@ using LlmAgents.LlmApi.Content;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using Newtonsoft.Json.Linq;
-using System.Drawing.Imaging;
 
 namespace GuiAgent.Agents.Work;
 
-public class GetUserInputWorkAndScreenshot : LlmAgentWork
+public class GetScreenshot : LlmAgentWork
 {
     private readonly McpClient? mcpClient;
 
-    public GetUserInputWorkAndScreenshot(McpClient? mcpClient, LlmAgent agent)
+    public GetScreenshot(McpClient? mcpClient, LlmAgent agent)
         : base(agent)
     {
         this.mcpClient = mcpClient;
@@ -30,32 +29,14 @@ public class GetUserInputWorkAndScreenshot : LlmAgentWork
 
         var blobContent = resource.Contents[0] as BlobResourceContents;
 
+        await mcpClient.SendMessageAsync(new JsonRpcRequest() { Method = "test" });
+
         MessageContentImageUrl messageContentImageUrl = new MessageContentImageUrl
         {
             MimeType = blobContent.MimeType,
             DataBase64 = blobContent.Blob
         };
 
-        agent.PreWaitForContent?.Invoke();
-
-        var messageContent = await agent.agentCommunication.WaitForContent(cancellationToken);
-        if (messageContent == null)
-        {
-            return;
-        }
-
-        agent.PostReceiveContent?.Invoke();
-
-        Messages = [LlmApiOpenAi.GetMessage(messageContent.Prepend(messageContentImageUrl))];
-
-        foreach (var message in messageContent)
-        {
-            if (message is not MessageContentText textContent)
-            {
-                continue;
-            }
-
-            await agent.agentCommunication.SendMessage($"User: {textContent.Text}", true);
-        }
+        Messages = [LlmApiOpenAi.GetMessage([messageContentImageUrl])];
     }
 }

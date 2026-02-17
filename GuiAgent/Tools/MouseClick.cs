@@ -30,39 +30,52 @@ public class MouseClick : Tool
                 type = "object",
                 properties = new
                 {
-                    x = new
-                    {
-                        type = "number",
-                        description = "x-coordinate of the mouse click location"
-                    },
-                    y = new
+                    location = new
                     {
                         type = "string",
-                        description = "y-coordinate of the mouse click location"
+                        description = "location of the mouse click location as a string 'x y' leave empty to click at the current location"
                     }
                 },
+                required = new[] { "location" } 
             }
         }
     });
 
     public override Task<JToken> Function(Session session,JObject parameters)
     {
+        var result = new JObject();
+        if (!parameters.ContainsKey("location") || !parameters.TryGetValue("location", out var l) || l.Value<string>() is not string location)
+        {
+            result.Add("error", "location parameter is null or missing");
+            return Task.FromResult<JToken>(result);
+        }
+
+        int x, y;
+        if (string.IsNullOrEmpty(location))
+        {
+            var mousePosition = Control.MousePosition;
+            x = mousePosition.X;
+            y = mousePosition.Y;
+        }
+        else
+        {
+            var parts = location.Split(' ');
+            if (parts.Length != 2)
+            {
+                result.Add("error", "location parameter does not contain two coordinates");
+                return Task.FromResult<JToken>(result);
+            }
+
+            x = int.Parse(parts[0]);
+            y = int.Parse(parts[1]);
+        }
+
         // Create the mouse down event
         INPUT[] inputs = new INPUT[2];
         inputs[0].type = INPUT_MOUSE;
         inputs[0].u.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTDOWN;
-
-        if (parameters.ContainsKey("x") && parameters.TryGetValue("x", out var x) && parameters.ContainsKey("y") && parameters.TryGetValue("y", out var y))
-        {
-            inputs[0].u.mi.dx = 65535 / screenWidth * x.Value<int>();
-            inputs[0].u.mi.dy = 65535 / screenHeight * y.Value<int>();
-        }
-        else
-        {
-            var mousePosition = Control.MousePosition;
-            inputs[0].u.mi.dx = 65535 / screenWidth * mousePosition.X;
-            inputs[0].u.mi.dy = 65535 / screenHeight * mousePosition.Y;
-        }
+        inputs[0].u.mi.dx = (int)(65535.0f / screenWidth * x);
+        inputs[0].u.mi.dy = (int)(65535.0f / screenHeight * y);
 
         // Create the mouse up event
         inputs[1].type = INPUT_MOUSE;
@@ -71,7 +84,6 @@ public class MouseClick : Tool
         // Send the input
         uint inputResult = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
 
-        var result = new JObject();
         if (inputResult == 0)
         {
             result.Add("error", "Failed to send mouse input. Error: " + Marshal.GetLastWin32Error());

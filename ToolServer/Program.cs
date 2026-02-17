@@ -77,12 +77,15 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
     builder.WebHost
         .UseUrls($"http://{listenAddress}:{listenPort}");
 
+    var resource = new ScreenshotServerResource();
+
     // Add services
     builder.Services.AddSingleton(stateDatabase);
     builder.Services.AddHttpContextAccessor();
 
     builder.Services
         .AddMcpServer()
+        .WithResources([resource])
         .WithHttpTransport()
         .WithStdioServerTransport()
         .WithTools(mcpTools);

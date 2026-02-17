@@ -8,9 +8,9 @@ public class McpTool : Tool
 {
     private readonly McpClientTool mcpClientTool;
 
-    private readonly IMcpClient mcpClient;
+    private readonly McpClient mcpClient;
 
-    public McpTool(McpClientTool mcpClientTool, IMcpClient mcpClient, ToolFactory toolFactory)
+    public McpTool(McpClientTool mcpClientTool, McpClient mcpClient, ToolFactory toolFactory)
         : base(toolFactory)
     {
         this.mcpClientTool = mcpClientTool;

@@ -33,6 +33,8 @@ public class McpToolAdapter : McpServerTool
 
     public override Tool ProtocolTool => protocolTool;
 
+    public override IReadOnlyList<object> Metadata => [];
+
     public async override ValueTask<CallToolResult> InvokeAsync(RequestContext<CallToolRequestParams> request, CancellationToken cancellationToken = default)
     {
         var result = new CallToolResult();

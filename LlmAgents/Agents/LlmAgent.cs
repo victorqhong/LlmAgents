@@ -5,8 +5,10 @@ using LlmAgents.Communication;
 using LlmAgents.LlmApi;
 using LlmAgents.State;
 using LlmAgents.Tools;
+using ModelContextProtocol.Client;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Threading;
 
 public class LlmAgent
 {
@@ -41,6 +43,8 @@ public class LlmAgent
     public Session Session { get; set; } = Session.New();
 
     public StateDatabase? StateDatabase { get; set; }
+
+    public ICollection<McpClient> Clients { get; set; } = [];
 
     public LlmAgent(LlmAgentParameters parameters, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
         : this(parameters.AgentId, llmApi, agentCommunication)
@@ -120,6 +124,11 @@ public class LlmAgent
         AddWorkToTasks(work, predecessor);
         await work.Run(cancellationToken);
 
+        if (Persistent)
+        {
+            SaveMessages();
+        }
+
         return work;
     }
 
@@ -128,26 +137,25 @@ public class LlmAgent
         return new GetUserInputWork(this);
     }
 
+    protected virtual async Task Turn(CancellationToken cancellationToken)
+    {
+        var userInputWork = await RunWork(CreateUserInputWork(), null, cancellationToken);
+        var assistantWork = await RunWork(new GetAssistantResponseWork(this), userInputWork, cancellationToken);
+
+        while (assistantWork.Parser != null && string.Equals(assistantWork.Parser.FinishReason, "tool_calls"))
+        {
+            var toolCallsWork = await RunWork(new ToolCalls(this), assistantWork, cancellationToken);
+            assistantWork = await RunWork(new GetAssistantResponseWork(this), toolCallsWork, cancellationToken);
+        }
+    }
+
     public async Task Run(CancellationToken cancellationToken)
     {
         _ = Task.Run(async () =>
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var userInputWork = await RunWork(CreateUserInputWork(), null, cancellationToken);
-                var assistantWork = await RunWork(new GetAssistantResponseWork(this), userInputWork, cancellationToken);
-
-                while (assistantWork.Parser != null && string.Equals(assistantWork.Parser.FinishReason, "tool_calls"))
-                {
-                    var toolCallsWork = await RunWork(new ToolCalls(this), assistantWork, cancellationToken);
-                    assistantWork = await RunWork(new GetAssistantResponseWork(this), toolCallsWork, cancellationToken);
-
-                    if (Persistent)
-                    {
-                        SaveMessages();
-                    }
-                }
-
+                await Turn(cancellationToken);
             }
         }, cancellationToken);
 

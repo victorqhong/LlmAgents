@@ -93,8 +93,7 @@ internal class DefaultCommand : RootCommand
         agent.PostParseUsage += (usage) => { consoleCommunication.SendMessage(string.Format("\nPromptTokens: {0}, CompletionTokens: {1}, TotalTokens: {2}, Context Used: {3}", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, ((double)usage.TotalTokens / agent.llmApi.ContextSize).ToString("P"))); };
 
         var toolFactory = new ToolFactory(loggerFactory);
-        agent.AddTool(new KeyboardType(toolFactory));
-        agent.AddTool(new MouseClick(toolFactory));
+        agent.llmApi.Temperature = 0.001;
 
         await agent.Run(cancellationToken);
     }

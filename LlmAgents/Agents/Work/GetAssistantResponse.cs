@@ -36,7 +36,7 @@ public class GetAssistantResponseWork : LlmAgentWork
 
         if (agent.StreamOutput)
         {
-            await agent.agentCommunication.SendMessage("Assistant: ", true);
+            await agent.agentCommunication.SendMessage("Assistant: ", false);
             await foreach (var chunk in Parser.StreamingCompletion)
             {
                 await agent.agentCommunication.SendMessage(chunk, false);

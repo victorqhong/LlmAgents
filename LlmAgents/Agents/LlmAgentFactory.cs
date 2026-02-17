@@ -96,12 +96,14 @@ public static class LlmAgentFactory
                         httpClient.DefaultRequestHeaders.Add("X-Session-Id", session.SessionId);
                         httpClient.DefaultRequestHeaders.Add("X-Agent-Id", agent.Id);
 
-                        var clientTransport = new SseClientTransport(
-                            new SseClientTransportOptions { Endpoint = toolServerUri },
+                        var httpTransport = new HttpClientTransport(
+                            new HttpClientTransportOptions { Endpoint = toolServerUri },
                             httpClient
                         );
 
-                        tools.AddRange(await CreateMcpTools(clientTransport, toolFactory));
+                        var client = await McpClient.CreateAsync(httpTransport);
+                        tools.AddRange(await CreateMcpTools(client, toolFactory));
+                        agent.Clients.Add(client);
                     }
                     else if (string.Equals(type, "stdio") && server.Value<string>("command") is string command && server.Value<JArray>("args") is JArray args)
                     {
@@ -112,7 +114,8 @@ public static class LlmAgentFactory
                             Arguments = arguments
                         });
 
-                        tools.AddRange(await CreateMcpTools(stdioTransport, toolFactory));
+                        var client = await McpClient.CreateAsync(stdioTransport);
+                        tools.AddRange(await CreateMcpTools(client, toolFactory));
                     }
                 }
             }
@@ -122,7 +125,6 @@ public static class LlmAgentFactory
         {
             var toolEventBus = new ToolEventBus();
             var toolsFile = JObject.Parse(File.ReadAllText(toolParameters.ToolsConfig));
-            var toolFactory = new ToolFactory(loggerFactory);
 
             toolFactory.Register(agentCommunication);
             toolFactory.Register(loggerFactory);
@@ -170,10 +172,9 @@ public static class LlmAgentFactory
         return agent;
     }
 
-    private static async Task<IEnumerable<Tool>> CreateMcpTools(IClientTransport clientTransport, ToolFactory toolFactory)
+    private static async Task<IEnumerable<Tool>> CreateMcpTools(McpClient mcpClient, ToolFactory toolFactory)
     {
-        var client = await McpClientFactory.CreateAsync(clientTransport);
-        var tools = await client.ListToolsAsync();
-        return tools.Select(tool => new McpTool(tool, client, toolFactory));
+        var tools = await mcpClient.ListToolsAsync();
+        return tools.Select(tool => new McpTool(tool, mcpClient, toolFactory));
     }
 }
