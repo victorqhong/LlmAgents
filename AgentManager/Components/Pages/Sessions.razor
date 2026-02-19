@@ -1,0 +1,81 @@
+@page "/sessions"
+
+@using AgentManager.Models
+@using AgentManager.Services
+@using MudBlazor
+@using System.Collections.ObjectModel
+@rendermode InteractiveServer
+
+@inject AgentSessionService AgentSessionService
+
+<PageTitle>Sessions</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="my-8">
+    <MudText Typo="Typo.h4" GutterBottom="true">Sessions</MudText>
+
+    @if (sessions == null)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (!sessions.Any())
+    {
+        <MudAlert Severity="Severity.Info">No agent sessions yet.</MudAlert>
+    }
+    else
+    {
+        <MudDataGrid Items="@sessions" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@loading">
+            <Columns>
+                <PropertyColumn Property="x => x.AgentName" Title="Agent" />
+                <PropertyColumn Property="x => x.Id" Title="Id" />
+                <PropertyColumn Property="x => x.Status" Title="Status" />
+            </Columns>
+        </MudDataGrid>
+    }
+</MudContainer>
+
+@code {
+    private ObservableCollection<AgentSession> sessions = new();
+    private bool loading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        loading = true;
+        foreach (var session in await AgentSessionService.GetAllAsync())
+        {
+            sessions.Add(session);
+        }
+        loading = false;
+
+        AgentSessionService.OnChange += OnSessionsChange;
+    }
+
+    private async void OnSessionsChange(AgentSession session)
+    {
+        int i;
+        var found = false;
+        for (i = 0; i < sessions.Count; i++)
+        {
+            if (sessions[i].Id.Equals(session.Id))
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if (found)
+        {
+            sessions[i].Status = session.Status;
+        }
+        else
+        {
+            sessions.Add(session);
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        AgentSessionService.OnChange -= OnSessionsChange;
+    }
+}

@@ -58,6 +58,7 @@ public static class Parser
         bool persistent = parseResult.GetValue(Options.Persistent);
         string? storageDirectory = parseResult.GetValue(Options.StorageDirectory);
         bool streamOutput = parseResult.GetValue(Options.StreamOutput);
+        string? hubUrl = parseResult.GetValue(Options.HubUrl);
 
         if (string.IsNullOrEmpty(agentId) || string.IsNullOrEmpty(storageDirectory))
         {
@@ -69,7 +70,8 @@ public static class Parser
             AgentId = agentId,
             Persistent = persistent,
             StorageDirectory = storageDirectory,
-            StreamOutput = streamOutput
+            StreamOutput = streamOutput,
+            HubUrl = hubUrl
         };
     }
 

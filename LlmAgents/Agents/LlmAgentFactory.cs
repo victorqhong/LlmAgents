@@ -35,7 +35,6 @@ public static class LlmAgentFactory
         }
 
         var stateDatabase = new StateDatabase(loggerFactory, Path.Join(llmAgentParameters.StorageDirectory, $"{llmAgentParameters.AgentId}.db"));
-        agent.StateDatabase = stateDatabase;
 
         Session? session = null;
         if (!string.IsNullOrEmpty(sessionParameters.SessionId))
@@ -49,7 +48,11 @@ public static class LlmAgentFactory
         }
         else
         {
-            session = stateDatabase.GetLatestSession();
+            if (llmAgentParameters.Persistent)
+            {
+                session = stateDatabase.GetLatestSession();
+            }
+
             if (session == null)
             {
                 session = Session.New();
@@ -57,7 +60,18 @@ public static class LlmAgentFactory
             }
         }
 
-        agent.Session = session;
+        session.PersistentMessagesPath = llmAgentParameters.StorageDirectory;
+
+        if (llmAgentParameters.Persistent)
+        {
+            session.Load();
+        }
+        else if (!string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
+        {
+            session.AddMessages([JObject.FromObject(new { role = "system", content = File.ReadAllText(sessionParameters.SystemPromptFile) })]);
+        }
+
+        agent.LoadSession(session, stateDatabase);
 
         List<Tool> tools = [];
 
@@ -143,16 +157,6 @@ public static class LlmAgentFactory
         if (tools.Count > 0)
         {
             agent.AddTool(tools.ToArray());
-        }
-
-        if (llmAgentParameters.Persistent)
-        {
-            agent.LoadMessages();
-        }
-
-        if (agent.RenderConversation().Count == 0 && !string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
-        {
-            agent.AddMessages([JObject.FromObject(new { role = "system", content = File.ReadAllText(sessionParameters.SystemPromptFile) })]);
         }
 
         return agent;

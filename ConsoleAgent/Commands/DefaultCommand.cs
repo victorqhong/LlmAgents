@@ -2,9 +2,11 @@
 using LlmAgents.Agents;
 using LlmAgents.CommandLineParser;
 using LlmAgents.Communication;
+using LlmAgents.Tools;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using System.CommandLine;
-
 using LlmAgentsOptions = LlmAgents.CommandLineParser.Options;
 using Parser = LlmAgents.CommandLineParser.Parser;
 
@@ -35,6 +37,7 @@ internal class DefaultCommand : RootCommand
         Options.Add(LlmAgentsOptions.StreamOutput);
         Options.Add(LlmAgentsOptions.ToolsConfig);
         Options.Add(LlmAgentsOptions.McpConfigPath);
+        Options.Add(LlmAgentsOptions.HubUrl);
     }
 
     private async Task CommandHandler(ParseResult parseResult, CancellationToken cancellationToken)
@@ -84,7 +87,7 @@ internal class DefaultCommand : RootCommand
         var consoleCommunication = new ConsoleCommunication();
 
         var agent = await LlmAgentFactory.CreateAgent(loggerFactory, consoleCommunication, apiParameters, agentParameters, toolParameters, sessionParameters);
-        agent.PreWaitForContent = async () =>
+        agent.PreWaitForContent += async () =>
         {
             await consoleCommunication.SendMessage("User: ", false);
         };
@@ -93,6 +96,37 @@ internal class DefaultCommand : RootCommand
         {
             await consoleCommunication.SendMessage(string.Format("PromptTokens: {0}, CompletionTokens: {1}, TotalTokens: {2}, Context Used: {3}", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, ((double)usage.TotalTokens / agent.llmApi.ContextSize).ToString("P"), true));
         };
+
+        if (!string.IsNullOrEmpty(agentParameters.HubUrl) && Uri.TryCreate(agentParameters.HubUrl, UriKind.Absolute, out var hubUri))
+        {
+            var hub = new HubConnectionBuilder()
+                .WithUrl(hubUri)
+                .WithAutomaticReconnect()
+                .Build();
+            await hub.StartAsync(cancellationToken);
+            await hub.InvokeAsync("Register", agent.Id, agent.Session.SessionId, agent.Persistent, cancellationToken);
+
+            agent.PreWaitForContent += async () =>
+            {
+                await hub.InvokeAsync("UpdateStatus", agent.Session.SessionId, "WAITING", cancellationToken);
+            };
+            agent.PostParseUsage += async (usage) =>
+            {
+                await hub.InvokeAsync("Log", agent.Session.SessionId, "Usage", $"{{ \"PromptTokens\": {usage.PromptTokens}, \"CompletionTokens\": {usage.CompletionTokens}, \"TotalTokens\": {usage.TotalTokens} }}", "INFO", cancellationToken);
+            };
+            agent.ToolCalled += async (tool, arguments, result) =>
+            {
+                await hub.InvokeAsync("SendLog", agent.Id, agent.Session.SessionId, "Tool", $"{{ \"Name\": \"{tool}\", \"Arguments\": {arguments}, \"Result\": {result} }}", "INFO", cancellationToken);
+            };
+            agent.PostRunWork += async work =>
+            {
+                await hub.InvokeAsync("AddMessages", agent.Session.SessionId, JsonConvert.SerializeObject(work.Messages), cancellationToken);
+            };
+            agent.PostReceiveContent += async () =>
+            {
+                await hub.InvokeAsync("UpdateStatus", agent.Session.SessionId, "WORKING", cancellationToken);
+            };
+        }
 
         await agent.Run(cancellationToken);
     }

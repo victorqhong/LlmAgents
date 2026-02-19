@@ -89,4 +89,10 @@ public static class Options
         Description = "Whether to stream the output responses",
         DefaultValueFactory = result => true
     };
+
+    public readonly static Option<string?> HubUrl = new ("--hubUrl")
+    {
+        Description = "URL of the SignalR Hub the agent will connect to",
+        DefaultValueFactory = result => null
+    };
 }

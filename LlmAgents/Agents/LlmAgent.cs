@@ -6,7 +6,6 @@ using LlmAgents.LlmApi;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 public class LlmAgent
@@ -29,8 +28,6 @@ public class LlmAgent
 
     public bool StreamOutput { get; set; }
 
-    public string PersistentMessagesPath { get; set; } = Environment.CurrentDirectory;
-
     public Action? PreWaitForContent { get; set; }
 
     public Action? PostReceiveContent { get; set; }
@@ -41,11 +38,15 @@ public class LlmAgent
 
     public Action<TokenUsage>? PostParseUsage { get; set; }
 
+    public Action<string, JObject, JToken>? ToolCalled { get; set; }
+
+    public Action<LlmAgentWork>? PostRunWork { get; set; }
+
     public IToolEventBus? ToolEventBus { get; set; }
 
-    public Session Session { get; set; } = Session.New();
+    public Session Session { get; private set; }
 
-    public StateDatabase? StateDatabase { get; set; }
+    public StateDatabase? StateDatabase { get; private set; }
 
     public Func<LlmAgent, GetUserInputWork> CreateUserInputWork { get; set; } = agent => new GetUserInputWork(agent);
 
@@ -57,7 +58,6 @@ public class LlmAgent
         : this(parameters.AgentId, llmApi, agentCommunication, loggerFactory)
     {
         Persistent = parameters.Persistent;
-        PersistentMessagesPath = parameters.StorageDirectory;
         StreamOutput = parameters.StreamOutput;
     }
 
@@ -67,6 +67,8 @@ public class LlmAgent
         this.llmApi = llmApi;
         this.agentCommunication = agentCommunication;
         this.loggerFactory = loggerFactory;
+
+        Session = Session.New();
     }
 
     public void AddTool(params Tool[] tools)
@@ -94,6 +96,7 @@ public class LlmAgent
 
         var result = await tool.Function(Session, arguments);
         ToolEventBus?.PostCallToolEvent(tool, arguments, result);
+        ToolCalled?.Invoke(toolName, arguments, result);
 
         if (Session != null && StateDatabase != null)
         {
@@ -132,6 +135,13 @@ public class LlmAgent
         AddWorkToTasks(work, predecessor);
         await work.Run(cancellationToken);
 
+        PostRunWork?.Invoke(work);
+
+        if (Persistent)
+        {
+            Session.Save(RenderConversation());
+        }
+
         return work;
     }
 
@@ -148,49 +158,18 @@ public class LlmAgent
                 {
                     var toolCallsWork = await RunWork(CreateToolCallsWork(this), assistantWork, cancellationToken);
                     assistantWork = await RunWork(CreateAssistantResponseWork(this), toolCallsWork, cancellationToken);
-
-                    if (Persistent)
-                    {
-                        SaveMessages();
-                    }
                 }
-
             }
         }, cancellationToken);
 
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
     }
 
-    public void AddMessages(ICollection<JObject> messages)
+    public void LoadSession(Session session, StateDatabase stateDatabase)
     {
-        AddWorkToTasks(new StaticMessages(messages, this), null);
-    }
-
-    public void LoadMessages()
-    {
-        var messagesFileName = GetMessagesFilename(Id);
-        var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
-
-        if (!File.Exists(messagesFilePath))
-        {
-            return;
-        }
-
-        List<JObject>? messages = JsonConvert.DeserializeObject<List<JObject>>(File.ReadAllText(messagesFilePath));
-        if (messages == null)
-        {
-            return;
-        }
-
-        AddMessages(messages);
-    }
-
-    public void SaveMessages()
-    {
-        var messagesFileName = GetMessagesFilename(Id);
-        var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
-
-        File.WriteAllText(messagesFilePath, JsonConvert.SerializeObject(RenderConversation()));
+        Session = session;
+        StateDatabase = stateDatabase;
+        AddWorkToTasks(new StaticMessages(Session.GetMessages(), this), null);
     }
 
     private void AddWorkToTasks(LlmAgentWork work, LlmAgentWork? predecessor)
@@ -213,8 +192,4 @@ public class LlmAgent
         }
     }
 
-    private static string GetMessagesFilename(string agentId)
-    {
-        return $"messages-{agentId}.json";
-    }
 }
