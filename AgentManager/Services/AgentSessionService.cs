@@ -73,6 +73,8 @@ public class AgentSessionService
         }
 
         connections.TryRemove(sessionId, out _);
+
+        OnChange?.Invoke(session);
     }
 
     public async Task Unregister(string connectionId)

@@ -119,6 +119,11 @@ internal class DefaultCommand : RootCommand
             };
             agent.PostRunWork += async work =>
             {
+                if (work.Messages == null)
+                {
+                    return;
+                }
+
                 await hub.InvokeAsync("AddMessages", agent.Session.SessionId, JsonConvert.SerializeObject(work.Messages), cancellationToken);
             };
             agent.PostReceiveContent += async () =>
