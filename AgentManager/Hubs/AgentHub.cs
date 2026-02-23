@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using AgentManager.Models;
 using AgentManager.Services;
 using Microsoft.AspNetCore.SignalR;
@@ -81,74 +82,35 @@ public class AgentHub : Hub<IAgentClient>
         using var doc = JsonDocument.Parse(messageJson);
         foreach (var element in doc.RootElement.EnumerateArray())
         {
-            var role = element.GetProperty("role").GetString();
-            var contentProperty = element.GetProperty("content");
-
-            string? textContent = null;
-            string? imageContent = null;
-            string? imageContentMimeType = null;
-            if (contentProperty.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var e in contentProperty.EnumerateArray())
-                {
-                    var type = e.GetProperty("type").GetString();
-                    if (string.Equals(type, "text"))
-                    {
-                        textContent = e.GetProperty("text").GetString()!;
-                        break;
-                    }
-                    else if (string.Equals(type, "image_url"))
-                    {
-                        var imageUrl = e.GetProperty("image_url");
-                        var url = imageUrl.GetProperty("url").GetString();
-                        var parts = url.Split(';');
-                        string mimeType = parts[0].Split(':', 2)[1];
-                        string dataBase64 = parts[1].Split(',', 2)[1];
-
-                        imageContent = dataBase64;
-                        imageContentMimeType = mimeType;
-                    }
-                    else
-                    {
-                        throw new NotImplementedException();
-                    }
-                }
-            }
-            else if (contentProperty.ValueKind == JsonValueKind.String)
-            {
-                textContent = contentProperty.GetString()!;
-            }
-            else
-            {
-                throw new NotImplementedException();
-            }
-
-            if (textContent != null)
-            {
-                messages.Add(new AgentMessage
-                {
-                    Session = session,
-                    Role = role,
-                    TextContent = textContent
-                });
-            }
-            else if (imageContent != null && imageContentMimeType != null)
-            {
-                messages.Add(new AgentMessage
-                {
-                    Session = session,
-                    Role = role,
-                    ImageContent = imageContent,
-                    ImageContentMimeType = imageContentMimeType
-                });
-            }
-            else
-            {
-                throw new NotImplementedException();
-            }
+            messages.Add(AgentMessage.Parse(element, session));
         }
 
         await agentMessageService.AddMessages(new AddMessageDto(id, messages));
+    }
+
+    public async Task<string> GetMessages(string sessionId)
+    {
+        if (!Guid.TryParse(sessionId, out Guid id))
+        {
+            throw new ArgumentException(nameof(sessionId));
+        }
+
+        var session = await agentSessionService.GetSessionById(id);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        var jsonArray = new JsonArray();
+
+        var messages = await agentMessageService.GetSessionMessages(id);
+        foreach (var message in messages)
+        {
+            var jsonObject = JsonNode.Parse(message.Json);
+            jsonArray.Add(jsonObject);
+        }
+
+        return jsonArray.ToString();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

@@ -74,9 +74,8 @@ public class AgentMessageService
                 var messageEntity = new MessageEntity
                 {
                     Id = 0,
-                    Role = m.Role,
-                    TextContent = m.TextContent,
-                    Session = sessionEntity
+                    Session = sessionEntity,
+                    Json = m.Json
                 };
 
                 return messageEntity;
@@ -92,17 +91,14 @@ public class AgentMessageService
             return await db.Messages
                 .Where(m => string.Equals(m.Session.Id, agentSession.Id))
                 .AsNoTracking()
-                .Select(m => new AgentMessage { Role = m.Role, TextContent = m.TextContent, ImageContent = m.ImageContent, ImageContentMimeType = m.ImageContentMimeType, Session = agentSession })
+                .Select(m => AgentMessage.Parse(m.Json, agentSession))
                 .ToListAsync();
         }
 
         private static void MapAgentMessage(AgentMessage agentMessage, ref MessageEntity messageEntity, SessionEntity sessionEntity)
         {
             messageEntity.Session = sessionEntity;
-            messageEntity.Role = agentMessage.Role;
-            messageEntity.TextContent = agentMessage.TextContent;
-            messageEntity.ImageContent = agentMessage.ImageContent;
-            messageEntity.ImageContentMimeType = agentMessage.ImageContentMimeType;
+            messageEntity.Json = agentMessage.Json;
         }
     }
 }
