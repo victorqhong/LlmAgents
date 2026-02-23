@@ -11,6 +11,8 @@ public class AgentMessageService
     private readonly AgentSessionService agentSessionService;
     private readonly Persistence persistence;
 
+    public Action<ICollection<AgentMessage>>? OnMessage;
+
     public AgentMessageService(AgentSessionService agentSessionService, IDbContextFactory<AppDbContext> dbFactory)
     {
         this.agentSessionService = agentSessionService;
@@ -27,6 +29,31 @@ public class AgentMessageService
         }
 
         await persistence.InsertAsync(addMessage.SessionId, addMessage.Messages);
+
+        OnMessage?.Invoke(addMessage.Messages);
+    }
+
+    public async Task<List<AgentMessage>> GetMessages()
+    {
+        var sessions = await agentSessionService.GetAllAsync();
+        var messages = new List<AgentMessage>();
+        foreach (var session in sessions)
+        {
+            messages.AddRange(await persistence.GetAsync(session));
+        }
+
+        return messages;
+    }
+
+    public async Task<List<AgentMessage>> GetSessionMessages(Guid sessionId)
+    {
+        var session = await agentSessionService.GetSessionById(sessionId);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        return await persistence.GetAsync(session);
     }
 
     public class Persistence(IDbContextFactory<AppDbContext> dbContextFactory)
@@ -47,7 +74,8 @@ public class AgentMessageService
                 var messageEntity = new MessageEntity
                 {
                     Id = 0,
-                    Message = m.Message,
+                    Role = m.Role,
+                    TextContent = m.TextContent,
                     Session = sessionEntity
                 };
 
@@ -58,10 +86,23 @@ public class AgentMessageService
             await db.SaveChangesAsync();
         }
 
+        public async Task<List<AgentMessage>> GetAsync(AgentSession agentSession)
+        {
+            using var db = await _dbFactory.CreateDbContextAsync();
+            return await db.Messages
+                .Where(m => string.Equals(m.Session.Id, agentSession.Id))
+                .AsNoTracking()
+                .Select(m => new AgentMessage { Role = m.Role, TextContent = m.TextContent, ImageContent = m.ImageContent, ImageContentMimeType = m.ImageContentMimeType, Session = agentSession })
+                .ToListAsync();
+        }
+
         private static void MapAgentMessage(AgentMessage agentMessage, ref MessageEntity messageEntity, SessionEntity sessionEntity)
         {
             messageEntity.Session = sessionEntity;
-            messageEntity.Message = agentMessage.Message;
+            messageEntity.Role = agentMessage.Role;
+            messageEntity.TextContent = agentMessage.TextContent;
+            messageEntity.ImageContent = agentMessage.ImageContent;
+            messageEntity.ImageContentMimeType = agentMessage.ImageContentMimeType;
         }
     }
 }

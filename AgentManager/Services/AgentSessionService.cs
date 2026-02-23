@@ -128,7 +128,6 @@ public class AgentSessionService
 
         public async Task InsertAsync(AgentSession session)
         {
-            using var db = await _dbFactory.CreateDbContextAsync();
             var sessionEntity = new SessionEntity
             {
                 Id = session.Id,
@@ -137,7 +136,10 @@ public class AgentSessionService
                 Status = session.Status,
                 Persistent = session.Persistent,
             };
-            MapSessionEntity(session, ref sessionEntity);
+
+            MapSessionEntity(session, ref sessionEntity, sessionEntity.Logs, sessionEntity.Messages);
+
+            using var db = await _dbFactory.CreateDbContextAsync();
             db.Sessions.Add(sessionEntity);
             await db.SaveChangesAsync();
         }
@@ -151,7 +153,7 @@ public class AgentSessionService
                 throw new KeyNotFoundException();
             }
 
-            MapSessionEntity(session, ref sessionEntity);
+            MapSessionEntity(session, ref sessionEntity, sessionEntity.Logs, sessionEntity.Messages);
             db.Sessions.Update(sessionEntity);
 
             await db.SaveChangesAsync();
@@ -184,7 +186,7 @@ public class AgentSessionService
             return session;
         }
 
-        public void MapSessionEntity(AgentSession session, ref SessionEntity sessionEntity)
+        public void MapSessionEntity(AgentSession session, ref SessionEntity sessionEntity, ICollection<LogEntity> logEntities, ICollection<MessageEntity> messageEntities)
         {
             sessionEntity.Id = session.Id;
             sessionEntity.AgentName = session.AgentName;
@@ -193,24 +195,8 @@ public class AgentSessionService
             sessionEntity.SessionName = session.SessionName;
             sessionEntity.UpdatedAt = session.UpdatedAt;
 
-            //throw new NotImplementedException();
-
-            //sessionEntity.Logs = session.Logs.Select(l => new LogEntity
-            //{
-            //    Id = -1,
-            //    Category = l.Category,
-            //    Level = l.Level,
-            //    LogTime = l.LogTime,
-            //    Message = l.Message,
-            //    SessionId = session.Id,
-            //}).ToList();
-
-            //sessionEntity.Messages = session.Messages.Select(m => new MessageEntity
-            //{
-            //    Id = -1,
-            //    Message = m.Message,
-            //    SessionId = session.Id,
-            //}).ToList();
+            sessionEntity.Logs = logEntities;
+            sessionEntity.Messages = messageEntities;
         }
     }
 }

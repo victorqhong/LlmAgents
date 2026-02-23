@@ -2,7 +2,6 @@
 using LlmAgents.Agents;
 using LlmAgents.CommandLineParser;
 using LlmAgents.Communication;
-using LlmAgents.Tools;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -116,7 +115,7 @@ internal class DefaultCommand : RootCommand
             };
             agent.ToolCalled += async (tool, arguments, result) =>
             {
-                await hub.InvokeAsync("SendLog", agent.Id, agent.Session.SessionId, "Tool", $"{{ \"Name\": \"{tool}\", \"Arguments\": {arguments}, \"Result\": {result} }}", "INFO", cancellationToken);
+                await hub.InvokeAsync("Log", agent.Session.SessionId, "Tool", $"{{ \"Name\": \"{tool}\", \"Arguments\": {arguments}, \"Result\": {result} }}", "INFO", cancellationToken);
             };
             agent.PostRunWork += async work =>
             {
