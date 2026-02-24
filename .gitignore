@@ -9,3 +9,5 @@ xmpp.json
 tools.json
 
 nupkg/
+
+AgentManager/agents.db*

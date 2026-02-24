@@ -19,6 +19,8 @@ builder.Services.AddSingleton<AgentLogService>();
 builder.Services.AddSingleton<AgentMessageService>();
 builder.Services.AddDbContextFactory<AppDbContext>(options => options.UseSqlite("Data Source=agents.db"));
 
+builder.WebHost.UseUrls("http://0.0.0.0:5000");
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

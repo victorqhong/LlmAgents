@@ -74,6 +74,7 @@ public class AgentLogService
             {
                 throw new KeyNotFoundException();
             }
+
             db.Logs.Add(MapLogEntity(log, session));
             await db.SaveChangesAsync();
         }
