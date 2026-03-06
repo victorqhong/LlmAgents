@@ -17,7 +17,7 @@ public class AgentLogService
     {
         this.agentSessionService = agentSessionService;
 
-        persistence = new Persistence(dbFactory);
+        persistence = new Persistence(dbFactory, agentSessionService);
     }
 
     public async Task Log(LogOperationDto logOperation)
@@ -52,9 +52,38 @@ public class AgentLogService
        return await persistence.GetLogs(sessionId, session);
     }
 
-    private class Persistence(IDbContextFactory<AppDbContext> dbContextFactory)
+    public async Task<List<AgentLog>> GetLogs()
+    {
+        return await persistence.GetLogs();
+    }
+
+    private class Persistence(IDbContextFactory<AppDbContext> dbContextFactory, AgentSessionService agentSessionService)
     {
         public readonly IDbContextFactory<AppDbContext> _dbFactory = dbContextFactory;
+        public readonly AgentSessionService agentSessionService = agentSessionService;
+
+        public async Task<List<AgentLog>> GetLogs()
+        {
+            using var db = await _dbFactory.CreateDbContextAsync();
+            var logs = await db.Logs
+                .Include(l => l.Session)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var sessions = await agentSessionService.GetAllAsync();
+            return logs.Select(log =>
+            {
+                var session = sessions.Where(s => Equals(s.Id, log.Session.Id));
+                return new AgentLog
+                {
+                    Category = log.Category,
+                    Level = log.Level,
+                    Message = log.Message,
+                    LogTime = log.LogTime,
+                    Session = session.First()
+                };
+            }).ToList();
+        }
 
         public async Task<List<AgentLog>> GetLogs(Guid sessionId, AgentSession session)
         {
@@ -79,7 +108,7 @@ public class AgentLogService
             await db.SaveChangesAsync();
         }
 
-        public LogEntity MapLogEntity(AgentLog log, SessionEntity session)
+        public static LogEntity MapLogEntity(AgentLog log, SessionEntity session)
         {
             var logEntity = new LogEntity
             {

@@ -22,7 +22,7 @@ public sealed class TestLlmAgent
             AgentId = "unit_test",
             Persistent = false,
             StorageDirectory = Environment.CurrentDirectory,
-            HubUrl = null
+            AgentManagerUrl = null
         };
 
         var loggerFactory = new LoggerFactory();

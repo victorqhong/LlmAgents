@@ -14,11 +14,13 @@ public class AgentMessage
     public static AgentMessage Parse(JsonElement element, AgentSession agentSession)
     {
         var role = element.GetProperty("role").GetString();
-        var contentProperty = element.GetProperty("content");
+        ArgumentException.ThrowIfNullOrEmpty(role);
 
         string? textContent = null;
         string? imageContent = null;
         string? imageContentMimeType = null;
+
+        var contentProperty = element.GetProperty("content");
         if (contentProperty.ValueKind == JsonValueKind.Array)
         {
             foreach (var e in contentProperty.EnumerateArray())
@@ -26,19 +28,22 @@ public class AgentMessage
                 var type = e.GetProperty("type").GetString();
                 if (string.Equals(type, "text"))
                 {
-                    textContent = e.GetProperty("text").GetString()!;
+                    textContent = e.GetProperty("text").GetString();
                     break;
                 }
                 else if (string.Equals(type, "image_url"))
                 {
                     var imageUrl = e.GetProperty("image_url");
                     var url = imageUrl.GetProperty("url").GetString();
-                    var parts = url.Split(';');
-                    string mimeType = parts[0].Split(':', 2)[1];
-                    string dataBase64 = parts[1].Split(',', 2)[1];
+                    if (!string.IsNullOrEmpty(url))
+                    {
+                        var parts = url.Split(';');
+                        string mimeType = parts[0].Split(':', 2)[1];
+                        string dataBase64 = parts[1].Split(',', 2)[1];
 
-                    imageContent = dataBase64;
-                    imageContentMimeType = mimeType;
+                        imageContent = dataBase64;
+                        imageContentMimeType = mimeType;
+                    }
                 }
                 else
                 {
@@ -48,7 +53,7 @@ public class AgentMessage
         }
         else if (contentProperty.ValueKind == JsonValueKind.String)
         {
-            textContent = contentProperty.GetString()!;
+            textContent = contentProperty.GetString();
         }
         else
         {

@@ -1,10 +1,11 @@
 @page "/sessions"
 
+@attribute [Authorize]
+
 @using AgentManager.Models
 @using AgentManager.Services
 @using MudBlazor
 @using System.Collections.ObjectModel
-@rendermode InteractiveServer
 
 @inject AgentSessionService AgentSessionService
 
@@ -58,8 +59,6 @@
             sessions.Add(s);
         }
         loading = false;
-
-        InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()

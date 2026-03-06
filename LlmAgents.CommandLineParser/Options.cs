@@ -90,9 +90,9 @@ public static class Options
         DefaultValueFactory = result => true
     };
 
-    public readonly static Option<string?> HubUrl = new ("--hubUrl")
+    public readonly static Option<string?> AgentManagerUrl = new ("--managerUrl")
     {
-        Description = "URL of the SignalR Hub the agent will connect to",
+        Description = "URL of the AgentManager server to connect to",
         DefaultValueFactory = result => null
     };
 }

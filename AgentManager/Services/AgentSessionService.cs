@@ -172,7 +172,7 @@ public class AgentSessionService
             }
         }
 
-        public AgentSession MapAgentSession(SessionEntity sessionEntity)
+        public static AgentSession MapAgentSession(SessionEntity sessionEntity)
         {
             var session = new AgentSession
             {
@@ -188,7 +188,7 @@ public class AgentSessionService
             return session;
         }
 
-        public void MapSessionEntity(AgentSession session, ref SessionEntity sessionEntity, ICollection<LogEntity> logEntities, ICollection<MessageEntity> messageEntities)
+        public static void MapSessionEntity(AgentSession session, ref SessionEntity sessionEntity, ICollection<LogEntity> logEntities, ICollection<MessageEntity> messageEntities)
         {
             sessionEntity.Id = session.Id;
             sessionEntity.AgentName = session.AgentName;

@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using AgentManager.Models;
 using AgentManager.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace AgentManager.Hubs;
@@ -12,6 +14,7 @@ public record UpdateStatusDto(Guid SessionId, string Status);
 public record LogOperationDto(Guid SessionId, string Category, string Message, string Level);
 public record AddMessageDto(Guid SessionId, ICollection<AgentMessage> Messages);
 
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AgentHub : Hub<IAgentClient>
 {
     private readonly AgentSessionService agentSessionService;

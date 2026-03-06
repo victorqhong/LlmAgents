@@ -58,12 +58,14 @@ public static class Parser
         bool persistent = parseResult.GetValue(Options.Persistent);
         string? storageDirectory = parseResult.GetValue(Options.StorageDirectory);
         bool streamOutput = parseResult.GetValue(Options.StreamOutput);
-        string? hubUrl = parseResult.GetValue(Options.HubUrl);
+        string? managerUrl = parseResult.GetValue(Options.AgentManagerUrl);
 
         if (string.IsNullOrEmpty(agentId) || string.IsNullOrEmpty(storageDirectory))
         {
             return null;
         }
+
+        Uri.TryCreate(managerUrl, UriKind.Absolute, out var uri);
 
         return new LlmAgentParameters
         {
@@ -71,7 +73,7 @@ public static class Parser
             Persistent = persistent,
             StorageDirectory = storageDirectory,
             StreamOutput = streamOutput,
-            HubUrl = hubUrl
+            AgentManagerUrl = uri
         };
     }
 

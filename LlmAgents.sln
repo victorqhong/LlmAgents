@@ -15,9 +15,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LlmAgents.Tools", "LlmAgent
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Agent", "Agent", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
 	ProjectSection(SolutionItems) = preProject
-		Agent\api.json = Agent\api.json
-		Agent\tools.json = Agent\tools.json
-		Agent\xmpp.json = Agent\xmpp.json
+		Agent\api.jsonc = Agent\api.jsonc
+		Agent\tools.jsonc = Agent\tools.jsonc
+		Agent\xmpp.jsonc = Agent\xmpp.jsonc
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ToolServer", "ToolServer\ToolServer.csproj", "{9F96E6A3-19FD-4E8E-BE2E-D43AC07E6D8C}"
@@ -27,6 +27,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LlmAgents.CommandLineParser", "LlmAgents.CommandLineParser\LlmAgents.CommandLineParser.csproj", "{2E130061-E27D-4F02-8B03-BC62227D386C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentManager", "AgentManager\AgentManager.csproj", "{889C292E-0D0A-4CE3-ABEB-4852B2506873}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LlmAgents.Api", "LlmAgents.Api\LlmAgents.Api.csproj", "{EA685414-E73C-4785-B327-03EB988FECD0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -146,6 +148,18 @@ Global
 		{889C292E-0D0A-4CE3-ABEB-4852B2506873}.Release|x64.Build.0 = Release|Any CPU
 		{889C292E-0D0A-4CE3-ABEB-4852B2506873}.Release|x86.ActiveCfg = Release|Any CPU
 		{889C292E-0D0A-4CE3-ABEB-4852B2506873}.Release|x86.Build.0 = Release|Any CPU
+		{EA685414-E73C-4785-B327-03EB988FECD0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EA685414-E73C-4785-B327-03EB988FECD0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EA685414-E73C-4785-B327-03EB988FECD0}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{EA685414-E73C-4785-B327-03EB988FECD0}.Debug|x64.Build.0 = Debug|Any CPU
+		{EA685414-E73C-4785-B327-03EB988FECD0}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{EA685414-E73C-4785-B327-03EB988FECD0}.Debug|x86.Build.0 = Debug|Any CPU
+		{EA685414-E73C-4785-B327-03EB988FECD0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EA685414-E73C-4785-B327-03EB988FECD0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EA685414-E73C-4785-B327-03EB988FECD0}.Release|x64.ActiveCfg = Release|Any CPU
+		{EA685414-E73C-4785-B327-03EB988FECD0}.Release|x64.Build.0 = Release|Any CPU
+		{EA685414-E73C-4785-B327-03EB988FECD0}.Release|x86.ActiveCfg = Release|Any CPU
+		{EA685414-E73C-4785-B327-03EB988FECD0}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

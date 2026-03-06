@@ -1,0 +1,83 @@
+@page "/containers"
+
+@using AgentManager.Models.Containers;
+@using AgentManager.Services
+@using MudBlazor
+
+@rendermode InteractiveServer
+
+@inject ContainerService ContainerService
+
+@attribute [Authorize]
+
+<PageTitle>Containers</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="my-8">
+    <MudText Typo="Typo.h4" GutterBottom="true">Containers</MudText>
+    <MudButton Variant="Variant.Filled" OnClick="OnClickCreate">Create container</MudButton>
+    <MudButton Variant="Variant.Filled" OnClick="OnClickGet">Get container</MudButton>
+    <MudButton Variant="Variant.Filled" OnClick="OnClickStart">Start container</MudButton>
+    <MudButton Variant="Variant.Filled" OnClick="OnClickStop">Stop container</MudButton>
+    <MudButton Variant="Variant.Filled" OnClick="OnClickDelete">Delete container</MudButton>
+    <MudButton Variant="Variant.Filled" OnClick="OnClickExec">Exec container</MudButton>
+    <MudButton Variant="Variant.Filled" OnClick="OnClickCreateFile">Create file</MudButton>
+</MudContainer>
+
+@code {
+    async Task OnClickCreate()
+    {
+      await ContainerService.CreateInstance(new InstancesPost
+      {
+	Name = "my-instance",
+	Type = "container",
+	Start = true,
+	Source = new InstanceSource
+	{
+	  Type = "image",
+	  Protocol = "simplestreams",
+	  Server = "https://images.lxd.canonical.com",
+	  Alias = "debian/13"
+	}
+      });
+    }
+
+    async Task OnClickGet()
+    {
+      await ContainerService.GetInstance("my-instance");
+    }
+
+    async Task OnClickStart()
+    {
+      await ContainerService.StartInstance("my-instance");
+    }
+
+    async Task OnClickStop()
+    {
+      await ContainerService.StopInstance("my-instance");
+    }
+
+    async Task OnClickDelete()
+    {
+      await ContainerService.DeleteInstance("my-instance", force: true);
+    }
+
+    async Task OnClickExec()
+    {
+      await ContainerService.ExecInstance("my-instance", new InstanceExecPost
+      {
+	Command = ["date"],
+	CurrentWorkingDirectory = "",
+	Environment = new Dictionary<string, string> { {"TERM", "xterm"} },
+	Interactive = false,
+	WaitForWebsocket = true,
+	Width = 212,
+	Height = 56
+      });
+    }
+
+    async Task OnClickCreateFile()
+    {
+      var content = System.IO.File.OpenRead("");
+      await ContainerService.CreateFile("my-instance", "/root/default", content);
+    }
+}
