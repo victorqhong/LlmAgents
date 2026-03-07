@@ -1,6 +1,7 @@
-﻿using ConsoleAgent.Extensions;
+using ConsoleAgent.Extensions;
 using LlmAgents;
 using LlmAgents.Agents;
+using LlmAgents.Api.GitHub;
 using LlmAgents.CommandLineParser;
 using LlmAgents.Communication;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -98,18 +99,17 @@ internal class DefaultCommand : RootCommand
 
         if (agentParameters.AgentManagerUrl != null)
         {
-            var accessToken = await LlmAgents.Api.GitHub.Login.GetHubLoginToken(consoleCommunication, agentParameters.AgentManagerUrl);
-            if (string.IsNullOrEmpty(accessToken))
-            {
-                Console.Error.WriteLine("accessToken is null or empty");
-                return;
-            }
-
             var hubUrl = new Uri(agentParameters.AgentManagerUrl, "hubs/agent");
             var hub = new HubConnectionBuilder()
                 .WithUrl(hubUrl, options =>
                 {
-                    options.AccessTokenProvider = () => Task.FromResult<string?>(accessToken);
+                    options.AccessTokenProvider = () =>
+                    {
+                        return Task.Run(async () =>
+                        {
+                            return await Login.GetHubLoginToken(consoleCommunication, agentParameters.AgentManagerUrl, cancellationToken);
+                        });
+                    };
                 })
                 .WithAutomaticReconnect()
                 .Build();

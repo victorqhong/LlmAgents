@@ -14,11 +14,11 @@ public static class BlazorExtensions
             .AddRazorComponents()
             .AddInteractiveServerComponents();
 
-        builder.Services.AddScoped<AgentSessionService>();
-        builder.Services.AddScoped<AgentLogService>();
-        builder.Services.AddScoped<AgentMessageService>();
-        builder.Services.AddScoped<ContainerService>();
-        builder.Services.AddScoped<WebsocketManager>();
+        builder.Services.AddSingleton<AgentSessionService>();
+        builder.Services.AddSingleton<AgentLogService>();
+        builder.Services.AddSingleton<AgentMessageService>();
+        builder.Services.AddSingleton<ContainerService>();
+        builder.Services.AddSingleton<WebsocketManager>();
     }
 
     public static void ConfigureBlazor(this WebApplication app)
