@@ -18,7 +18,7 @@ public static class Login
             return await PerformOAuthFlow(communication, agentHubUri, cancellationToken);
         }
 
-        var remainingTime = DateTime.Now - storedToken.ExpireTime;
+        var remainingTime = storedToken.ExpireTime - DateTime.Now;
         if (remainingTime > TimeSpan.FromMinutes(storedToken.ExpiresIn / 2.0))
         {
            return storedToken.AccessToken; 

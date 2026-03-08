@@ -23,20 +23,7 @@ public class HubAuthTokenStore
         try
         {
             var json = File.ReadAllText(tokenPath);
-            var token = JsonConvert.DeserializeObject<HubAuthToken>(json);
-            
-            // Check if token is expired
-            if (token != null)
-            {
-                if (token.ExpireTime > DateTime.Now)
-                {
-                    // Token has expired, delete it
-                    File.Delete(tokenPath);
-                    return null;
-                }
-            }
-            
-            return token;
+            return JsonConvert.DeserializeObject<HubAuthToken>(json);
         }
         catch
         {
@@ -45,6 +32,7 @@ public class HubAuthTokenStore
             {
                 File.Delete(tokenPath);
             }
+
             return null;
         }
     }
