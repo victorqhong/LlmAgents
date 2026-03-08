@@ -23,6 +23,9 @@
 
   <ItemGroup>
     <Folder Include="Migrations\" />
+    <None Include="wwwroot\install-xmppagent.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

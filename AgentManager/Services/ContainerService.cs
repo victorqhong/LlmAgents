@@ -16,6 +16,52 @@ public class ContainerService
         this.websocketManager = websocketManager;
     }
 
+    public async Task AllocateXmppAgent()
+    {
+        _ = Task.Run(async () =>
+        {
+            var instanceName = "my-instance";
+            await CreateInstance(new InstancesPost
+            {
+                Name = instanceName,
+                Type = "container",
+                Start = true,
+                Source = new InstanceSource
+                {
+                    Type = "image",
+                    Protocol = "simplestreams",
+                    Server = "https://images.lxd.canonical.com",
+                    Alias = "debian/13"
+                }
+            });
+
+            await StartInstance(instanceName);
+            await CreateFile(instanceName, "/root/install-xmppagent.sh", File.OpenRead("wwwroot/install-xmppagent.sh"));
+            await ExecInstance(instanceName, new InstanceExecPost
+            {
+                Command = ["bash", "/root/install-xmppagent.sh"],
+                CurrentWorkingDirectory = "/root",
+                Environment = [],
+                User = 0,
+                Group = 0,
+                WaitForWebsocket = true,
+                Interactive = false,
+                Width = 212,
+                Height = 56
+            });
+        });
+    }
+
+    public async Task DeallocateXmppAgent()
+    {
+        _ = Task.Run(async () =>
+        {
+            var instanceName = "my-instance";
+            await StopInstance(instanceName);
+            await DeleteInstance(instanceName, force: true);
+        });
+    }
+
     public async Task<LxdResponse> Get()
     {
         return await httpClient.Get<LxdResponse>("1.0") ?? throw new SerializationException();
@@ -37,12 +83,10 @@ public class ContainerService
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<LxdResponse>() ?? throw new SerializationException();
-        if (string.IsNullOrEmpty(result.Operation))
+        if (!string.IsNullOrEmpty(result.Operation))
         {
-            throw new NullReferenceException();
+            await WaitOperation(result.Operation);
         }
-
-        await WaitOperation(result.Operation);
 
         return result;
     }
@@ -101,11 +145,13 @@ public class ContainerService
         return result;
     }
 
-    private async Task ConnectWebsocket(string id, string operation, string secret)
+    private async Task<ManagedWebSocket?> ConnectWebsocket(string id, string operation, string secret)
     {
         var websocket = await websocketManager.OpenAsync(id, new Uri($"wss://{httpClient.BaseAddress.Host}:{httpClient.BaseAddress.Port}{operation}/websocket?secret={secret}"), CancellationToken.None);
         websocket.OnMessage += (ws, message) => Console.WriteLine($"{id}: {message}");
         // websocket.OnError += (ws, ex) => Console.WriteLine(ex);
+
+        return websocket;
     }
 
     private async Task<LxdResponse> ChangeInstanceState(string instanceName, string action, string project)
@@ -119,6 +165,11 @@ public class ContainerService
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<LxdResponse>() ?? throw new SerializationException();
+        if (!string.IsNullOrEmpty(result.Operation))
+        {
+            await WaitOperation(result.Operation);
+        }
+
         return result;
     }
 
