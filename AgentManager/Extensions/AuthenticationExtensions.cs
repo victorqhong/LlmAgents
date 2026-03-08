@@ -149,9 +149,10 @@ public static class AuthenticationExtensions
             return Results.Redirect("/");
         });
 
-        app.MapGet("/auth/github", async (HttpContext httpContext) =>
+        app.MapPost("/auth/github", async (HttpContext httpContext) =>
         {
-            var accessToken = httpContext.Request.Query["accessToken"].FirstOrDefault();
+            var tokenRequest = await httpContext.Request.ReadFromJsonAsync<TokenRequest>();
+            var accessToken = tokenRequest?.AccessToken;
             if (string.IsNullOrEmpty(accessToken))
             {
                 return Results.BadRequest();
@@ -177,16 +178,20 @@ public static class AuthenticationExtensions
             var refreshTokenService = httpContext.RequestServices.GetRequiredService<RefreshTokenService>();
             var refreshToken = await refreshTokenService.CreateAsync(user);
 
-            return Results.Ok(new
+            var token = new HubAuthToken
             {
-                accessToken = jwt,
-                refreshToken,
-                expiresIn = jwtOptions.ExpirationMinutes
-            });
+                AccessToken = jwt,
+                RefreshToken = refreshToken,
+                ExpiresIn = jwtOptions.ExpirationMinutes,
+                ExpireTime = DateTime.UtcNow.AddMinutes(jwtOptions.ExpirationMinutes)
+            };
+
+            return Results.Ok(token);
         });
         app.MapPost("/auth/refresh", async (HttpContext httpContext) =>
         {
-            var refreshToken = httpContext.Request.Query["refreshToken"].FirstOrDefault();
+            var refreshRequest = await httpContext.Request.ReadFromJsonAsync<RefreshRequest>();
+            var refreshToken = refreshRequest?.RefreshToken;
             if (string.IsNullOrEmpty(refreshToken))
             {
                 return Results.BadRequest();
@@ -201,18 +206,26 @@ public static class AuthenticationExtensions
                 return Results.BadRequest();
             }
 
+            if (token.ExpiresAt < DateTime.Now)
+            {
+                return Results.Unauthorized();
+            }
+
             await refreshTokenService.RevokeAsync(token);
             var newRefreshToken = await refreshTokenService.CreateAsync(token.User);
 
             var jwtOptions = httpContext.RequestServices.GetRequiredService<JwtOptions>();
             var jwt = CreateJwt(token.User, jwtOptions);
 
-            return Results.Ok(new
+            var authToken = new HubAuthToken
             {
-                accessToken = jwt,
-                newRefreshToken,
-                expiresIn = jwtOptions.ExpirationMinutes 
-            });
+                AccessToken = jwt,
+                RefreshToken = refreshToken,
+                ExpiresIn = jwtOptions.ExpirationMinutes,
+                ExpireTime = DateTime.UtcNow.AddMinutes(jwtOptions.ExpirationMinutes)
+            };
+
+            return Results.Ok(authToken);
         });
     }
 

@@ -24,7 +24,7 @@ public class RefreshTokenService
         db.RefreshTokens.Add(new RefreshTokenEntity
         {
             TokenHash = hash,
-            ExpiresAt = DateTime.Now.AddDays(7),
+            ExpiresAt = DateTime.Now.AddDays(1),
             UserId = user.Id
 
         });

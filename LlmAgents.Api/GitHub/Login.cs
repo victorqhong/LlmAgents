@@ -1,6 +1,7 @@
 namespace LlmAgents.Api.GitHub;
 
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using LlmAgents.Api;
 using LlmAgents.Communication;
 using Newtonsoft.Json;
@@ -44,10 +45,10 @@ public static class Login
         using var client = new HttpClient();
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        var response = await client.GetAsync($"{agentHubUri}auth/refresh?refreshToken={storedToken.RefreshToken}", cancellationToken);
+        var content = JsonContent.Create(new RefreshRequest { RefreshToken = storedToken.RefreshToken });
+        var response = await client.PostAsync($"{agentHubUri}auth/refresh", content, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            HubAuthTokenStore.ClearToken();
             return null;
         }
 
@@ -120,22 +121,18 @@ public static class Login
             return null;
         }
 
-        var response = await client.GetAsync($"{agentHubUri}auth/github?accessToken={tokenResponse.AccessToken}", cancellationToken);
+        var content = JsonContent.Create(new TokenRequest { AccessToken = tokenResponse.AccessToken });
+        var response = await client.PostAsync($"{agentHubUri}auth/github", content, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             return null;
         }
 
-        var apiContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        var json = JObject.Parse(apiContent);
-
-        var hubAuthToken = new HubAuthToken
+        var hubAuthToken = await response.Content.ReadFromJsonAsync<HubAuthToken>(cancellationToken);
+        if (hubAuthToken == null)
         {
-            AccessToken = json.Value<string>("accessToken") ?? string.Empty,
-            RefreshToken = json.Value<string>("refreshToken") ?? string.Empty,
-            ExpiresIn = json.Value<int>("expiresIn"),
-            ExpireTime = DateTime.Now.AddMinutes(json.Value<int>("expiresIn"))
-        };
+            return null;
+        }
 
         HubAuthTokenStore.SaveToken(hubAuthToken);
 
