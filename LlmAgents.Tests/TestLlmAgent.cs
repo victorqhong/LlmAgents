@@ -5,8 +5,8 @@ using LlmAgents.Tests.Communication;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json.Linq;
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -25,14 +25,18 @@ public sealed class TestLlmAgent
             StorageDirectory = Environment.CurrentDirectory
         };
 
+        var apiModel = Environment.GetEnvironmentVariable("LLMAGENTS_API_MODEL")!;
+        var apiKey = Environment.GetEnvironmentVariable("LLMAGENTS_API_KEY")!;
+        var apiEndpoint = Environment.GetEnvironmentVariable("LLMAGENTS_API_ENDPOINT")!;
+
         var loggerFactory = new LoggerFactory();
         var llmApiParameters = new LlmApiOpenAiParameters
         {
             ContextSize = 8192,
             MaxCompletionTokens = 8192,
-            ApiModel = Environment.GetEnvironmentVariable("LLMAGENTS_API_MODEL")!,
-            ApiKey = Environment.GetEnvironmentVariable("LLMAGENTS_API_KEY")!,
-            ApiEndpoint = Environment.GetEnvironmentVariable("LLMAGENTS_API_ENDPOINT")!,
+            ApiModel = apiModel,
+            ApiKey = apiKey,
+            ApiEndpoint = apiEndpoint,
         };
         var llmApi = new LlmApiOpenAi(loggerFactory, llmApiParameters);
         communication = new UnitTestCommunication();
@@ -92,5 +96,52 @@ public sealed class TestLlmAgent
         Assert.AreEqual(2, messages.Count);
         Assert.IsNotNull(assistantResponse.Parser);
         Assert.AreEqual("tool_calls", assistantResponse.Parser.FinishReason);
+    }
+
+    [TestMethod]
+    [TestCategory(Constants.TestCategory_Integration)]
+    [Timeout(TestTimeout.Infinite)]
+    public async Task TestAgent_InvalidToolCall()
+    {
+        var cts = new CancellationTokenSource();
+
+        var loggerFactory = new LoggerFactory();
+        var toolFactory = new ToolFactory(loggerFactory);
+        toolFactory.Register<ILoggerFactory>(loggerFactory);
+        var agent = CreateAgent(out var communication);
+        agent.AddTool(new FileWrite(toolFactory));
+
+        communication.Input.Add("use file_write tool to write a SearchReplace.cs file");
+        var userInputWork = await agent.RunWork(new GetUserInputWork(agent), null, cts.Token);
+        var messages = agent.RenderConversation();
+        Assert.AreEqual(1, messages.Count);
+
+        var stream = File.OpenRead("Responses\\response_toolcallinvalid_stream.txt");
+        var parser = new LlmApiOpenAiStreamingCompletionParser(stream);
+        parser.Parse(cts.Token);
+
+        await foreach (var token in parser.StreamingCompletion)
+        {
+            continue;
+        }
+
+        var mockMessages = parser.Messages;
+
+        var mockToolCall = await agent.RunWork(new StaticMessages(mockMessages, agent), userInputWork, cts.Token);
+        messages = agent.RenderConversation();
+        //Assert.AreEqual(2, messages.Count);
+
+        var toolCalls = await agent.RunWork(new ToolCalls(loggerFactory, agent), mockToolCall, cts.Token);
+        messages = agent.RenderConversation();
+        //Assert.AreEqual(3, messages.Count);
+
+        communication.Input.Add("something went wrong");
+        userInputWork = await agent.RunWork(new GetUserInputWork(agent), null, cts.Token);
+        messages = agent.RenderConversation();
+        //Assert.AreEqual(4, messages.Count);
+
+        var assistantResponse = await agent.RunWork(new GetAssistantResponseWork(agent), userInputWork, cts.Token);
+        messages = agent.RenderConversation();
+        //Assert.AreEqual(5, messages.Count);
     }
 }

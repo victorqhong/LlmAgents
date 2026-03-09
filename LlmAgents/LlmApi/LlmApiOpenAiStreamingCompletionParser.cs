@@ -20,8 +20,6 @@ public class LlmApiOpenAiStreamingCompletionParser
 
     public List<JObject> Messages { get; private set; } = [];
 
-    public IReadOnlyList<Dictionary<string, string>> ParsedToolCalls { get; private set; } = [];
-
     public bool OutputReasoning { get; set; } = true;
 
     public LlmApiOpenAiStreamingCompletionParser(Stream stream)
@@ -99,7 +97,7 @@ public class LlmApiOpenAiStreamingCompletionParser
                 {
                     if (OutputReasoning)
                     {
-                    yield return "<thinking>";
+                        yield return "<thinking>";
                     }
 
                     seenReasoningContent = true;
@@ -107,7 +105,7 @@ public class LlmApiOpenAiStreamingCompletionParser
 
                 if (OutputReasoning)
                 {
-                yield return deltaReasoningContent;
+                    yield return deltaReasoningContent;
                 }
 
                 reasoningContentBuffer.Append(deltaReasoningContent);
@@ -119,7 +117,7 @@ public class LlmApiOpenAiStreamingCompletionParser
                 {
                     if (OutputReasoning)
                     {
-                    yield return "</thinking>\n";
+                        yield return "</thinking>\n";
                     }
 
                     seenContent = true;
@@ -182,7 +180,7 @@ public class LlmApiOpenAiStreamingCompletionParser
         {
             if (OutputReasoning)
             {
-            yield return "</thinking>\n";
+                yield return "</thinking>\n";
             }
 
             seenContent = true;
@@ -199,23 +197,39 @@ public class LlmApiOpenAiStreamingCompletionParser
         }
         else if (string.Equals(FinishReason, "tool_calls"))
         {
-            var tool_calls = parsedToolCalls.Select(kvp =>
-            {
-                return new
+            var additionalMessages = new List<JObject>();
+            var tool_calls = parsedToolCalls
+                .Select(kvp =>
                 {
-                    id = kvp.Value["id"],
-                    type = kvp.Value["type"],
-                    function = new
+                    string arguments;
+                    try
                     {
-                        name = kvp.Value["functionName"],
-                        arguments = kvp.Value["functionArguments"]
+                        var parsedArguments = JObject.Parse(kvp.Value["functionArguments"]);
+                        arguments = kvp.Value["functionArguments"];
                     }
-                };
-            });
+                    catch
+                    {
+                        arguments = "{}";
+                        additionalMessages.Add(JObject.FromObject(new { role = "user", content = $"The arguments for tool call \"{kvp.Value["id"]}\" is not well formed JSON" }));
+                    }
 
-            ParsedToolCalls = parsedToolCalls.Select(kvp => kvp.Value).ToList();
+                    return new
+                    {
+                        id = kvp.Value["id"],
+                        type = kvp.Value["type"],
+                        function = new
+                        {
+                            name = kvp.Value["functionName"],
+                            arguments
+                        }
+                    };
+                });
 
             Messages.Add(JObject.FromObject(new { role, content, reasoning_content, tool_calls }));
+            if (additionalMessages.Count > 0)
+            {
+                Messages.AddRange(additionalMessages);
+            }
         }
         else
         {
