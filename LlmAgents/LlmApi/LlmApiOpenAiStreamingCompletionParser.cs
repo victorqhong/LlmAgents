@@ -20,6 +20,8 @@ public class LlmApiOpenAiStreamingCompletionParser
 
     public List<JObject> Messages { get; private set; } = [];
 
+    public IReadOnlyList<Dictionary<string, string>> ParsedToolCalls { get; private set; } = [];
+
     public bool OutputReasoning { get; set; } = true;
 
     public LlmApiOpenAiStreamingCompletionParser(Stream stream)
