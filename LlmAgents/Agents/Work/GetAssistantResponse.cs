@@ -8,6 +8,14 @@ public class GetAssistantResponseWork : LlmAgentWork
 {
     public LlmApiOpenAiStreamingCompletionParser? Parser { get; private set; }
 
+    public string AssistantMessagePrefix { get; set; } = "Assistant: ";
+
+    public IList<JObject>? Tools { get; set; }
+
+    public string ToolChoice { get; set; } = "auto";
+
+    public bool OutputReasoning { get; set; } = true;
+
     public GetAssistantResponseWork(LlmAgent agent)
         : base(agent)
     {
@@ -20,8 +28,13 @@ public class GetAssistantResponseWork : LlmAgentWork
 
     public async override Task Run(CancellationToken cancellationToken)
     {
+        if (Tools == null)
+        {
+            Tools = agent.GetToolDefinitions();
+        }
+
         var conversation = agent.RenderConversation();
-        var parser = await agent.llmApi.GetStreamingCompletion(conversation, agent.GetToolDefinitions(), "auto", cancellationToken: cancellationToken);
+        var parser = await agent.llmApi.GetStreamingCompletion(conversation, Tools, ToolChoice, OutputReasoning, cancellationToken);
         if (parser == null)
         {
             return;
@@ -36,7 +49,11 @@ public class GetAssistantResponseWork : LlmAgentWork
 
         if (agent.StreamOutput)
         {
-            await agent.agentCommunication.SendMessage("Assistant: ", true);
+            if (!string.IsNullOrEmpty(AssistantMessagePrefix))
+            {
+                await agent.agentCommunication.SendMessage(AssistantMessagePrefix, false);
+            }
+            
             await foreach (var chunk in Parser.StreamingCompletion)
             {
                 await agent.agentCommunication.SendMessage(chunk, false);
@@ -47,11 +64,17 @@ public class GetAssistantResponseWork : LlmAgentWork
         else
         {
             var sb = new StringBuilder();
-            sb.Append("Assistant: ");
+
+            if (!string.IsNullOrEmpty(AssistantMessagePrefix))
+            {
+                sb.Append(AssistantMessagePrefix);
+            }
+
             await foreach (var chunk in Parser.StreamingCompletion)
             {
                 sb.Append(chunk);
             }
+
             sb.Append('\n');
 
             await agent.agentCommunication.SendMessage(sb.ToString(), true);

@@ -20,7 +20,7 @@ public class LlmApiOpenAiStreamingCompletionParser
 
     public List<JObject> Messages { get; private set; } = [];
 
-    public IReadOnlyList<Dictionary<string, string>> ParsedToolCalls { get; private set; } = [];
+    public bool OutputReasoning { get; set; } = true;
 
     public LlmApiOpenAiStreamingCompletionParser(Stream stream)
     {
@@ -95,11 +95,19 @@ public class LlmApiOpenAiStreamingCompletionParser
             {
                 if (!seenReasoningContent)
                 {
+                    if (OutputReasoning)
+                    {
                     yield return "<thinking>";
+                    }
+
                     seenReasoningContent = true;
                 }
 
+                if (OutputReasoning)
+                {
                 yield return deltaReasoningContent;
+                }
+
                 reasoningContentBuffer.Append(deltaReasoningContent);
             }
 
@@ -107,7 +115,11 @@ public class LlmApiOpenAiStreamingCompletionParser
             {
                 if (seenReasoningContent && !seenContent)
                 {
+                    if (OutputReasoning)
+                    {
                     yield return "</thinking>\n";
+                    }
+
                     seenContent = true;
                 }
 

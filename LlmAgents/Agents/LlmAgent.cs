@@ -42,6 +42,12 @@ public class LlmAgent
 
     public StateDatabase? StateDatabase { get; set; }
 
+    public Func<LlmAgent, GetUserInputWork> CreateUserInputWork { get; set; } = agent => new GetUserInputWork(agent);
+
+    public Func<LlmAgent, GetAssistantResponseWork> CreateAssistantResponseWork { get; set; } = agent => new GetAssistantResponseWork(agent);
+
+    public Func<LlmAgent, ToolCalls> CreateToolCallsWork { get; set; } = agent => new ToolCalls(agent);
+
     public LlmAgent(LlmAgentParameters parameters, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
         : this(parameters.AgentId, llmApi, agentCommunication)
     {
@@ -129,13 +135,13 @@ public class LlmAgent
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var userInputWork = await RunWork(new GetUserInputWork(this), null, cancellationToken);
-                var assistantWork = await RunWork(new GetAssistantResponseWork(this), userInputWork, cancellationToken);
+                var userInputWork = await RunWork(CreateUserInputWork(this), null, cancellationToken);
+                var assistantWork = await RunWork(CreateAssistantResponseWork(this), userInputWork, cancellationToken);
 
                 while (assistantWork.Parser != null && string.Equals(assistantWork.Parser.FinishReason, "tool_calls"))
                 {
-                    var toolCallsWork = await RunWork(new ToolCalls(this), assistantWork, cancellationToken);
-                    assistantWork = await RunWork(new GetAssistantResponseWork(this), toolCallsWork, cancellationToken);
+                    var toolCallsWork = await RunWork(CreateToolCallsWork(this), assistantWork, cancellationToken);
+                    assistantWork = await RunWork(CreateAssistantResponseWork(this), toolCallsWork, cancellationToken);
 
                     if (Persistent)
                     {
