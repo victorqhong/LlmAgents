@@ -6,10 +6,12 @@ namespace LlmAgents.Tools.BackgroundJob;
 public class StopJobTool : Tool
 {
     private readonly JobManager jobManager;
+    private readonly BackgroundJobStore jobStore;
 
     public StopJobTool(ToolFactory toolFactory) : base(toolFactory)
     {
         jobManager = toolFactory.Resolve<JobManager>();
+        jobStore = toolFactory.Resolve<BackgroundJobStore>();
         Schema = new JObject
         {
             ["type"] = "function",
@@ -43,13 +45,21 @@ public class StopJobTool : Tool
         {
             return Task.FromResult<JToken>(new JObject { ["error"] = "invalid job_id" });
         }
-        // Attempt to cancel the job. If the job does not exist, return an error.
-        var info = jobManager.Get(jobId);
+        var info = jobStore.GetJob(jobId);
         if (info == null)
         {
             return Task.FromResult<JToken>(new JObject { ["error"] = "job not found" });
         }
-        jobManager.Cancel(jobId);
+        if (info.Status != JobStatus.Running)
+        {
+            return Task.FromResult<JToken>(new JObject { ["result"] = "already_stopped" });
+        }
+
+        if (!jobManager.Cancel(jobId))
+        {
+            jobStore.UpdateStatus(jobId, JobStatus.Cancelled, ended: DateTime.UtcNow);
+        }
+
         return Task.FromResult<JToken>(new JObject { ["result"] = "cancelled" });
     }
 }

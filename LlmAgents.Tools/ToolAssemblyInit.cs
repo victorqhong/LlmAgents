@@ -15,6 +15,8 @@ public class ToolAssemblyInitializer : IToolAssemblyInitializer
         var todoDatabase = new TodoDatabase(loggerFactory, stateDatabase);
         toolFactory.Register(todoDatabase);
 
-        toolFactory.Register(new JobManager());
+        var jobStore = new BackgroundJobStore(loggerFactory, stateDatabase);
+        toolFactory.Register(jobStore);
+        toolFactory.Register(new JobManager(jobStore));
     }
 }

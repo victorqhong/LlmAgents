@@ -1,6 +1,7 @@
 using LlmAgents.Communication;
 using LlmAgents.State;
 using LlmAgents.Tools;
+using ModelContextProtocol.Server;
 using Newtonsoft.Json.Linq;
 using System.CommandLine;
 using ToolServer;
@@ -21,9 +22,17 @@ var listenPortOption = new Option<int>(name: "--port")
     DefaultValueFactory = result => 5000
 };
 
+var agentIdOption = new Option<string>(name: "--agentId")
+{
+    Description = "Default agent identifier used for autonomous task control-plane tools",
+    DefaultValueFactory = _ => Environment.MachineName
+};
+
 var rootCommand = new RootCommand("ToolServer");
 rootCommand.Options.Add(listenAddressOption);
 rootCommand.Options.Add(listenPortOption);
+rootCommand.Options.Add(agentIdOption);
+rootCommand.Options.Add(Options.StorageDirectory);
 rootCommand.Options.Add(Options.ToolsConfig);
 rootCommand.Options.Add(Options.WorkingDirectory);
 rootCommand.SetAction(RootCommandHandler);
@@ -32,18 +41,22 @@ async Task RootCommandHandler(ParseResult parseResult, CancellationToken cancell
 {
     var listenAddress = parseResult.GetValue(listenAddressOption);
     var listenPort = parseResult.GetValue(listenPortOption);
+    var agentIdValue = parseResult.GetValue(agentIdOption);
+    var storageDirectoryValue = parseResult.GetValue(Options.StorageDirectory);
     var toolsConfigValue = parseResult.GetValue(Options.ToolsConfig);
     var workingDirectoryValue = parseResult.GetValue(Options.WorkingDirectory);
 
     ArgumentException.ThrowIfNullOrEmpty(listenAddress);
+    ArgumentException.ThrowIfNullOrEmpty(agentIdValue);
+    ArgumentException.ThrowIfNullOrEmpty(storageDirectoryValue);
     ArgumentException.ThrowIfNullOrEmpty(toolsConfigValue);
 
-    await RunServer(listenAddress, listenPort, toolsConfigValue, workingDirectoryValue, new ConsoleCommunication(), cancellationToken);
+    await RunServer(listenAddress, listenPort, agentIdValue, storageDirectoryValue, toolsConfigValue, workingDirectoryValue, new ConsoleCommunication(), cancellationToken);
 }
 
 return await rootCommand.Parse(args).InvokeAsync();
 
-async Task RunServer(string listenAddress, int listenPort, string toolsConfigPath, string? workingDirectory, IAgentCommunication agentCommunication, CancellationToken cancellationToken = default)
+async Task RunServer(string listenAddress, int listenPort, string defaultAgentId, string storageDirectory, string toolsConfigPath, string? workingDirectory, IAgentCommunication agentCommunication, CancellationToken cancellationToken = default)
 {
     if (string.IsNullOrEmpty(workingDirectory))
     {
@@ -55,6 +68,8 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
         Console.Error.WriteLine($"Tools config file does not exist: {toolsConfigPath}");
         return;
     }
+
+    Directory.CreateDirectory(storageDirectory);
 
     var toolsFile = JObject.Parse(File.ReadAllText(toolsConfigPath));
     var toolFactory = new ToolFactory(loggerFactory);
@@ -71,6 +86,15 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
 
     var tools = toolFactory.Load(toolsFile) ?? [];
     var mcpTools = tools.Select(tool => new McpToolAdapter(tool));
+    var autonomyControlPlaneTools = new McpServerTool[]
+    {
+        new AutonomyTaskSubmitTool(loggerFactory, storageDirectory, defaultAgentId),
+        new AutonomyTaskStatusTool(loggerFactory, storageDirectory, defaultAgentId),
+        new AutonomyTaskListTool(loggerFactory, storageDirectory, defaultAgentId),
+        new AutonomyTaskResumeTool(loggerFactory, storageDirectory, defaultAgentId),
+        new AutonomyTaskCancelTool(loggerFactory, storageDirectory, defaultAgentId)
+    };
+    var allMcpTools = mcpTools.Cast<McpServerTool>().Concat(autonomyControlPlaneTools).ToArray();
 
     var builder = WebApplication.CreateBuilder(args);
 
@@ -85,7 +109,7 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
         .AddMcpServer()
         .WithHttpTransport()
         .WithStdioServerTransport()
-        .WithTools(mcpTools);
+        .WithTools(allMcpTools);
 
     var app = builder.Build();
 

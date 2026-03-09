@@ -5,11 +5,11 @@ namespace LlmAgents.Tools.BackgroundJob;
 
 public class JobStatusTool : Tool
 {
-    private readonly JobManager jobManager;
+    private readonly BackgroundJobStore jobStore;
 
     public JobStatusTool(ToolFactory toolFactory) : base(toolFactory)
     {
-        jobManager = toolFactory.Resolve<JobManager>();
+        jobStore = toolFactory.Resolve<BackgroundJobStore>();
         Schema = new JObject
         {
             ["type"] = "function",
@@ -43,7 +43,7 @@ public class JobStatusTool : Tool
         {
             return Task.FromResult<JToken>(new JObject { ["error"] = "invalid job_id" });
         }
-        var info = jobManager.Get(jobId);
+        var info = jobStore.GetJob(jobId);
         if (info == null)
         {
             return Task.FromResult<JToken>(new JObject { ["error"] = "job not found" });

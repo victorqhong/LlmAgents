@@ -86,6 +86,25 @@ $ dotnet run --project ConsoleAgent
 
 You’ll be prompted to enter messages and interact with the LLM via the command line.
 
+### Autonomous task workflow (ConsoleAgent)
+
+The `task` command group provides an autonomous task queue and runner:
+
+```bash
+# Submit a long-running goal
+$ dotnet run --project ConsoleAgent -- task submit "Implement feature X and run tests"
+
+# Inspect queued/running work
+$ dotnet run --project ConsoleAgent -- task list
+$ dotnet run --project ConsoleAgent -- task status <taskId>
+
+# Run the autonomous worker loop
+$ dotnet run --project ConsoleAgent -- task runner --apiConfig Agent/api.json --toolsConfig Agent/tools.json
+```
+
+`ToolServer` now also exposes MCP control-plane tools for the same lifecycle operations:
+`autonomy_task_submit`, `autonomy_task_status`, `autonomy_task_list`, `autonomy_task_resume`, and `autonomy_task_cancel`.
+
 ### XmppAgent
 
 After building, run:
@@ -103,4 +122,3 @@ Contributions are welcome! Please open an issue or submit a pull request.
 ## License
 
 This project is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0). 
-

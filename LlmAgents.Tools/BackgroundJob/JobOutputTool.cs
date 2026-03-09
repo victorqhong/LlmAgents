@@ -5,11 +5,11 @@ namespace LlmAgents.Tools.BackgroundJob;
 
 public class JobOutputTool : Tool
 {
-    private readonly JobManager jobManager;
+    private readonly BackgroundJobStore jobStore;
 
     public JobOutputTool(ToolFactory toolFactory) : base(toolFactory)
     {
-        jobManager = toolFactory.Resolve<JobManager>();
+        jobStore = toolFactory.Resolve<BackgroundJobStore>();
         Schema = new JObject
         {
             ["type"] = "function",
@@ -31,6 +31,11 @@ public class JobOutputTool : Tool
                         {
                             ["type"] = "integer",
                             ["description"] = "Maximum number of bytes to return (optional)."
+                        },
+                        ["cursor"] = new JObject
+                        {
+                            ["type"] = "integer",
+                            ["description"] = "Optional byte cursor to read from. If omitted, the durable cursor is used."
                         }
                     },
                     ["required"] = new JArray { "job_id" }
@@ -48,20 +53,41 @@ public class JobOutputTool : Tool
         {
             return Task.FromResult<JToken>(new JObject { ["error"] = "invalid job_id" });
         }
-        var info = jobManager.Get(jobId);
-        if (info == null)
+        if (!jobStore.TryGetOutputAndCursor(jobId, out var fullOutput, out var durableCursor))
         {
             return Task.FromResult<JToken>(new JObject { ["error"] = "job not found" });
         }
-        var output = info.Output.ToString();
+
+        var hasCursor = parameters["cursor"] != null;
+        var cursor = durableCursor;
+        if (hasCursor && !int.TryParse(parameters["cursor"]?.ToString(), out cursor))
+        {
+            return Task.FromResult<JToken>(new JObject { ["error"] = "invalid cursor" });
+        }
+
+        var bytes = System.Text.Encoding.UTF8.GetBytes(fullOutput);
+        var start = Math.Clamp(cursor, 0, bytes.Length);
+        var length = bytes.Length - start;
         if (parameters["max_bytes"] != null && int.TryParse(parameters["max_bytes"]?.ToString(), out var max))
         {
-            var bytes = System.Text.Encoding.UTF8.GetBytes(output);
-            if (bytes.Length > max)
-            {
-                output = System.Text.Encoding.UTF8.GetString(bytes, 0, max);
-            }
+            length = Math.Min(length, Math.Max(0, max));
         }
-        return Task.FromResult<JToken>(new JObject { ["output"] = output });
+
+        var output = length > 0
+            ? System.Text.Encoding.UTF8.GetString(bytes, start, length)
+            : string.Empty;
+        var nextCursor = start + length;
+
+        if (!hasCursor)
+        {
+            jobStore.SetCursor(jobId, nextCursor);
+        }
+
+        return Task.FromResult<JToken>(new JObject
+        {
+            ["output"] = output,
+            ["cursor"] = start,
+            ["next_cursor"] = nextCursor
+        });
     }
 }

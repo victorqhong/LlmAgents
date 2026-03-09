@@ -15,18 +15,22 @@ public class BackgroundJobTests
 {
     private static readonly ILoggerFactory LoggerFactory = new LoggerFactory();
 
-    private ToolFactory CreateFactory()
+    private static (ToolFactory factory, JobManager manager) CreateFactory(StateDatabase stateDatabase)
     {
         var factory = new ToolFactory(LoggerFactory);
-        var jobManager = new JobManager();
+        var jobStore = new BackgroundJobStore(LoggerFactory, stateDatabase);
+        var jobManager = new JobManager(jobStore);
+        factory.Register(jobStore);
         factory.Register(jobManager);
-        return factory;
+        return (factory, jobManager);
     }
 
     [TestMethod]
     public async Task StartAndMonitorJob()
     {
-        var factory = CreateFactory();
+        using var stateDatabase = new StateDatabase(LoggerFactory, ":memory:");
+        var (factory, manager) = CreateFactory(stateDatabase);
+        using var _ = manager;
         var startTool = new StartJobTool(factory);
         var statusTool = new JobStatusTool(factory);
         var outputTool = new JobOutputTool(factory);
@@ -55,5 +59,48 @@ public class BackgroundJobTests
         var output = outputResult["output"]?.ToString() ?? string.Empty;
         Assert.IsTrue(output.Contains("Version"), "output should contain the word 'Version'");
     }
-}
 
+    [TestMethod]
+    public async Task StatusAndOutputCursor_AreDurable()
+    {
+        using var stateDatabase = new StateDatabase(LoggerFactory, ":memory:");
+        var (factory, manager) = CreateFactory(stateDatabase);
+        using var _ = manager;
+        var startTool = new StartJobTool(factory);
+        var outputTool = new JobOutputTool(factory);
+
+        var startResult = await startTool.Function(null!, new JObject
+        {
+            ["command"] = "dotnet",
+            ["args"] = new JArray { "--info" }
+        });
+        var jobId = startResult["job_id"]?.ToString();
+        Assert.IsFalse(string.IsNullOrEmpty(jobId), "job_id should be returned");
+
+        Thread.Sleep(500);
+
+        var firstChunk = await outputTool.Function(null!, new JObject
+        {
+            ["job_id"] = jobId,
+            ["max_bytes"] = 20
+        });
+        var firstNextCursor = firstChunk["next_cursor"]?.Value<int>() ?? 0;
+        Assert.IsTrue(firstNextCursor > 0, "first read should advance cursor");
+
+        var (newFactory, newManager) = CreateFactory(stateDatabase);
+        using var __ = newManager;
+        var statusTool = new JobStatusTool(newFactory);
+        var newOutputTool = new JobOutputTool(newFactory);
+
+        var statusResult = await statusTool.Function(null!, new JObject { ["job_id"] = jobId });
+        Assert.IsTrue(statusResult["error"] == null, "status should be available from durable store");
+
+        var secondChunk = await newOutputTool.Function(null!, new JObject
+        {
+            ["job_id"] = jobId,
+            ["max_bytes"] = 20
+        });
+        var secondCursor = secondChunk["cursor"]?.Value<int>() ?? -1;
+        Assert.AreEqual(firstNextCursor, secondCursor, "second read should continue from durable cursor");
+    }
+}

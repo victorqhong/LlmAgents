@@ -26,8 +26,14 @@ public class JobInfo
 
 public class JobManager : IDisposable
 {
+    private readonly BackgroundJobStore jobStore;
     private readonly ConcurrentDictionary<Guid, JobInfo> jobs = new();
     private bool disposed = false;
+
+    public JobManager(BackgroundJobStore jobStore)
+    {
+        this.jobStore = jobStore;
+    }
 
     public Guid Start(string fileName, string[] args)
     {
@@ -47,28 +53,49 @@ public class JobManager : IDisposable
         var jobInfo = new JobInfo { Id = jobId, Process = process };
         if (!jobs.TryAdd(jobId, jobInfo))
             throw new InvalidOperationException($"Could not add job {jobId}");
+        jobStore.CreateJob(jobId, fileName, args);
 
         process.OutputDataReceived += (s, e) =>
         {
             if (e.Data != null)
+            {
                 jobInfo.Output.AppendLine(e.Data);
+                jobStore.AppendOutput(jobId, e.Data + Environment.NewLine);
+            }
         };
         process.ErrorDataReceived += (s, e) =>
         {
             if (e.Data != null)
+            {
                 jobInfo.Output.AppendLine(e.Data);
+                jobStore.AppendOutput(jobId, e.Data + Environment.NewLine);
+            }
         };
 
         process.Exited += (s, e) =>
         {
-            jobInfo.Status = JobStatus.Exited;
+            if (jobInfo.Status != JobStatus.Cancelled)
+            {
+                jobInfo.Status = JobStatus.Exited;
+            }
             jobInfo.ExitCode = process.ExitCode;
             jobInfo.Ended = DateTime.UtcNow;
+            jobStore.UpdateStatus(jobId, jobInfo.Status, jobInfo.ExitCode, jobInfo.Ended);
         };
 
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+        try
+        {
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+        }
+        catch
+        {
+            jobInfo.Status = JobStatus.Failed;
+            jobInfo.Ended = DateTime.UtcNow;
+            jobStore.UpdateStatus(jobId, jobInfo.Status, null, jobInfo.Ended);
+            throw;
+        }
 
         // Monitor cancellation token
         Task.Run(async () =>
@@ -85,6 +112,7 @@ public class JobManager : IDisposable
                 }
                 jobInfo.Status = JobStatus.Cancelled;
                 jobInfo.Ended = DateTime.UtcNow;
+                jobStore.UpdateStatus(jobId, jobInfo.Status, null, jobInfo.Ended);
             }
         });
 
@@ -93,12 +121,15 @@ public class JobManager : IDisposable
 
     public JobInfo? Get(Guid id) => jobs.TryGetValue(id, out var info) ? info : null;
 
-    public void Cancel(Guid id)
+    public bool Cancel(Guid id)
     {
         if (jobs.TryGetValue(id, out var info))
         {
             info.Cancellation.Cancel();
+            return true;
         }
+
+        return false;
     }
 
     public void Dispose()
