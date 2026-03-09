@@ -36,7 +36,7 @@ public sealed class TestLlmAgent
         };
         var llmApi = new LlmApiOpenAi(loggerFactory, llmApiParameters);
         communication = new UnitTestCommunication();
-        return new LlmAgent(parameters, llmApi, communication);
+        return new LlmAgent(parameters, llmApi, communication, loggerFactory);
     }
 
     [TestMethod]

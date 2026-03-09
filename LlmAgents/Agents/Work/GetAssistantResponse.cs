@@ -14,7 +14,9 @@ public class GetAssistantResponseWork : LlmAgentWork
 
     public string ToolChoice { get; set; } = "auto";
 
-    public bool OutputReasoning { get; set; } = true;
+    public bool OutputReasoning { get; set; } = false;
+
+    public bool OutputNewLine { get; set; } = true;
 
     public GetAssistantResponseWork(LlmAgent agent)
         : base(agent)
@@ -34,6 +36,8 @@ public class GetAssistantResponseWork : LlmAgentWork
         }
 
         var conversation = agent.RenderConversation();
+
+        agent.PreGetResponse?.Invoke();
         var parser = await agent.llmApi.GetStreamingCompletion(conversation, Tools, ToolChoice, OutputReasoning, cancellationToken);
         if (parser == null)
         {
@@ -47,37 +51,56 @@ public class GetAssistantResponseWork : LlmAgentWork
             return;
         }
 
-        if (agent.StreamOutput)
+        var sb = new StringBuilder();
+
+        var sentPrefix = false;
+        var sentChunk = false;
+        await foreach (var chunk in Parser.StreamingCompletion)
         {
-            if (!string.IsNullOrEmpty(AssistantMessagePrefix))
+            if (!sentPrefix)
             {
-                await agent.agentCommunication.SendMessage(AssistantMessagePrefix, false);
+                if (!string.IsNullOrEmpty(AssistantMessagePrefix))
+                {
+                    if (agent.StreamOutput)
+                    {
+                        await agent.agentCommunication.SendMessage(AssistantMessagePrefix, false);
+                    }
+                    else
+                    {
+                        sb.Append(AssistantMessagePrefix);
+                    }
+                }
+
+                sentPrefix = true;
             }
-            
-            await foreach (var chunk in Parser.StreamingCompletion)
+
+            if (agent.StreamOutput)
             {
                 await agent.agentCommunication.SendMessage(chunk, false);
             }
-
-            await agent.agentCommunication.SendMessage(string.Empty, true);
-        }
-        else
-        {
-            var sb = new StringBuilder();
-
-            if (!string.IsNullOrEmpty(AssistantMessagePrefix))
-            {
-                sb.Append(AssistantMessagePrefix);
-            }
-
-            await foreach (var chunk in Parser.StreamingCompletion)
+            else
             {
                 sb.Append(chunk);
             }
 
-            sb.Append('\n');
+            sentChunk = true;
+        }
 
-            await agent.agentCommunication.SendMessage(sb.ToString(), true);
+        if (sentChunk && OutputNewLine)
+        {
+            if (agent.StreamOutput)
+            {
+                await agent.agentCommunication.SendMessage(string.Empty, true);
+            }
+            else
+            {
+                sb.Append('\n');
+            }
+        }
+
+        if (!agent.StreamOutput)
+        {
+            await agent.agentCommunication.SendMessage(sb.ToString(), false);
         }
 
         Messages = Parser.Messages;

@@ -18,7 +18,7 @@ public static class LlmAgentFactory
         SessionParameters sessionParameters)
     {
         var llmApi = new LlmApiOpenAi(loggerFactory, llmApiParameters);
-        var agent = new LlmAgent(llmAgentParameters, llmApi, agentCommunication);
+        var agent = new LlmAgent(llmAgentParameters, llmApi, agentCommunication, loggerFactory);
 
         if (string.IsNullOrEmpty(sessionParameters.WorkingDirectory))
         {

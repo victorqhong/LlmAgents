@@ -1,10 +1,10 @@
 using LlmAgents.Agents;
+using LlmAgents.Agents.Work;
 using LlmAgents.LlmApi;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using XmppAgent.Communication;
-using XmppAgent.Logging;
 
 namespace XmppAgent;
 
@@ -26,15 +26,24 @@ internal static class AgentFactory
 #endif
                 await xmppCommunication.Initialize();
 
-                using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new XmppLoggerProvider(xmppCommunication)));
+                using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
                 var agent = await LlmAgentFactory.CreateAgent(loggerFactory, xmppCommunication, apiParameters, agentParameters, toolParameters, sessionParameters);
 
-                agent.PostReceiveContent = () => Task.Run(() => xmppCommunication.SendComposing());
+                agent.PreGetResponse = () => Task.Run(() => xmppCommunication.SendComposing());
                 agent.PostSendMessage = () => Task.Run(() => xmppCommunication.SendActive());
+
+                agent.CreateAssistantResponseWork = agent =>
+                {
+                    var work = new GetAssistantResponseWork(agent);
+                    work.AssistantMessagePrefix = string.Empty;
+                    work.OutputNewLine = false;
+                    return work;
+                };
 
                 await agent.Run(cancellationToken);
             }
+            catch (TaskCanceledException) { }
             catch (Exception e)
             {
                 Console.WriteLine($"Error loading agent for: {agentParameters.AgentId}");

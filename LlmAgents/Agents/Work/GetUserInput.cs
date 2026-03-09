@@ -1,15 +1,10 @@
 namespace LlmAgents.Agents.Work;
 
 using LlmAgents.LlmApi;
-using LlmAgents.LlmApi.Content;
 using Newtonsoft.Json.Linq;
 
 public class GetUserInputWork : LlmAgentWork
 {
-    public string UserMessagePrefix { get; set; } = "User: ";
-
-    public bool EchoUserMessage { get; set; } = true;
-
     public GetUserInputWork(LlmAgent agent)
         : base(agent)
     {
@@ -32,20 +27,5 @@ public class GetUserInputWork : LlmAgentWork
         agent.PostReceiveContent?.Invoke();
 
         Messages = [LlmApiOpenAi.GetMessage(messageContent)];
-
-        if (!EchoUserMessage)
-        {
-            return;
-        }
-
-        foreach (var message in messageContent)
-        {
-            if (message is not MessageContentText textContent)
-            {
-                continue;
-            }
-
-            await agent.agentCommunication.SendMessage($"{UserMessagePrefix}{textContent.Text}", true);
-        }
     }
 }
