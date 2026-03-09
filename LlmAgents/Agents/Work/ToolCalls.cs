@@ -1,16 +1,20 @@
 namespace LlmAgents.Agents.Work;
 
 using LlmAgents.LlmApi;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 public class ToolCalls : LlmAgentWork
 {
+    private readonly ILogger logger;
+
     public LlmApiOpenAiStreamingCompletionParser? Parser { get; private set; }
 
-    public ToolCalls(LlmAgent agent)
+    public ToolCalls(ILoggerFactory loggerFactory, LlmAgent agent)
         : base(agent)
     {
+        logger = loggerFactory.CreateLogger(nameof(ToolCalls));
     }
 
     public override Task<ICollection<JObject>?> GetState(CancellationToken ct)
@@ -81,7 +85,8 @@ public class ToolCalls : LlmAgentWork
             string toolContent;
             try
             {
-                await agent.agentCommunication.SendMessage($"Calling tool '{name}' with arguments '{arguments}'", true);
+                logger.LogInformation($"Calling tool '{name}' with arguments '{arguments}'");
+
                 var toolResult = await agent.CallTool(name, JObject.Parse(arguments));
                 if (toolResult == null)
                 {

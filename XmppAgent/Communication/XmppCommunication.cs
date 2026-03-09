@@ -89,6 +89,7 @@ public class XmppCommunication : IAgentCommunication
         HandlePresenceSubscribe();
 
         await XmppClient.ConnectAsync();
+        await XmppClient.SendPresenceAsync(Show.Chat);
     }
 
     public async Task SendPresence(Show show)
@@ -119,9 +120,6 @@ public class XmppCommunication : IAgentCommunication
         incomingMessageStateMachine.Begin();
         fileTransferStateMachine.Begin();
 
-        var savedPresence = Presence;
-
-        await XmppClient.SendPresenceAsync(Show.Chat);
         while (incomingMessageStateMachine.Result == null)
         {
             if (cancellationToken.IsCancellationRequested)
@@ -134,8 +132,6 @@ public class XmppCommunication : IAgentCommunication
 
             Thread.Sleep(1000);
         }
-
-        await XmppClient.SendPresenceAsync(savedPresence);
 
         fileTransferStateMachine.End();
         incomingMessageStateMachine.End();

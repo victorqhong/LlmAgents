@@ -180,7 +180,11 @@ public class LlmApiOpenAiStreamingCompletionParser
 
         if (seenReasoningContent && !seenContent)
         {
+            if (OutputReasoning)
+            {
             yield return "</thinking>\n";
+            }
+
             seenContent = true;
         }
 

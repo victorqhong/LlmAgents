@@ -5,11 +5,14 @@ using LlmAgents.Communication;
 using LlmAgents.LlmApi;
 using LlmAgents.State;
 using LlmAgents.Tools;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 public class LlmAgent
 {
+    private readonly ILoggerFactory loggerFactory;
+
     private readonly List<JObject> ToolDefinitions = [];
 
     private readonly Dictionary<string, Tool> ToolMap = [];
@@ -32,6 +35,8 @@ public class LlmAgent
 
     public Action? PostReceiveContent { get; set; }
 
+    public Action? PreGetResponse { get; set; }
+
     public Action? PostSendMessage { get; set; }
 
     public Action<TokenUsage>? PostParseUsage { get; set; }
@@ -46,21 +51,22 @@ public class LlmAgent
 
     public Func<LlmAgent, GetAssistantResponseWork> CreateAssistantResponseWork { get; set; } = agent => new GetAssistantResponseWork(agent);
 
-    public Func<LlmAgent, ToolCalls> CreateToolCallsWork { get; set; } = agent => new ToolCalls(agent);
+    public Func<LlmAgent, ToolCalls> CreateToolCallsWork { get; set; } = agent => new ToolCalls(agent.loggerFactory, agent);
 
-    public LlmAgent(LlmAgentParameters parameters, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
-        : this(parameters.AgentId, llmApi, agentCommunication)
+    public LlmAgent(LlmAgentParameters parameters, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication, ILoggerFactory loggerFactory)
+        : this(parameters.AgentId, llmApi, agentCommunication, loggerFactory)
     {
         Persistent = parameters.Persistent;
         PersistentMessagesPath = parameters.StorageDirectory;
         StreamOutput = parameters.StreamOutput;
     }
 
-    public LlmAgent(string id, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication)
+    public LlmAgent(string id, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication, ILoggerFactory loggerFactory)
     {
         Id = id;
         this.llmApi = llmApi;
         this.agentCommunication = agentCommunication;
+        this.loggerFactory = loggerFactory;
     }
 
     public void AddTool(params Tool[] tools)

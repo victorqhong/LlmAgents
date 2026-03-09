@@ -86,8 +86,9 @@ internal class DefaultCommand : RootCommand
         var agent = await LlmAgentFactory.CreateAgent(loggerFactory, consoleCommunication, apiParameters, agentParameters, toolParameters, sessionParameters);
         agent.PreWaitForContent = async () =>
         {
-            await consoleCommunication.SendMessage("> ", false);
+            await consoleCommunication.SendMessage("User: ", false);
         };
+
         agent.PostParseUsage += async (usage) =>
         {
             await consoleCommunication.SendMessage(string.Format("PromptTokens: {0}, CompletionTokens: {1}, TotalTokens: {2}, Context Used: {3}", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, ((double)usage.TotalTokens / agent.llmApi.ContextSize).ToString("P"), true));
