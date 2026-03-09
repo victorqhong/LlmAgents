@@ -22,6 +22,8 @@ public class LlmApiOpenAiStreamingCompletionParser
 
     public IReadOnlyList<Dictionary<string, string>> ParsedToolCalls { get; private set; } = [];
 
+    public bool OutputReasoning { get; set; } = true;
+
     public LlmApiOpenAiStreamingCompletionParser(Stream stream)
     {
         this.stream = stream;
@@ -95,11 +97,19 @@ public class LlmApiOpenAiStreamingCompletionParser
             {
                 if (!seenReasoningContent)
                 {
+                    if (OutputReasoning)
+                    {
                     yield return "<thinking>";
+                    }
+
                     seenReasoningContent = true;
                 }
 
+                if (OutputReasoning)
+                {
                 yield return deltaReasoningContent;
+                }
+
                 reasoningContentBuffer.Append(deltaReasoningContent);
             }
 
@@ -107,7 +117,11 @@ public class LlmApiOpenAiStreamingCompletionParser
             {
                 if (seenReasoningContent && !seenContent)
                 {
+                    if (OutputReasoning)
+                    {
                     yield return "</thinking>\n";
+                    }
+
                     seenContent = true;
                 }
 

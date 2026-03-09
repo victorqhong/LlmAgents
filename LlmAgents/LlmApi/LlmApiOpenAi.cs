@@ -44,7 +44,7 @@ public class LlmApiOpenAi
 
     public int MaxRetryOnThrottledAttempts { get; set; } = 3;
 
-    public async Task<LlmApiOpenAiStreamingCompletionParser?> GetStreamingCompletion(IList<JObject> messages, IList<JObject>? tools = null, string toolChoice = "auto", CancellationToken cancellationToken = default)
+    public async Task<LlmApiOpenAiStreamingCompletionParser?> GetStreamingCompletion(IList<JObject> messages, IList<JObject>? tools = null, string toolChoice = "auto", bool outputReasoning = true, CancellationToken cancellationToken = default)
     {
         var stream = await GetCompletionStream(messages, tools, toolChoice, cancellationToken).ConfigureAwait(false);
         if (stream == null)
@@ -52,7 +52,7 @@ public class LlmApiOpenAi
             return null;
         }
 
-        var streamParser = new LlmApiOpenAiStreamingCompletionParser(stream);
+        var streamParser = new LlmApiOpenAiStreamingCompletionParser(stream) { OutputReasoning = outputReasoning };
         streamParser.Parse(cancellationToken);
 
         return streamParser;
