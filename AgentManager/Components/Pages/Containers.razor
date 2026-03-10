@@ -1,31 +1,86 @@
 @page "/containers"
 
+@attribute [Authorize]
+
 @using AgentManager.Models.Containers;
 @using AgentManager.Services
 @using MudBlazor
-
-@rendermode InteractiveServer
+@using System.Collections.ObjectModel
 
 @inject ContainerService ContainerService
-
-@attribute [Authorize]
 
 <PageTitle>Containers</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="my-8">
     <MudText Typo="Typo.h4" GutterBottom="true">Containers</MudText>
-    <MudButton Variant="Variant.Filled" OnClick="OnClickAllocate">Allocate container</MudButton>
-    <MudButton Variant="Variant.Filled" OnClick="OnClickDeallocate">Deallocate container</MudButton>
+
+    <MudDataGrid Items="@allocatedInstances" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@loading" T="string">
+	<Columns>
+	    <PropertyColumn Property="x => x" Title="Allocated Agents" />
+	    <TemplateColumn Title="Deallocate" CellClass="d-flex justify-between">
+		<CellTemplate Context="item">
+		    <MudIconButton
+			Icon="@Icons.Material.Filled.Delete"
+			Color="Color.Primary"
+			Size="Size.Small"
+			OnClick="@(() => DeallocateInstance(item.Item))" />
+		</CellTemplate>
+	    </TemplateColumn>
+	</Columns>
+    </MudDataGrid>
+    <MudDataGrid Items="@availableInstances" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@loading" T="string">
+	<Columns>
+	    <PropertyColumn Property="x => x" Title="Available Agents" />
+	    <TemplateColumn Title="Allocate" CellClass="d-flex justify-between">
+		<CellTemplate Context="item">
+		    <MudIconButton
+			Icon="@Icons.Material.Filled.AddToQueue"
+			Color="Color.Primary"
+			Size="Size.Small"
+			OnClick="@(() => AllocateInstance(item.Item))" />
+		</CellTemplate>
+	    </TemplateColumn>
+	</Columns>
+    </MudDataGrid>
+
 </MudContainer>
 
 @code {
-    async Task OnClickAllocate()
+    private ObservableCollection<string> allocatedInstances = new();
+    private ObservableCollection<string> availableInstances = new();
+    private bool loading = false;
+
+    protected override async Task OnInitializedAsync()
     {
-	await ContainerService.AllocateXmppAgent();
+        loading = true;
+	OnContainerUpdated();
+        loading = false;
+
+	ContainerService.OnContainerUpdated += OnContainerUpdated;
     }
 
-    async Task OnClickDeallocate()
+    private void OnContainerUpdated()
     {
-	await ContainerService.DeallocateXmppAgent();
+	allocatedInstances.Clear();
+        foreach (var instance in ContainerService.GetAllocatedAgents())
+        {
+	    allocatedInstances.Add(instance);
+        }
+
+	availableInstances.Clear();
+        foreach (var instance in ContainerService.GetAvailableAgents())
+        {
+	    availableInstances.Add(instance);
+        }
+    }
+
+    public async Task AllocateInstance(string instance)
+    {
+	await ContainerService.AllocateXmppAgent(instance);
+    }
+
+    private async Task DeallocateInstance(string instance)
+    {
+	await ContainerService.DeallocateXmppAgent(instance);
     }
 }

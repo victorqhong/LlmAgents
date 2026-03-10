@@ -12,14 +12,15 @@ Description=Agent Manager
 After=network.target
 
 [Service]
-ExecStart=/opt/LlmAgents/XmppAgent/bin/Debug/net9.0/XmppAgent
+ExecStart=/opt/LlmAgents/XmppAgent/bin/Debug/net9.0/XmppAgent agent --xmppConfig /opt/xmpp.json --apiConfig /opt/api.json --toolsConfig /opt/tools.json --persistent
 Restart=always
 User=root
 WorkingDirectory=/root
 Environment="DOTNET_ROOT=/opt/dotnet"
-Environment="PATH=/opt/dotnet:/opt/dotnet/tools:/root/.dotnet/tools"
+Environment="PATH=/usr/bin:/opt/dotnet:/opt/dotnet/tools:/root/.dotnet/tools"
 
 [Install]
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
+systemctl enable --now XmppAgent

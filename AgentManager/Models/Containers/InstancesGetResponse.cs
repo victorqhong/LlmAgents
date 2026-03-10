@@ -25,7 +25,7 @@ public class InstancesGetResponse : LxdResponse
                     continue;
                 }
 
-                instances.Add(instance);
+                instances.Add(instance[15..]);
             }
 
             return instances;
