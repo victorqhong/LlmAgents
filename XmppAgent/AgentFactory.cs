@@ -1,8 +1,11 @@
 using LlmAgents.Agents;
 using LlmAgents.Agents.Work;
+using LlmAgents.Api.GitHub;
+using LlmAgents.Extensions;
 using LlmAgents.LlmApi;
 using LlmAgents.State;
 using LlmAgents.Tools;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using XmppAgent.Communication;
 
@@ -10,46 +13,64 @@ namespace XmppAgent;
 
 internal static class AgentFactory
 {
-    public static Task RunAgent(LlmApiOpenAiParameters apiParameters, LlmAgentParameters agentParameters, ToolParameters toolParameters, SessionParameters sessionParameters, XmppParameters xmppParameters, CancellationToken cancellationToken = default)
+    public static async Task RunAgent(LlmApiOpenAiParameters apiParameters, LlmAgentParameters agentParameters, ToolParameters toolParameters, SessionParameters sessionParameters, XmppParameters xmppParameters, CancellationToken cancellationToken = default)
     {
-        return Task.Run(async () =>
+        try
         {
-            try
+            var xmppCommunication = new XmppCommunication(
+                xmppParameters.XmppUsername, xmppParameters.XmppDomain, xmppParameters.XmppPassword, trustHost: xmppParameters.XmppTrustHost)
             {
-                var xmppCommunication = new XmppCommunication(
-                    xmppParameters.XmppUsername, xmppParameters.XmppDomain, xmppParameters.XmppPassword, trustHost: xmppParameters.XmppTrustHost)
-                {
-                    TargetJid = xmppParameters.XmppTargetJid
-                };
+                TargetJid = xmppParameters.XmppTargetJid
+            };
 #if DEBUG
-                xmppCommunication.Debug = true;
+            xmppCommunication.Debug = true;
 #endif
-                await xmppCommunication.Initialize();
+            await xmppCommunication.Initialize();
 
-                using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+            using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
-                var agent = await LlmAgentFactory.CreateAgent(loggerFactory, xmppCommunication, apiParameters, agentParameters, toolParameters, sessionParameters);
+            var agent = await LlmAgentFactory.CreateAgent(loggerFactory, xmppCommunication, apiParameters, agentParameters, toolParameters, sessionParameters);
 
-                agent.PreGetResponse = () => Task.Run(() => xmppCommunication.SendComposing());
-                agent.PostSendMessage = () => Task.Run(() => xmppCommunication.SendActive());
+            agent.PreGetResponse = () => Task.Run(() => xmppCommunication.SendComposing());
+            agent.PostSendMessage = () => Task.Run(() => xmppCommunication.SendActive());
 
-                agent.CreateAssistantResponseWork = agent =>
-                {
-                    var work = new GetAssistantResponseWork(agent);
-                    work.AssistantMessagePrefix = string.Empty;
-                    work.OutputNewLine = false;
-                    return work;
-                };
-
-                await agent.Run(cancellationToken);
-            }
-            catch (TaskCanceledException) { }
-            catch (Exception e)
+            agent.CreateAssistantResponseWork = agent =>
             {
-                Console.WriteLine($"Error loading agent for: {agentParameters.AgentId}");
-                Console.WriteLine(e);
+                return new GetAssistantResponseWork(agent)
+                {
+                    AssistantMessagePrefix = string.Empty,
+                    OutputNewLine = false
+                };
+            };
+
+            if (agentParameters.AgentManagerUrl != null)
+            {
+                var hubUrl = new Uri(agentParameters.AgentManagerUrl, "hubs/agent");
+                var hub = new HubConnectionBuilder()
+                    .WithUrl(hubUrl, options =>
+                    {
+                        options.AccessTokenProvider = () =>
+                        {
+                            return Task.Run(async () =>
+                            {
+                                return await Login.GetHubLoginToken(xmppCommunication, agentParameters.AgentManagerUrl, cancellationToken);
+                            });
+                        };
+                    })
+                    .WithAutomaticReconnect()
+                    .Build();
+
+                await hub.StartAsync(cancellationToken);
+                await agent.ConfigureAgentHub(hub);
             }
 
-        }, cancellationToken);
+            await agent.Run(cancellationToken);
+        }
+        catch (TaskCanceledException) { }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Error loading agent for: {agentParameters.AgentId}");
+            Console.WriteLine(e);
+        }
     }
 }

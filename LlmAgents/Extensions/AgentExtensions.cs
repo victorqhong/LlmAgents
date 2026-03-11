@@ -2,7 +2,7 @@ using LlmAgents.Agents;
 using Microsoft.AspNetCore.SignalR.Client;
 using Newtonsoft.Json;
 
-namespace ConsoleAgent.Extensions;
+namespace LlmAgents.Extensions;
 
 public static class AgentExtensions
 {

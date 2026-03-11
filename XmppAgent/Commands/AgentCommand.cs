@@ -31,6 +31,7 @@ internal class AgentCommand : Command
         Options.Add(LlmAgentsOptions.WorkingDirectory);
         Options.Add(LlmAgentsOptions.StorageDirectory);
         Options.Add(LlmAgentsOptions.AgentId);
+        Options.Add(LlmAgentsOptions.AgentManagerUrl);
 
         Options.Add(XmppOptions.XmppDomain);
         Options.Add(XmppOptions.XmppUsername);
