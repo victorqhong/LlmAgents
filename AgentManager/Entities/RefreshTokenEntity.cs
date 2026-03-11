@@ -8,5 +8,5 @@ public class RefreshTokenEntity
     public DateTime ExpiresAt { get; set; }
     public DateTime? RevokedAt { get; set; }
 
-    public UserEntity User { get; set; }
+    public UserEntity? User { get; set; }
 }
