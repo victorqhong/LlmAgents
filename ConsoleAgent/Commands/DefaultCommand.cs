@@ -1,9 +1,9 @@
-using ConsoleAgent.Extensions;
 using LlmAgents;
 using LlmAgents.Agents;
 using LlmAgents.Api.GitHub;
 using LlmAgents.CommandLineParser;
 using LlmAgents.Communication;
+using LlmAgents.Extensions;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using System.CommandLine;
