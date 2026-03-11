@@ -6,4 +6,5 @@ public class LlmAgentParameters
     public required bool Persistent;
     public required string StorageDirectory;
     public required bool StreamOutput;
+    public required Uri? AgentManagerUrl;
 }

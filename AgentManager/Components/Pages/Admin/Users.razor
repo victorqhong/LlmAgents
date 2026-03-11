@@ -1,0 +1,94 @@
+@page "/admin/users"
+
+@attribute [Authorize(Policy = "AdminOnly")]
+
+@using AgentManager.Entities
+@using AgentManager.Services
+@using AgentManager.Data
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+
+@inject UserAuthorizationService UserAuthorizationService
+@inject IDbContextFactory<AppDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>User Management</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="my-8">
+    <MudText Typo="Typo.h4" GutterBottom="true">User Management</MudText>
+    <MudText Typo="Typo.subtitle1" GutterBottom="true" Class="mb-4">
+        Manage authorized users and their roles
+    </MudText>
+
+    @if (users == null)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (!users.Any())
+    {
+        <MudAlert Severity="Severity.Info">No users registered yet.</MudAlert>
+    }
+    else
+    {
+        <MudSimpleTable Hover="true" Striped="true">
+            <thead>
+                <tr>
+                    <th>GitHub Login</th>
+                    <th>Email</th>
+                    <th>Roles</th>
+                    <th>Last Login</th>
+                    <th>Created</th>
+                    <th>Active</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in users)
+                {
+                    <tr>
+                        <td>@user.GitHubLogin</td>
+                        <td>@user.Email</td>
+                        <td>
+                            @string.Join(", ", user.Roles.Select(r => r.Role))
+                        </td>
+                        <td>@user.LastLoginAt?.ToString("g")</td>
+                        <td>@user.CreatedAt.ToString("g")</td>
+                        <td>
+                            @if (user.IsActive)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" />
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" />
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+
+    <MudDivider Class="my-6" />
+    
+    <MudText Typo="Typo.h5" GutterBottom="true">Add New User</MudText>
+    <MudText Typo="Typo.body2" Class="mb-4">
+        Note: Users are automatically added when they log in via GitHub. To authorize a new user, 
+        add their GitHub username to the AllowedUsers configuration in appsettings.json with the desired roles.
+    </MudText>
+    
+    <MudAlert Severity="Severity.Info">
+        <MudText>
+            Current allowed users are configured in appsettings.json. After updating the configuration, 
+            restart the application for changes to take effect.
+        </MudText>
+    </MudAlert>
+</MudContainer>
+
+@code {
+    private IEnumerable<UserEntity>? users;
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = await UserAuthorizationService.GetAllUsersAsync();
+    }
+}

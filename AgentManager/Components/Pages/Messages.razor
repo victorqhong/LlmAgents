@@ -1,0 +1,115 @@
+@page "/messages"
+
+@using AgentManager.Models
+@using AgentManager.Services
+@using MudBlazor
+@using System.Collections.ObjectModel
+
+@inject AgentSessionService AgentSessionService
+@inject AgentMessageService AgentMessageService
+
+@attribute [Authorize]
+
+<PageTitle>Messages</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="my-8">
+
+    <MudText Typo="Typo.h4" GutterBottom="true">Messages</MudText>
+
+    <MudStack Spacing="2" Class="fill-height">
+
+        <MudText Typo="Typo.h6">Session</MudText>
+        <MudSelect T="string" ValueChanged="OnSelect">
+            @foreach (var session in sessions)
+            {
+                <MudSelectItem Value="@session.Id.ToString()">@session.AgentName (@(@session.SessionName ?? @session.Id.ToString()))</MudSelectItem>
+            }
+        </MudSelect>
+
+        @foreach (var message in messages)
+        {
+            if (string.Equals(message.Role, "tool") || string.IsNullOrEmpty(message.TextContent))
+            {
+                continue;
+            }
+
+            <MudStack Row="true">
+                <MudText Style="white-space: pre-line;"><MudText Inline="true" Typo="Typo.button">@message.Role: </MudText>@message.TextContent</MudText>
+            </MudStack>
+        }
+    </MudStack>
+
+</MudContainer>
+
+@code {
+    private ObservableCollection<AgentSession> sessions = new();
+    private ObservableCollection<AgentMessage> messages = new();
+
+    private Guid? sessionId;
+    private AgentSession? session;
+
+    protected override async Task OnInitializedAsync()
+    {
+        foreach (var session in await AgentSessionService.GetAllAsync())
+        {
+            sessions.Add(session);
+        }
+
+        AgentSessionService.OnChange += OnSessionChange;
+        AgentMessageService.OnMessage += HandleNewMessage;
+    }
+
+    private void OnSessionChange(AgentSession agentSession)
+    {
+        sessions.Clear();
+        foreach (var session in AgentSessionService.GetAllAsync().ConfigureAwait(false).GetAwaiter().GetResult())
+        {
+            sessions.Add(session);
+        }
+    }
+
+    private async Task OnSelect(string value)
+    {
+        sessionId = null;
+        if (!Guid.TryParse(value, out var id))
+        {
+            return;
+        }
+
+        sessionId = id;
+        session = await AgentSessionService.GetSessionById(id);
+
+        this.messages.Clear();
+
+        var messages = await AgentMessageService.GetSessionMessages(id);
+        foreach (var message in messages)
+        {
+            this.messages.Add(message);
+        }
+    }
+
+    private void HandleNewMessage(ICollection<AgentMessage> messages)
+    {
+        if (sessionId == null)
+        {
+            return;
+        }
+
+        foreach (var message in messages)
+        {
+            if (!Guid.Equals(message.Session.Id, sessionId))
+            {
+                return;
+            }
+
+            this.messages.Add(message);
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        AgentMessageService.OnMessage -= HandleNewMessage;
+    }
+}

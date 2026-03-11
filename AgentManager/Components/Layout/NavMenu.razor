@@ -1,0 +1,20 @@
+<MudNavMenu>
+    <MudNavLink Href="/" Match="NavLinkMatch.All">Home</MudNavLink>
+    <MudNavLink Href="/sessions" Match="NavLinkMatch.Prefix">Sessions</MudNavLink>
+    <MudNavLink Href="/logs" Match="NavLinkMatch.Prefix">Logs</MudNavLink>
+    <MudNavLink Href="/messages" Match="NavLinkMatch.Prefix">Messages</MudNavLink>
+    <MudNavLink Href="/containers" Match="NavLinkMatch.Prefix">Containers</MudNavLink>
+    <MudDivider Class="my-2" />
+    <AuthorizeView Roles="Admin">
+        <MudNavLink Href="/admin/users" Match="NavLinkMatch.Prefix">User Management</MudNavLink>
+        <MudDivider Class="my-2" />
+    </AuthorizeView>
+    <AuthorizeView>
+        <NotAuthorized>
+            <MudNavLink Href="/login"  Match="NavLinkMatch.Prefix">Login</MudNavLink>
+        </NotAuthorized>
+        <Authorized>
+            <MudNavLink Href="/logout"  Match="NavLinkMatch.Prefix">Logout</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+</MudNavMenu>

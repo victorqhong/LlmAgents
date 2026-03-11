@@ -1,5 +1,6 @@
 namespace LlmAgents.State;
 
+using LlmAgents.Agents;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using System;
@@ -21,7 +22,6 @@ public class StateDatabase : IDisposable
     public StateDatabase(ILoggerFactory LoggerFactory, string database)
     {
         Database = database;
-
         Log = LoggerFactory.CreateLogger(nameof(StateDatabase));
 
         readConnection = CreateConnection();
@@ -71,11 +71,10 @@ public class StateDatabase : IDisposable
             lock (writeLock)
             {
                 using var command = writeConnection.CreateCommand();
-                command.CommandText = "INSERT INTO sessions (session_id, start_time, last_active, status, metadata) VALUES ($sessionId, $startTime, $lastActive, $status, $metadata)";
+                command.CommandText = "INSERT INTO sessions (session_id, start_time, last_active, metadata) VALUES ($sessionId, $startTime, $lastActive, $metadata)";
                 command.Parameters.AddWithValue("$sessionId", session.SessionId);
                 command.Parameters.AddWithValue("$startTime", session.StartTime);
                 command.Parameters.AddWithValue("$lastActive", session.LastActive);
-                command.Parameters.AddWithValue("$status", session.Status);
                 command.Parameters.AddWithValue("$metadata", session.Metadata);
                 command.ExecuteNonQuery();
             }
@@ -91,7 +90,7 @@ public class StateDatabase : IDisposable
         try
         {
             using var command = readConnection.CreateCommand();
-            command.CommandText = "SELECT session_id, start_time, last_active, status, metadata FROM sessions WHERE session_id = $sessionId";
+            command.CommandText = "SELECT session_id, start_time, last_active, metadata FROM sessions WHERE session_id = $sessionId";
             command.Parameters.AddWithValue("$sessionId", sessionId);
 
             using var reader = command.ExecuteReader();
@@ -102,8 +101,7 @@ public class StateDatabase : IDisposable
                     SessionId = reader.GetString(0),
                     StartTime = reader.GetDateTime(1),
                     LastActive = reader.GetDateTime(2),
-                    Status = reader.GetString(3),
-                    Metadata = reader.IsDBNull(4) ? string.Empty : reader.GetString(4)
+                    Metadata = reader.IsDBNull(3) ? string.Empty : reader.GetString(3)
                 };
             }
         }
@@ -120,7 +118,7 @@ public class StateDatabase : IDisposable
         try
         {
             using var command = readConnection.CreateCommand();
-            command.CommandText = "SELECT session_id, start_time, last_active, status, metadata FROM sessions";
+            command.CommandText = "SELECT session_id, start_time, last_active, metadata FROM sessions";
 
             using var reader = command.ExecuteReader();
             if (!reader.Read())
@@ -137,8 +135,7 @@ public class StateDatabase : IDisposable
                     SessionId = reader.GetString(0),
                     StartTime = reader.GetDateTime(1),
                     LastActive = reader.GetDateTime(2),
-                    Status = reader.GetString(3),
-                    Metadata = reader.IsDBNull(4) ? string.Empty : reader.GetString(4)
+                    Metadata = reader.IsDBNull(3) ? string.Empty : reader.GetString(3)
                 });
             } while (reader.Read());
 
@@ -157,7 +154,7 @@ public class StateDatabase : IDisposable
         try
         {
             using var command = readConnection.CreateCommand();
-            command.CommandText = "SELECT session_id, start_time, last_active, status, metadata FROM sessions ORDER BY last_active DESC LIMIT 1";
+            command.CommandText = "SELECT session_id, start_time, last_active, metadata FROM sessions ORDER BY last_active DESC LIMIT 1";
 
             using var reader = command.ExecuteReader();
             if (reader.Read())
@@ -167,8 +164,7 @@ public class StateDatabase : IDisposable
                     SessionId = reader.GetString(0),
                     StartTime = reader.GetDateTime(1),
                     LastActive = reader.GetDateTime(2),
-                    Status = reader.GetString(3),
-                    Metadata = reader.IsDBNull(4) ? string.Empty : reader.GetString(4)
+                    Metadata = reader.IsDBNull(3) ? string.Empty : reader.GetString(3)
                 };
             }
         }
@@ -201,7 +197,7 @@ public class StateDatabase : IDisposable
         }
     }
 
-    public List<State>? GetSessionState(string sessionId)
+    public List<SessionState>? GetSessionState(string sessionId)
     {
         try
         {
@@ -216,11 +212,11 @@ public class StateDatabase : IDisposable
                 return null;
             }
 
-            var state = new List<State>();
+            var state = new List<SessionState>();
 
             do
             {
-                state.Add(new State
+                state.Add(new SessionState
                 {
                     Key = reader.GetString(0),
                     Value = reader.GetString(1),
@@ -305,7 +301,6 @@ public class StateDatabase : IDisposable
     session_id TEXT PRIMARY KEY,
     start_time DATETIME NOT NULL,
     last_active DATETIME NOT NULL,
-    status TEXT NOT NULL,
     metadata TEXT
 );
 

@@ -89,4 +89,10 @@ public static class Options
         Description = "Whether to stream the output responses",
         DefaultValueFactory = result => true
     };
+
+    public readonly static Option<string?> AgentManagerUrl = new ("--managerUrl")
+    {
+        Description = "URL of the AgentManager server to connect to",
+        DefaultValueFactory = result => null
+    };
 }

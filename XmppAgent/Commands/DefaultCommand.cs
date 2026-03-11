@@ -97,7 +97,8 @@ internal class DefaultCommand : RootCommand
                 AgentId = agentId,
                 Persistent = persistent,
                 StorageDirectory = agentDirectory,
-                StreamOutput = false
+                StreamOutput = false,
+                AgentManagerUrl = null
             };
 
             var sessionParameters = new SessionParameters

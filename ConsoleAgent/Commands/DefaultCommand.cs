@@ -1,10 +1,12 @@
-﻿using LlmAgents;
+using ConsoleAgent.Extensions;
+using LlmAgents;
 using LlmAgents.Agents;
+using LlmAgents.Api.GitHub;
 using LlmAgents.CommandLineParser;
 using LlmAgents.Communication;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using System.CommandLine;
-
 using LlmAgentsOptions = LlmAgents.CommandLineParser.Options;
 using Parser = LlmAgents.CommandLineParser.Parser;
 
@@ -35,6 +37,7 @@ internal class DefaultCommand : RootCommand
         Options.Add(LlmAgentsOptions.StreamOutput);
         Options.Add(LlmAgentsOptions.ToolsConfig);
         Options.Add(LlmAgentsOptions.McpConfigPath);
+        Options.Add(LlmAgentsOptions.AgentManagerUrl);
     }
 
     private async Task CommandHandler(ParseResult parseResult, CancellationToken cancellationToken)
@@ -84,7 +87,7 @@ internal class DefaultCommand : RootCommand
         var consoleCommunication = new ConsoleCommunication();
 
         var agent = await LlmAgentFactory.CreateAgent(loggerFactory, consoleCommunication, apiParameters, agentParameters, toolParameters, sessionParameters);
-        agent.PreWaitForContent = async () =>
+        agent.PreWaitForContent += async () =>
         {
             await consoleCommunication.SendMessage("User: ", false);
         };
@@ -93,6 +96,27 @@ internal class DefaultCommand : RootCommand
         {
             await consoleCommunication.SendMessage(string.Format("PromptTokens: {0}, CompletionTokens: {1}, TotalTokens: {2}, Context Used: {3}", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, ((double)usage.TotalTokens / agent.llmApi.ContextSize).ToString("P"), true));
         };
+
+        if (agentParameters.AgentManagerUrl != null)
+        {
+            var hubUrl = new Uri(agentParameters.AgentManagerUrl, "hubs/agent");
+            var hub = new HubConnectionBuilder()
+                .WithUrl(hubUrl, options =>
+                {
+                    options.AccessTokenProvider = () =>
+                    {
+                        return Task.Run(async () =>
+                        {
+                            return await Login.GetHubLoginToken(consoleCommunication, agentParameters.AgentManagerUrl, cancellationToken);
+                        });
+                    };
+                })
+                .WithAutomaticReconnect()
+                .Build();
+
+            await hub.StartAsync(cancellationToken);
+            await agent.ConfigureAgentHub(hub);
+        }
 
         await agent.Run(cancellationToken);
     }

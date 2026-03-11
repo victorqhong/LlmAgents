@@ -5,7 +5,6 @@ using LlmAgents.Tests.Communication;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,7 +21,8 @@ public sealed class TestLlmAgent
             StreamOutput = false,
             AgentId = "unit_test",
             Persistent = false,
-            StorageDirectory = Environment.CurrentDirectory
+            StorageDirectory = Environment.CurrentDirectory,
+            AgentManagerUrl = null
         };
 
         var loggerFactory = new LoggerFactory();

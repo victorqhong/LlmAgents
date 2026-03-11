@@ -1,0 +1,120 @@
+@page "/"
+
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Home</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="my-8">
+    <MudAlert Severity="Severity.Info" Class="mt-8">
+        <MudText>
+            @(string.IsNullOrEmpty(userName)
+                ? "Please log in to access all features."
+                : $"Welcome back, {userName}! You're authenticated and ready to manage your agents.")
+        </MudText>
+    </MudAlert>
+
+    @if (!string.IsNullOrEmpty(userName) && userRoles.Any())
+    {
+        <MudAlert Severity="Severity.Success" Class="mt-4">
+            <MudText Typo="Typo.subtitle2">Your Roles:</MudText>
+            <MudText Class="mt-2">
+                @string.Join(", ", userRoles)
+            </MudText>
+        </MudAlert>
+    }
+
+    <MudText Typo="Typo.h3" GutterBottom="true">Welcome to AgentManager</MudText>
+
+    <MudText Typo="Typo.subtitle1" GutterBottom="true">
+        A comprehensive dashboard for managing and monitoring LLM (Large Language Model) agent sessions.
+    </MudText>
+
+    <MudDivider Class="my-6" />
+
+    <MudText Typo="Typo.h5" GutterBottom="true">Project Overview</MudText>
+
+    <MudText GutterBottom="true">
+        AgentManager is an ASP.NET Core Blazor web application designed to provide real-time monitoring and management
+        capabilities for LLM agents running in Linux containers. It serves as a central hub for tracking agent activities,
+        conversation history, logs, and container orchestration.
+    </MudText>
+
+    <MudStack Spacing="4" Class="my-6">
+        <MudCard>
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">🤖 Agent Sessions</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText>
+                    Track multiple LLM agent sessions with real-time status updates. Monitor session lifecycle
+                    from creation to completion, with support for both persistent and temporary sessions.
+                </MudText>
+            </MudCardContent>
+        </MudCard>
+
+        <MudCard>
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">💬 Message History</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText>
+                    View complete conversation histories for each agent session. Supports text and image content
+                    with role-based message tracking (user, assistant, tool).
+                </MudText>
+            </MudCardContent>
+        </MudCard>
+
+        <MudCard>
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">📋 Logging System</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText>
+                    Comprehensive logging with categorized entries and severity levels. Filter logs by agent,
+                    session, category, or level for easy debugging and monitoring.
+                </MudText>
+            </MudCardContent>
+        </MudCard>
+
+        <MudCard>
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">📦 Container Management</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText>
+                    Full LXD (Linux Containers) integration for agent orchestration. Create, start, stop, delete
+                    containers, execute commands, and manage files directly from the dashboard.
+                </MudText>
+            </MudCardContent>
+        </MudCard>
+    </MudStack>
+
+</MudContainer>
+
+@code {
+    private string? userName;
+    private List<string> userRoles = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        userName = authState.User.Identity?.Name;
+
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            var roleClaims = authState.User.FindAll(System.Security.Claims.ClaimTypes.Role);
+            foreach (var claim in roleClaims)
+            {
+                userRoles.Add(claim.Value);
+            }
+        }
+    }
+}

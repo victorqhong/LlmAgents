@@ -1,0 +1,54 @@
+@page "/logs"
+
+@using AgentManager.Models
+@using AgentManager.Services
+@using MudBlazor
+@using System.Collections.ObjectModel
+
+@inject AgentLogService AgentLogService
+
+@attribute [Authorize]
+
+<PageTitle>Logs</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="my-8">
+
+  <MudText Typo="Typo.h4" GutterBottom="true">Logs</MudText>
+
+  <MudDataGrid Items="@logs">
+    <Columns>
+        <PropertyColumn Property="x => x.LogTime" Title="Time" />
+        <PropertyColumn Property="x => x.Session.AgentName" Title="Agent" />
+        <PropertyColumn Property="x => x.Session.Id" Title="Session" />
+        <PropertyColumn Property="x => x.Level" />
+        <PropertyColumn Property="x => x.Category" />
+        <PropertyColumn Property="x => x.Message" />
+    </Columns>
+  </MudDataGrid>
+
+</MudContainer>
+
+@code {
+    private ObservableCollection<AgentLog> logs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+	var logs = await AgentLogService.GetLogs();
+	foreach (var log in logs)
+	{
+	    this.logs.Insert(0, log);
+	}
+
+        AgentLogService.OnLog += HandleNewLog;
+    }
+
+    private void HandleNewLog(AgentLog log)
+    {
+        logs.Insert(0, log);
+    }
+
+    public void Dispose()
+    {
+        AgentLogService.OnLog -= HandleNewLog;
+    }
+}

@@ -1,0 +1,26 @@
+@page "/access-denied"
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="my-8">
+  <MudText Typo="Typo.h4" GutterBottom="true">Access Denied</MudText>
+  <MudAlert Severity="Severity.Error" Class="mt-4">
+    <MudText>
+      You are not authorized to access this application. Only specific users with assigned roles can access this system.
+    </MudText>
+  </MudAlert>
+  <MudText Typo="Typo.body1" Class="mt-4">
+    If you believe you should have access, please contact the administrator to have your GitHub account added to the allowed users list.
+  </MudText>
+  <MudButton Href="/login"
+	 Variant="Variant.Filled"
+	 EndIcon="@Icons.Custom.Brands.GitHub"
+	 Color="Color.Primary"
+	 Class="mt-4">
+    Try Login Again
+  </MudButton>
+  <MudButton Href="/"
+	 Variant="Variant.Outlined"
+	 Color="Color.Secondary"
+	 Class="mt-4 ml-2">
+    Go Home
+  </MudButton>
+</MudContainer>
