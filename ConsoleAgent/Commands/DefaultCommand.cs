@@ -1,10 +1,10 @@
+using System.CommandLine;
 using LlmAgents;
 using LlmAgents.Agents;
+using LlmAgents.Api.Extensions;
 using LlmAgents.CommandLineParser;
 using LlmAgents.Communication;
-using LlmAgents.Extensions;
 using Microsoft.Extensions.Logging;
-using System.CommandLine;
 using LlmAgentsOptions = LlmAgents.CommandLineParser.Options;
 using Parser = LlmAgents.CommandLineParser.Parser;
 

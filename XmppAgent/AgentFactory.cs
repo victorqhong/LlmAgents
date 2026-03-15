@@ -1,7 +1,7 @@
 using LlmAgents.Agents;
 using LlmAgents.Agents.Work;
+using LlmAgents.Api.Extensions;
 using LlmAgents.Configuration;
-using LlmAgents.Extensions;
 using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.State;
 using LlmAgents.Tools;

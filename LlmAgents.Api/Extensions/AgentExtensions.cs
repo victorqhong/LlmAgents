@@ -4,7 +4,7 @@ using LlmAgents.Api.GitHub;
 using LlmAgents.Communication;
 using Microsoft.AspNetCore.SignalR.Client;
 
-namespace LlmAgents.Extensions;
+namespace LlmAgents.Api.Extensions;
 
 public static class AgentExtensions
 {
