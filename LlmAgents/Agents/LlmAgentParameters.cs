@@ -1,4 +1,4 @@
-﻿namespace LlmAgents.Agents;
+namespace LlmAgents.Agents;
 
 public class LlmAgentParameters
 {

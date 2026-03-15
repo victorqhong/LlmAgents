@@ -1,4 +1,4 @@
-﻿namespace LlmAgents.Tools;
+namespace LlmAgents.Tools;
 
 public class ToolParameters
 {

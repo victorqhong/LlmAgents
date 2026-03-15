@@ -1,4 +1,4 @@
-﻿namespace LlmAgents.State;
+namespace LlmAgents.State;
 
 public class SessionParameters
 {

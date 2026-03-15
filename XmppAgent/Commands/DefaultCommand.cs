@@ -1,4 +1,4 @@
-﻿using LlmAgents.Agents;
+using LlmAgents.Agents;
 using LlmAgents.Configuration;
 using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.State;

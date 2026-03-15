@@ -1,4 +1,4 @@
-﻿namespace LlmAgents.Tools.Events;
+namespace LlmAgents.Tools.Events;
 
 internal class ChangeDirectoryEvent : ToolEvent
 {
