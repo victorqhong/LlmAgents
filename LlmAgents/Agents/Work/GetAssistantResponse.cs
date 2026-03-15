@@ -1,16 +1,18 @@
 namespace LlmAgents.Agents.Work;
 
 using System.Text;
-using LlmAgents.LlmApi;
-using Newtonsoft.Json.Linq;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using Microsoft.Extensions.Logging;
 
 public class GetAssistantResponseWork : LlmAgentWork
 {
-    public LlmApiOpenAiStreamingCompletionParser? Parser { get; private set; }
+    private readonly ILogger logger;
+
+    public ChatCompletionStreamParser? Parser { get; private set; }
 
     public string AssistantMessagePrefix { get; set; } = "Assistant: ";
 
-    public IList<JObject>? Tools { get; set; }
+    public List<ChatCompletionFunctionTool>? Tools { get; set; }
 
     public string ToolChoice { get; set; } = "auto";
 
@@ -18,22 +20,20 @@ public class GetAssistantResponseWork : LlmAgentWork
 
     public bool OutputNewLine { get; set; } = true;
 
-    public GetAssistantResponseWork(LlmAgent agent)
+    public GetAssistantResponseWork(ILoggerFactory loggerFactory, LlmAgent agent)
         : base(agent)
     {
+        logger = loggerFactory.CreateLogger<GetAssistantResponseWork>();
     }
 
-    public override Task<ICollection<JObject>?> GetState(CancellationToken ct)
+    public override Task<ICollection<ChatCompletionMessageParam>?> GetState(CancellationToken ct)
     {
-        return Task.FromResult<ICollection<JObject>?>(null);
+        return Task.FromResult<ICollection<ChatCompletionMessageParam>?>(null);
     }
 
     public async override Task Run(CancellationToken cancellationToken)
     {
-        if (Tools == null)
-        {
-            Tools = agent.GetToolDefinitions();
-        }
+        Tools ??= agent.GetToolDefinitions();
 
         var conversation = agent.RenderConversation();
 
@@ -55,35 +55,43 @@ public class GetAssistantResponseWork : LlmAgentWork
 
         var sentPrefix = false;
         var sentChunk = false;
-        await foreach (var chunk in Parser.StreamingCompletion)
+        try
         {
-            if (!sentPrefix)
+            await foreach (var chunk in Parser.StreamingCompletion)
             {
-                if (!string.IsNullOrEmpty(AssistantMessagePrefix))
+                if (!sentPrefix)
                 {
-                    if (agent.StreamOutput)
+                    if (!string.IsNullOrEmpty(AssistantMessagePrefix))
                     {
-                        await agent.agentCommunication.SendMessage(AssistantMessagePrefix, false);
+                        if (agent.StreamOutput)
+                        {
+                            await agent.agentCommunication.SendMessage(AssistantMessagePrefix, false);
+                        }
+                        else
+                        {
+                            sb.Append(AssistantMessagePrefix);
+                        }
                     }
-                    else
-                    {
-                        sb.Append(AssistantMessagePrefix);
-                    }
+
+                    sentPrefix = true;
                 }
 
-                sentPrefix = true;
-            }
+                if (agent.StreamOutput)
+                {
+                    await agent.agentCommunication.SendMessage(chunk, false);
+                }
+                else
+                {
+                    sb.Append(chunk);
+                }
 
-            if (agent.StreamOutput)
-            {
-                await agent.agentCommunication.SendMessage(chunk, false);
+                sentChunk = true;
             }
-            else
-            {
-                sb.Append(chunk);
-            }
-
-            sentChunk = true;
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Error while parsing response");
+            return;
         }
 
         if (sentChunk && OutputNewLine)
@@ -106,6 +114,9 @@ public class GetAssistantResponseWork : LlmAgentWork
         Messages = Parser.Messages;
 
         agent.PostSendMessage?.Invoke();
-        agent.PostParseUsage?.Invoke(new TokenUsage { CompletionTokens = Parser.UsageCompletionTokens, PromptTokens = Parser.UsagePromptTokens, TotalTokens = Parser.UsageTotalTokens });
+        if (Parser.Usage != null)
+        {
+            agent.PostParseUsage?.Invoke(new ChatCompletionUsage { CompletionTokens = Parser.Usage.CompletionTokens, PromptTokens = Parser.Usage.PromptTokens, TotalTokens = Parser.Usage.TotalTokens });
+        }
     }
 }

@@ -1,10 +1,13 @@
 namespace LlmAgents.Tools;
 
-using LlmAgents.State;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Net.Http.Headers;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Xml.Linq;
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.State;
 
 public class NextcloudFileList : Nextcloud
 {
@@ -13,44 +16,37 @@ public class NextcloudFileList : Nextcloud
     {
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "nextcloud_file_list",
-            description = "List the Nextcloud files and directories at the specified path",
-            parameters = new
+            Name = "nextcloud_file_list",
+            Description = "List the Nextcloud files and directories at the specified path",
+            Parameters = new()
             {
-                type = "object",
-                properties = new
+                Properties = new()
                 {
-                    path = new
-                    {
-                        type = "string",
-                        description = "The path to list files"
-                    }
+                    { "path", new() { Type = "string", Description = "The path to list files" } }
                 },
-                required = new[] { "path" }
+                Required = ["path"]
             }
         }
-    });
+    };
 
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
         if (!ValidateParameters())
         {
             result.Add("error", "Nextcloud username, password, or basePath not specified");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
-        var path = parameters["path"]?.ToString();
-        if (string.IsNullOrEmpty(path))
+        if (!parameters.TryGetValueString("path", string.Empty, out var path) || string.IsNullOrEmpty(path))
         {
             result.Add("error", "path is null or empty");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
         var url = string.Format("{0}/{1}/{2}", basePath, username, path);
@@ -86,14 +82,14 @@ public class NextcloudFileList : Nextcloud
                 .Select(r => r.Descendants(d + "displayname")?.FirstOrDefault()?.Value);
 
             result.Add("statuscode", (int)response.StatusCode);
-            result.Add("files", new JArray(responses));
+            result.Add("files", JsonSerializer.SerializeToNode(responses));
         }
         catch (Exception e)
         {
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 }
 

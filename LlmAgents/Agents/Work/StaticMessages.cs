@@ -1,18 +1,18 @@
 namespace LlmAgents.Agents.Work;
 
-using Newtonsoft.Json.Linq;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 
 public class StaticMessages : LlmAgentWork
 {
-    public StaticMessages(ICollection<JObject> staticMessages, LlmAgent agent)
+    public StaticMessages(ICollection<ChatCompletionMessageParam> staticMessages, LlmAgent agent)
         : base(agent)
     {
         Messages = staticMessages;
     }
 
-    public override Task<ICollection<JObject>?> GetState(CancellationToken ct)
+    public override Task<ICollection<ChatCompletionMessageParam>?> GetState(CancellationToken ct)
     {
-        return Task.FromResult<ICollection<JObject>?>(null);
+        return Task.FromResult<ICollection<ChatCompletionMessageParam>?>(null);
     }
 
     public override Task Run(CancellationToken cancellationToken)

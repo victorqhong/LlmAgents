@@ -1,4 +1,5 @@
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace LlmAgents.Tools;
 
@@ -10,7 +11,7 @@ public interface IToolEventBus
 
 public static class IToolEventBusExtensions
 {
-    public static void PostCallToolEvent<T>(this IToolEventBus eventBus, T sender, JObject arguments, JToken result) where T : Tool
+    public static void PostCallToolEvent<T>(this IToolEventBus eventBus, T sender, JsonDocument arguments, JsonNode result) where T : Tool
     {
         eventBus.PostToolEvent(new ToolCallEvent
         {

@@ -1,11 +1,9 @@
-﻿using LlmAgents.State;
+﻿namespace ToolServer;
+
+using System.Text.Json;
+using LlmAgents.State;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
-using Newtonsoft.Json.Linq;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-
-namespace ToolServer;
 
 public class McpToolAdapter : McpServerTool
 {
@@ -17,17 +15,11 @@ public class McpToolAdapter : McpServerTool
     {
         this.tool = tool;
 
-        var schemaDocument = JsonDocument.Parse(tool.Schema.ToString());
-
-        var function = schemaDocument.RootElement.GetProperty("function");
-        var description = function.GetProperty("description").GetString();
-        var inputSchema = function.GetProperty("parameters");
-
         protocolTool = new Tool()
         {
             Name = tool.Name,
-            Description = description,
-            InputSchema = inputSchema
+            Description = tool.Schema.Function.Description,
+            InputSchema = JsonSerializer.SerializeToElement(tool.Schema.Function.Parameters)
         };
     }
 
@@ -72,11 +64,8 @@ public class McpToolAdapter : McpServerTool
 
         try
         {
-            var arguments = JObject.Parse(JsonSerializer.Serialize(request.Params.Arguments));
-            var toolResult = await tool.Function(session, arguments);
-            var toolResultJson = JsonDocument.Parse(toolResult.ToString());
-
-            result.StructuredContent = JsonNode.Parse(JsonSerializer.Serialize(toolResultJson.RootElement));
+            var arguments = JsonDocument.Parse(JsonSerializer.Serialize(request.Params.Arguments));
+            result.StructuredContent = await tool.Function(session, arguments);
         }
         catch (Exception e)
         {

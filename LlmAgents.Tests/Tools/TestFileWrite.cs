@@ -1,15 +1,16 @@
 using System.IO;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json.Linq;
 
-namespace LlmAgents.Tests;
+namespace LlmAgents.Tests.Tools;
 
 [TestClass]
-public class FileWriteTests
+public class TestFileWrite
 {
     [DataTestMethod]
     [DataRow("response1.json", "out1.txt")]
@@ -27,7 +28,7 @@ public class FileWriteTests
         var response = File.ReadAllText($"Responses/tools/file_write/{responseFile}");
         Assert.IsNotNull(response);
 
-        var parameters = JObject.Parse(response);
+        var parameters = JsonDocument.Parse(response);
 
         var loggerFactory = new LoggerFactory();
         var toolFactory = new ToolFactory(loggerFactory);
@@ -35,7 +36,11 @@ public class FileWriteTests
 
         var result = await tool.Function(Session.New(), parameters);
         Assert.IsNotNull(result);
-        Assert.IsTrue((result is JObject obj) && string.Equals(obj.Value<string>("result"), "success"));
+        var obj = result as JsonObject;
+        Assert.IsNotNull(obj);
+        Assert.IsTrue(obj.TryGetPropertyValue("result", out var r));
+        Assert.IsNotNull(r);
+        Assert.IsTrue(string.Equals(r.GetValue<string>(), "success"));
         Assert.IsTrue(File.Exists(fileName));
 
         var contents = File.ReadAllText(fileName);

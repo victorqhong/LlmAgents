@@ -1,18 +1,20 @@
 namespace LlmAgents.Agents;
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using LlmAgents.Agents.Work;
 using LlmAgents.Communication;
-using LlmAgents.LlmApi;
+using LlmAgents.LlmApi.OpenAi;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 
 public class LlmAgent
 {
     private readonly ILoggerFactory loggerFactory;
 
-    private readonly List<JObject> ToolDefinitions = [];
+    private readonly List<ChatCompletionFunctionTool> ToolDefinitions = [];
 
     private readonly Dictionary<string, Tool> ToolMap = [];
 
@@ -36,9 +38,9 @@ public class LlmAgent
 
     public Action? PostSendMessage { get; set; }
 
-    public Action<TokenUsage>? PostParseUsage { get; set; }
+    public Action<ChatCompletionUsage>? PostParseUsage { get; set; }
 
-    public Action<string, JObject, JToken>? ToolCalled { get; set; }
+    public Action<string, JsonDocument, JsonNode>? ToolCalled { get; set; }
 
     public Action<LlmAgentWork>? PostRunWork { get; set; }
 
@@ -50,7 +52,7 @@ public class LlmAgent
 
     public Func<LlmAgent, GetUserInputWork> CreateUserInputWork { get; set; } = agent => new GetUserInputWork(agent);
 
-    public Func<LlmAgent, GetAssistantResponseWork> CreateAssistantResponseWork { get; set; } = agent => new GetAssistantResponseWork(agent);
+    public Func<LlmAgent, GetAssistantResponseWork> CreateAssistantResponseWork { get; set; } = agent => new GetAssistantResponseWork(agent.loggerFactory, agent);
 
     public Func<LlmAgent, ToolCalls> CreateToolCallsWork { get; set; } = agent => new ToolCalls(agent.loggerFactory, agent);
 
@@ -87,7 +89,7 @@ public class LlmAgent
         ToolMap.Add(tool.Name, tool);
     }
 
-    public async Task<JToken?> CallTool(string toolName, JObject arguments)
+    public async Task<JsonNode?> CallTool(string toolName, JsonDocument arguments)
     {
         if (!ToolMap.TryGetValue(toolName, out var tool))
         {
@@ -106,12 +108,12 @@ public class LlmAgent
         return result;
     }
 
-    public IList<JObject> GetToolDefinitions()
+    public List<ChatCompletionFunctionTool> GetToolDefinitions()
     {
         return ToolDefinitions;
     }
 
-    public List<JObject> RenderConversation()
+    public List<ChatCompletionMessageParam> RenderConversation()
     {
         return tasks.SelectMany((work, selector) =>
         {
@@ -154,7 +156,7 @@ public class LlmAgent
                 var userInputWork = await RunWork(CreateUserInputWork(this), null, cancellationToken);
                 var assistantWork = await RunWork(CreateAssistantResponseWork(this), userInputWork, cancellationToken);
 
-                while (assistantWork.Parser != null && string.Equals(assistantWork.Parser.FinishReason, "tool_calls"))
+                while (assistantWork.Parser?.FinishReason == ChatCompletionChoiceFinishReason.ToolCalls)
                 {
                     var toolCallsWork = await RunWork(CreateToolCallsWork(this), assistantWork, cancellationToken);
                     assistantWork = await RunWork(CreateAssistantResponseWork(this), toolCallsWork, cancellationToken);

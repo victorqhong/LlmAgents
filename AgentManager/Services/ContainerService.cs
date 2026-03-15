@@ -1,11 +1,11 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Runtime.Serialization;
+using System.Text.Json;
 using AgentManager.Configuration;
 using AgentManager.Models.Containers;
 using AgentManager.Services.Containers;
-using LlmAgents.LlmApi;
-using Newtonsoft.Json;
+using LlmAgents.LlmApi.OpenAi;
 
 namespace AgentManager.Services;
 
@@ -34,14 +34,14 @@ public class ContainerService
             throw new FileNotFoundException();
         }
 
-        llmApiParameters = JsonConvert.DeserializeObject<LlmApiOpenAiParameters>(File.ReadAllText(provisioningOptions.ApiConfigFile)) ?? throw new SerializationException();
+        llmApiParameters = JsonSerializer.Deserialize<LlmApiOpenAiParameters>(File.ReadAllText(provisioningOptions.ApiConfigFile)) ?? throw new SerializationException();
 
         if (!File.Exists(provisioningOptions.UserConfigFile))
         {
             throw new FileNotFoundException();
         }
 
-        var userConfig = JsonConvert.DeserializeObject<List<XmppUser>>(File.ReadAllText(provisioningOptions.UserConfigFile)) ?? throw new SerializationException();
+        var userConfig = JsonSerializer.Deserialize<List<XmppUser>>(File.ReadAllText(provisioningOptions.UserConfigFile)) ?? throw new SerializationException();
         foreach (var user in userConfig)
         {
             xmppUsers.Add(user.Jid, user.Password);
@@ -140,7 +140,7 @@ public class ContainerService
         await api.StartInstance(instanceName);
         await api.CreateFile(instanceName, "/opt/install-xmppagent.sh", File.OpenRead("wwwroot/install-xmppagent.sh"));
 
-        var xmppJson = JsonConvert.SerializeObject(new { xmppDomain = domain, xmppUsername = username, xmppPassword = xmppUsers[key], xmppTargetJid = provisioningOptions.XmppTargetJid, xmppTrustHost = true });
+        var xmppJson = JsonSerializer.Serialize(new { xmppDomain = domain, xmppUsername = username, xmppPassword = xmppUsers[key], xmppTargetJid = provisioningOptions.XmppTargetJid, xmppTrustHost = true });
         var xmppConfig = new MemoryStream();
         var xmppWriter = new StreamWriter(xmppConfig);
         xmppWriter.Write(xmppJson);
@@ -149,7 +149,7 @@ public class ContainerService
         await api.CreateFile(instanceName, "/opt/xmpp.json", xmppConfig);
         xmppWriter.Close();
 
-        var apiJson = JsonConvert.SerializeObject(new
+        var apiJson = JsonSerializer.Serialize(new
         {
             apiEndpoint = llmApiParameters.ApiEndpoint,
             apiKey = llmApiParameters.ApiKey,
@@ -165,7 +165,7 @@ public class ContainerService
         await api.CreateFile(instanceName, "/opt/api.json", apiConfig);
         apiWriter.Close();
 
-        var toolsJson = JsonConvert.SerializeObject(new
+        var toolsJson = JsonSerializer.Serialize(new
         {
             assemblies = new Dictionary<string, string> {
                 { "LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null", "/opt/LlmAgents/LlmAgents.Tools/bin/Debug/net9.0/LlmAgents.Tools.dll" }

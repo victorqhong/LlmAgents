@@ -1,7 +1,10 @@
-using Newtonsoft.Json.Linq;
-using LlmAgents.State;
-
 namespace LlmAgents.Tools.BackgroundJob;
+
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.State;
 
 public class JobStatusTool : Tool
 {
@@ -10,51 +13,47 @@ public class JobStatusTool : Tool
     public JobStatusTool(ToolFactory toolFactory) : base(toolFactory)
     {
         jobManager = toolFactory.Resolve<JobManager>();
-        Schema = new JObject
-        {
-            ["type"] = "function",
-            ["function"] = new JObject
-            {
-                ["name"] = "job_status",
-                ["description"] = "Get the current status of a background job.",
-                ["parameters"] = new JObject
-                {
-                    ["type"] = "object",
-                    ["properties"] = new JObject
-                    {
-                        ["job_id"] = new JObject
-                        {
-                            ["type"] = "string",
-                            ["description"] = "Identifier returned by start_job."
-                        }
-                    },
-                    ["required"] = new JArray { "job_id" }
-                }
-            }
-        };
     }
 
-    public override JObject Schema { get; protected set; }
-
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new() 
     {
-        var jobIdStr = parameters["job_id"]?.ToString();
-        if (!Guid.TryParse(jobIdStr, out var jobId))
+        Function = new()
         {
-            return Task.FromResult<JToken>(new JObject { ["error"] = "invalid job_id" });
+            Name = "job_status",
+            Description = "Get the current status of a background job.",
+            Parameters = new()
+            {
+                Properties = new()
+                {
+                    { "job_id", new() { Type = "string", Description = "Identifier returned by start_job." } },
+                },
+                Required = ["job_id"]
+            }
         }
+    };
+
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
+    {
+        var result = new JsonObject();
+
+        if (!parameters.TryGetValueString("job_id", string.Empty, out var jobIdStr) || !Guid.TryParse(jobIdStr, out var jobId))
+        {
+            result.Add("error", "invalid job_id");
+            return Task.FromResult<JsonNode>(result);
+        }
+
         var info = jobManager.Get(jobId);
         if (info == null)
         {
-            return Task.FromResult<JToken>(new JObject { ["error"] = "job not found" });
+            result.Add("error", "job not found");
+            return Task.FromResult<JsonNode>(result);
         }
-        var result = new JObject
-        {
-            ["status"] = info.Status.ToString().ToLowerInvariant(),
-            ["started"] = info.Started,
-            ["ended"] = info.Ended,
-            ["exit_code"] = info.ExitCode
-        };
-        return Task.FromResult<JToken>(result);
+
+        result.Add("status", info.Status.ToString().ToLowerInvariant());
+        result.Add("started", info.Started);
+        result.Add("ended", info.Ended);
+        result.Add("exit_code", info.ExitCode);
+
+        return Task.FromResult<JsonNode>(result);
     }
 }

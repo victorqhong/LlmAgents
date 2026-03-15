@@ -50,7 +50,7 @@
     private ObservableCollection<string> availableInstances = new();
     private bool loading = false;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
         loading = true;
 	OnContainerUpdated();

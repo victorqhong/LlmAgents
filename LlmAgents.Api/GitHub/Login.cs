@@ -2,10 +2,9 @@ namespace LlmAgents.Api.GitHub;
 
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using LlmAgents.Api;
 using LlmAgents.Communication;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 public static class Login
 {
@@ -52,16 +51,11 @@ public static class Login
             return null;
         }
 
-        var apiContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        var json = JObject.Parse(apiContent);
-
-        var hubAuthToken = new HubAuthToken
+        var hubAuthToken = await response.Content.ReadFromJsonAsync<HubAuthToken>(cancellationToken);
+        if (hubAuthToken == null)
         {
-            AccessToken = json.Value<string>("accessToken") ?? string.Empty,
-            RefreshToken = json.Value<string>("newRefreshToken") ?? string.Empty,
-            ExpiresIn = json.Value<int>("expiresIn"),
-            ExpireTime = DateTime.Now.AddMinutes(json.Value<int>("expiresIn"))
-        };
+            return null;
+        }
 
         HubAuthTokenStore.SaveToken(hubAuthToken);
 
@@ -86,7 +80,7 @@ public static class Login
 
         var deviceCodeContent = await deviceCodeResponse.Content.ReadAsStringAsync(cancellationToken);
 
-        var deviceCode = JsonConvert.DeserializeObject<DeviceCodeResponse>(deviceCodeContent);
+        var deviceCode = JsonSerializer.Deserialize<DeviceCodeResponse>(deviceCodeContent);
         if (deviceCode == null || string.IsNullOrEmpty(deviceCode.DeviceCode))
         {
             return null;
@@ -113,10 +107,15 @@ public static class Login
             if (payload.Contains("authorization_pending"))
                 continue;
 
-            tokenResponse = JsonConvert.DeserializeObject<TokenResponse>(payload);
+            tokenResponse = JsonSerializer.Deserialize<TokenResponse>(payload);
         }
 
         if (tokenResponse == null)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(tokenResponse.AccessToken))
         {
             return null;
         }

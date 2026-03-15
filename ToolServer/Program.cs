@@ -1,8 +1,9 @@
 using LlmAgents.Communication;
+using LlmAgents.Configuration;
 using LlmAgents.State;
 using LlmAgents.Tools;
-using Newtonsoft.Json.Linq;
 using System.CommandLine;
+using System.Text.Json;
 using ToolServer;
 
 using Options = LlmAgents.CommandLineParser.Options;
@@ -56,7 +57,6 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
         return;
     }
 
-    var toolsFile = JObject.Parse(File.ReadAllText(toolsConfigPath));
     var toolFactory = new ToolFactory(loggerFactory);
 
     var stateDatabase = new StateDatabase(loggerFactory, ":memory:");
@@ -69,9 +69,6 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
 
     toolFactory.AddParameter("basePath", workingDirectory);
 
-    var tools = toolFactory.Load(toolsFile) ?? [];
-    var mcpTools = tools.Select(tool => new McpToolAdapter(tool));
-
     var builder = WebApplication.CreateBuilder(args);
 
     builder.WebHost
@@ -81,7 +78,17 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
     builder.Services.AddSingleton(stateDatabase);
     builder.Services.AddHttpContextAccessor();
 
-    builder.Services
+    var toolsFile = JsonSerializer.Deserialize<ToolsConfig>(File.ReadAllText(toolsConfigPath));
+    if (toolsFile == null)
+    {
+        Console.Error.WriteLine("Could not parse tools config file");
+        return;
+    }
+
+    var tools = toolFactory.Load(toolsFile) ?? [];
+    var mcpTools = tools.Select(tool => new McpToolAdapter(tool));
+
+    var mcpBuilder = builder.Services
         .AddMcpServer()
         .WithHttpTransport()
         .WithStdioServerTransport()

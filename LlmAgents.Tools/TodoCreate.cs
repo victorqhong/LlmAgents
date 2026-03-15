@@ -1,9 +1,12 @@
 namespace LlmAgents.Tools;
 
+using System;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
 using LlmAgents.Tools.Todo;
-using Newtonsoft.Json.Linq;
-using System;
 
 public class TodoCreate : Tool
 {
@@ -15,58 +18,42 @@ public class TodoCreate : Tool
         todoDatabase = toolFactory.Resolve<TodoDatabase>();
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "todo_create",
-            description = "Create a todo",
-            parameters = new
+            Name = "todo_create",
+            Description = "Create a todo",
+            Parameters = new()
             {
-                type = "object",
-                properties = new
+                Properties = new()
                 {
-                    title = new
-                    {
-                        type = "string",
-                        description = "Title of the todo"
-                    },
-                    group = new
-                    {
-                        type = "string",
-                        description = "Name of the that contains this todo"
-                    },
-                    description = new
-                    {
-                        type = "string",
-                        description = "Description of the todo (optional)"
-                    }
+                    { "title", new() { Type = "string", Description = "Title of the todo" } },
+                    { "group", new() { Type = "string", Description = "Name of the that contains this todo" } },
+                    { "description", new() { Type = "string", Description = "Description of the todo (optional)" } },
                 },
-                required = new[] { "title", "group" }
+                Required = [ "title", "group" ]
             }
         }
-    });
+    };
 
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
-        var title = parameters["title"]?.ToString();
-        if (string.IsNullOrEmpty(title))
+        if (!parameters.TryGetValueString("title", string.Empty, out var title) || string.IsNullOrEmpty(title))
         {
             result.Add("error", "title is null or empty");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
-        var group = parameters["group"]?.ToString();
-        if (string.IsNullOrEmpty(group))
+        if (!parameters.TryGetValueString("group", string.Empty, out var group) || string.IsNullOrEmpty(group))
         {
             result.Add("error", "group is null or empty");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
-        var description = parameters["description"]?.ToString();
+        parameters.TryGetValueString("description", string.Empty, out var description);
 
         try
         {
@@ -78,6 +65,6 @@ public class TodoCreate : Tool
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 }

@@ -1,27 +1,29 @@
+using System;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Threading.Tasks;
+using LlmAgents.Configuration;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.State;
+using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json.Linq;
-using System;
-using System.Threading.Tasks;
-using LlmAgents.Tools;
-using LlmAgents.State;
-
 namespace LlmAgents.Tests;
 
-// Simple dummy tool for testing the ToolFactory Load method.
 public class DummyTool : Tool
 {
-    private JObject _schema = new JObject();
-
     public DummyTool(ToolFactory toolFactory) : base(toolFactory) { }
 
-    public override JObject Schema
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new() 
     {
-        get => _schema;
-        protected set => _schema = value;
-    }
+        Type = "function",
+        Function = new() 
+        {
+            Name = "dummy",
+        }
+    };
 
-    public override Task<JToken> Function(Session session, JObject parameters) => Task.FromResult<JToken>(new JValue("dummy"));
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters) => Task.FromResult<JsonNode>(new JsonObject());
 }
 
 [TestClass]
@@ -29,15 +31,15 @@ public class TestToolFactoryLoad
 {
     private static readonly ILoggerFactory LoggerFactory = new LoggerFactory();
 
-    private static JObject CreateToolDefinition(string typeName, string assemblyName, string assemblyPath)
+    private static ToolsConfig CreateToolDefinition(string typeName, string assemblyName, string assemblyPath)
     {
-        return new JObject
+        return new ToolsConfig
         {
-            ["types"] = new JArray(typeName + ", " + assemblyName),
-            ["assemblies"] = new JObject
+            Assemblies = new()
             {
-                [assemblyName] = assemblyPath
-            }
+                { assemblyName, assemblyPath }
+            },
+            Types = [$"{typeName}, {assemblyName}"]
         };
     }
 
@@ -51,6 +53,7 @@ public class TestToolFactoryLoad
         var definition = CreateToolDefinition(typeName, assemblyName, assembly.Location);
         var factory = new ToolFactory(LoggerFactory);
 
+        Console.WriteLine(typeName);
         // Act
         var tools = factory.Load(definition);
 

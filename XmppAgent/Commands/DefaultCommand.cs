@@ -1,11 +1,11 @@
 ﻿using LlmAgents.Agents;
-using LlmAgents.LlmApi;
+using LlmAgents.Configuration;
+using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 using System.CommandLine;
-
+using System.Text.Json;
 using LlmAgentsOptions = LlmAgents.CommandLineParser.Options;
 using XmppOptions = XmppAgent.Options;
 
@@ -32,21 +32,26 @@ internal class DefaultCommand : RootCommand
         var agentsConfigValue = parseResult.GetValue(XmppOptions.AgentsConfig);
         if (string.IsNullOrEmpty(agentsConfigValue) || !File.Exists(agentsConfigValue))
         {
-            Console.WriteLine("agentsConfig is invalid or does not exist");
+            logger.LogError("agentsConfig is invalid or does not exist");
             return;
         }
 
         var agentTasks = new List<Task>();
 
-        var agentsConfig = JObject.Parse(File.ReadAllText(agentsConfigValue));
-        foreach (var agentProperty in agentsConfig.Properties())
+        var agentsConfig = JsonSerializer.Deserialize<Dictionary<string, AgentConfig>>(File.ReadAllText(agentsConfigValue));
+        if (agentsConfig == null)
         {
-            var agentId = agentProperty.Name;
-            var apiConfigPath = agentProperty.Value.Value<string>("apiConfig");
-            var xmppConfigPath = agentProperty.Value.Value<string>("xmppConfig");
-            var toolsConfig = agentProperty.Value.Value<string>("toolsConfig");
-            var workingDirectory = agentProperty.Value.Value<string>("workingDirectory");
-            var agentDirectory = agentProperty.Value.Value<string>("agentDirectory");
+            return;
+        }
+
+        foreach (var agentProperty in agentsConfig)
+        {
+            var agentId = agentProperty.Key;
+            var apiConfigPath = agentProperty.Value.ApiConfig;
+            var xmppConfigPath = agentProperty.Value.XmppConfig;
+            var toolsConfig = agentProperty.Value.ToolsConfig;
+            var workingDirectory = agentProperty.Value.WorkingDirectory;
+            var agentDirectory = agentProperty.Value.AgentDirectory;
 
             if (string.IsNullOrEmpty(agentId) || string.IsNullOrEmpty(apiConfigPath) || string.IsNullOrEmpty(xmppConfigPath) || string.IsNullOrEmpty(toolsConfig) || string.IsNullOrEmpty(workingDirectory) || string.IsNullOrEmpty(agentDirectory))
             {
@@ -54,43 +59,23 @@ internal class DefaultCommand : RootCommand
                 continue;
             }
 
-            var systemPromptFile = agentProperty.Value.Value<string>("systemPromptFile") ?? null;
-            var persistent = agentProperty.Value.Value<bool>("persistent");
+            var systemPromptFile = agentProperty.Value.SystemPromptFile;
+            var persistent = agentProperty.Value.Persistent;
 
-            var apiConfig = JObject.Parse(File.ReadAllText(apiConfigPath));
-            var xmppConfig = JObject.Parse(File.ReadAllText(xmppConfigPath));
+            var apiParameters = JsonSerializer.Deserialize<LlmApiOpenAiParameters>(File.ReadAllText(apiConfigPath));
+            var xmppParameters = JsonSerializer.Deserialize<XmppConfig>(File.ReadAllText(xmppConfigPath));
 
-            var apiEndpoint = apiConfig.Value<string>("apiEndpoint");
-            var apiKey = apiConfig.Value<string>("apiKey");
-            var apiModel = apiConfig.Value<string>("apiModel");
-            var contextSize = apiConfig.Value<int>("contextSize");
-            var maxCompletionTokens = apiConfig.Value<int>("maxCompletionTokens");
-            var xmppDomain = xmppConfig.Value<string>("xmppDomain");
-            var xmppUsername = xmppConfig.Value<string>("xmppUsername");
-            var xmppPassword = xmppConfig.Value<string>("xmppPassword");
-            var xmppTargetJid = xmppConfig.Value<string>("xmppTargetJid");
-            var xmppTrustHost = xmppConfig.Value<bool>("xmppTrustHost");
-
-            if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(apiModel))
+            if (apiParameters == null || !apiParameters.Valid())
             {
                 logger.LogWarning("{agentId} apiParameters not configured correctly", agentId);
                 continue;
             }
 
-            if (string.IsNullOrEmpty(xmppDomain) || string.IsNullOrEmpty(xmppUsername) || string.IsNullOrEmpty(xmppPassword) || string.IsNullOrEmpty(xmppTargetJid))
+            if (xmppParameters == null || !xmppParameters.Valid())
             {
                 logger.LogWarning("{agentId} xmppParameters not configured correctly", agentId);
                 continue;
             }
-
-            var apiParameters = new LlmApiOpenAiParameters
-            {
-                ApiEndpoint = apiEndpoint,
-                ApiKey = apiKey,
-                ApiModel = apiModel,
-                ContextSize = contextSize,
-                MaxCompletionTokens = maxCompletionTokens
-            };
 
             var agentParameters = new LlmAgentParameters
             {
@@ -110,15 +95,6 @@ internal class DefaultCommand : RootCommand
             var toolParameters = new ToolParameters
             {
                 ToolsConfig = toolsConfig,
-            };
-
-            var xmppParameters = new XmppParameters
-            {
-                XmppDomain = xmppDomain,
-                XmppUsername = xmppUsername,
-                XmppPassword = xmppPassword,
-                XmppTrustHost = xmppTrustHost,
-                XmppTargetJid = xmppTargetJid,
             };
 
             agentTasks.Add(AgentFactory.RunAgent(apiParameters, agentParameters, toolParameters, sessionParameters, xmppParameters, cancellationToken));

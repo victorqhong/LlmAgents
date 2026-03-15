@@ -1,7 +1,7 @@
 namespace LlmAgents.Agents.Work;
 
-using LlmAgents.LlmApi;
-using Newtonsoft.Json.Linq;
+using LlmAgents.LlmApi.Content;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 
 public class GetUserInputWork : LlmAgentWork
 {
@@ -10,9 +10,9 @@ public class GetUserInputWork : LlmAgentWork
     {
     }
 
-    public override Task<ICollection<JObject>?> GetState(CancellationToken ct)
+    public override Task<ICollection<ChatCompletionMessageParam>?> GetState(CancellationToken ct)
     {
-        return Task.FromResult<ICollection<JObject>?>(null);
+        return Task.FromResult<ICollection<ChatCompletionMessageParam>?>(null);
     }
 
     public async override Task Run(CancellationToken cancellationToken)
@@ -26,6 +26,42 @@ public class GetUserInputWork : LlmAgentWork
 
         agent.PostReceiveContent?.Invoke();
 
-        Messages = [LlmApiOpenAi.GetMessage(messageContent)];
+        Messages = [GetMessage(messageContent)];
+    }
+
+    public static ChatCompletionMessageParam GetMessage(IEnumerable<IMessageContent> messageContents)
+    {
+        ArgumentNullException.ThrowIfNull(messageContents);
+
+        var content = new List<ChatCompletionContentPart>();
+
+        foreach (var messageContent in messageContents)
+        {
+            if (messageContent is MessageContentText userMessage)
+            {
+                content.Add(new ChatCompletionContentPartText
+                {
+                    Type = "text",
+                    Text = userMessage.Text
+                });
+
+            }
+            else if (messageContent is MessageContentImageUrl imageUrl)
+            {
+                var url = string.Format("data:{0};base64,{1}", imageUrl.MimeType, imageUrl.DataBase64);
+
+                content.Add(new ChatCompletionContentPartImage
+                {
+                    Type = "image_url",
+                    ImageUrl = new ChatCompletionContentPartImageUrl { Url = url }
+                });
+            }
+        }
+
+        return new ChatCompletionMessageParam
+        {
+            Role = "user",
+            Content = new ChatCompletionMessageParamContentParts { Content = content }
+        };
     }
 }

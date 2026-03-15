@@ -1,13 +1,17 @@
 namespace LlmAgents.Tools;
 
-using Newtonsoft.Json.Linq;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using System.Collections.Generic;
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
+
 public class FileList : Tool
 {
     private readonly string basePath;
@@ -29,9 +33,9 @@ public class FileList : Tool
 
     private Task OnChangeDirectory(ToolEvent e)
     {
-        if (e is ToolCallEvent tce)
+        if (e is ToolCallEvent tce && tce.Result.AsObject() is JsonObject jsonObject && jsonObject.TryGetPropertyValue("currentDirectory", out var property))
         {
-            currentDirectory = tce.Result.Value<string>("currentDirectory") ?? currentDirectory;
+            currentDirectory = property?.GetValue<string>() ?? currentDirectory;
         }
         else if (e is Events.ChangeDirectoryEvent cde)
         {
@@ -41,58 +45,39 @@ public class FileList : Tool
         return Task.CompletedTask;
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "file_list",
-            description = "List the files and directories at the specified path",
-            parameters = new
+            Name = "file_list",
+            Description = "List the files and directories at the specified path",
+            Parameters = new()
             {
-                type = "object",
-                properties = new
+                Properties = new()
                 {
-                    path = new
-                    {
-                        type = "string",
-                        description = "The path to list files"
-                    },
-                    recursive = new
-                    {
-                        type = "boolean",
-                        description = "Whether to recursively list files in all subdirectories (default is false)"
-                    },
-                    searchPattern = new
-                    {
-                        type = "string",
-                        description = "The search string to match against the names of files in path (default *.*). This parameter can contain a combination of valid literal path and wildcard (* and ?) characters, but it doesn't support regular expressions."
-                    },
-                    useIgnoreFile = new
-                    {
-                        type = "boolean",
-                        description = "Whether to use .gitignore and .llmignore files to filter results (default is true)"
-                    }
+                    { "path", new() { Type = "string", Description = "The path to list files"  } },
+                    { "recursive", new() { Type = "boolean", Description = "Whether to recursively list files in all subdirectories (default is false)"  } },
+                    { "searchPattern", new() { Type = "string", Description = "The search string to match against the names of files in path (default *.*). This parameter can contain a combination of valid literal path and wildcard (* and ?) characters, but it doesn't support regular expressions."  } },
+                    { "useIgnoreFile", new() { Type = "boolean", Description = "Whether to use .gitignore and .llmignore files to filter results (default is true)" } }
                 },
-                required = new[] { "path" }
+                Required = [ "path" ]
             }
         }
-    });
+    };
 
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
-        var path = parameters["path"]?.ToString();
-        if (string.IsNullOrEmpty(path))
+        if (!parameters.TryGetValueString("path", string.Empty, out var path) || string.IsNullOrEmpty(path))
         {
             result.Add("error", "path is null or empty");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
-        var recursive = parameters["recursive"]?.Value<bool>() ?? false;
-        var searchPattern = parameters["searchPattern"]?.Value<string>() ?? "*.*";
-        var useIgnoreFile = parameters["useIgnoreFile"]?.Value<bool>() ?? true;
+        parameters.TryGetValueString("searchPattern", "*.*", out var searchPattern);
+        parameters.TryGetValueBool("recursive", false, out var recursive);
+        parameters.TryGetValueBool("useIgnoreFile", true, out var useIgnoreFile);
 
         try
         {
@@ -111,7 +96,7 @@ public class FileList : Tool
             if (restrictToBasePath && !path.StartsWith(basePath))
             {
                 result.Add("error", $"cannot list files outside {basePath}");
-                return Task.FromResult<JToken>(result);
+                return Task.FromResult<JsonNode>(result);
             }
 
             var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
@@ -126,14 +111,21 @@ public class FileList : Tool
                 directoryContents = directoryContents.Where(filter.IsNotIgnored).ToArray();
             }
 
-            return Task.FromResult<JToken>(JArray.FromObject(directoryContents));
+            var node = JsonSerializer.SerializeToNode(directoryContents);
+            if (node == null)
+            {
+                result.Add("error", $"error with tool: could not serialize results");
+                return Task.FromResult<JsonNode>(result);
+            }
+
+            return Task.FromResult(node);
         }
         catch (Exception e)
         {
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 
     private class MultiLevelGitIgnoreFilter
@@ -178,8 +170,7 @@ public class FileList : Tool
                 {
                     isIgnored = filter.Item2.IsIgnored(Path.GetRelativePath(filter.Item1, path));
                     if (isIgnored)
-                    {
-                        break;
+                    { break;
                     }
                 }
             }

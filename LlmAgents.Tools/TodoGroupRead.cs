@@ -1,10 +1,13 @@
 namespace LlmAgents.Tools;
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using LlmAgents.Tools.Todo;
 using System;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
+using LlmAgents.Tools.Todo;
+
 public class TodoGroupRead : Tool
 {
     private readonly TodoDatabase todoDatabase;
@@ -15,38 +18,31 @@ public class TodoGroupRead : Tool
         todoDatabase = toolFactory.Resolve<TodoDatabase>();
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "todo_group_read",
-            description = "Get a todo group",
-            parameters = new
+            Name = "todo_group_read",
+            Description = "Get a todo group",
+            Parameters = new()
             {
-                type = "object",
-                properties = new
+                Properties = new()
                 {
-                    name = new
-                    {
-                        type = "string",
-                        description = "Name of the group"
-                    }
+                    { "name", new() { Type = "string", Description = "Name of the group" } }
                 },
-                required = new[] { "name" }
+                Required = ["name"]
             }
         }
-    });
+    };
 
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
-        var name = parameters["name"]?.ToString();
-        if (string.IsNullOrEmpty(name))
+        if (!parameters.TryGetValueString("name", string.Empty, out var name) || string.IsNullOrEmpty(name))
         {
             result.Add("error", "name is null or empty");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
         try
@@ -58,7 +54,7 @@ public class TodoGroupRead : Tool
             }
             else
             {
-                result.Add("result", JsonConvert.SerializeObject(todoContainer));
+                result.Add("result", JsonSerializer.Serialize(todoContainer));
             }
         }
         catch (Exception e)
@@ -66,6 +62,6 @@ public class TodoGroupRead : Tool
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 }

@@ -80,7 +80,7 @@ internal class AgentCommand : Command
             systemPrompt = File.ReadAllText(sessionParameters.SystemPromptFile);
         }
 
-        var xmppParameters = XmppParameters.ParseXmppParameters(parseResult);
+        var xmppParameters = XmppParameterParser.ParseXmppParameters(parseResult);
         if (xmppParameters == null)
         {
             logger.LogError("xmppParameters not configured correctly");

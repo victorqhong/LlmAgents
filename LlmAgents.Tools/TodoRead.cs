@@ -1,9 +1,11 @@
 namespace LlmAgents.Tools;
 
-using Newtonsoft.Json.Linq;
 using LlmAgents.Tools.Todo;
-using System;
 using LlmAgents.State;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using System.Text.Json.Nodes;
+using System.Text.Json;
+using LlmAgents.Extensions;
 
 public class TodoRead : Tool
 {
@@ -15,50 +17,38 @@ public class TodoRead : Tool
         todoDatabase = toolFactory.Resolve<TodoDatabase>();
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "todo_read",
-            description = "Get a todo",
-            parameters = new
+            Name = "todo_read",
+            Description = "Get a todo",
+            Parameters = new()
             {
-                type = "object",
-                properties = new
+                Properties = new()
                 {
-                    title = new
-                    {
-                        type = "string",
-                        description = "Title of the todo"
-                    },
-                    group = new
-                    {
-                        type = "string",
-                        description = "Name of the group that contains this todo"
-                    }
+                    { "title", new() { Type = "string", Description = "Title of the todo" } },
+                    { "group", new() { Type = "string", Description = "Name of the group that contains this todo" } }
                 },
-                required = new[] { "title", "group" }
+                Required = ["title", "group"]
             }
         }
-    });
+    };
 
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
-        var title = parameters["title"]?.ToString();
-        if (string.IsNullOrEmpty(title))
+        if (!parameters.TryGetValueString("title", string.Empty, out var title) || string.IsNullOrEmpty(title))
         {
             result.Add("error", $"{nameof(title)} is null or empty");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
-        var group = parameters["group"]?.ToString();
-        if (string.IsNullOrEmpty(group))
+        if (!parameters.TryGetValueString("group", string.Empty, out var group) || string.IsNullOrEmpty(group))
         {
-            result.Add("error", $"{nameof(group)} is null or empty");
-            return Task.FromResult<JToken>(result);
+            result.Add("error", "group is null or empty");
+            return Task.FromResult<JsonNode>(result);
         }
 
         try
@@ -70,7 +60,7 @@ public class TodoRead : Tool
             }
             else
             {
-                result.Add("result", Newtonsoft.Json.JsonConvert.SerializeObject(todo));
+                result.Add("result", JsonSerializer.Serialize(todo));
             }
         }
         catch (Exception e)
@@ -78,7 +68,7 @@ public class TodoRead : Tool
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 }
 

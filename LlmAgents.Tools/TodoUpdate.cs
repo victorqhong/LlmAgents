@@ -1,9 +1,11 @@
 namespace LlmAgents.Tools;
 
-using Newtonsoft.Json.Linq;
 using LlmAgents.Tools.Todo;
-using System;
 using LlmAgents.State;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using System.Text.Json.Nodes;
+using System.Text.Json;
+using LlmAgents.Extensions;
 
 public class TodoUpdate : Tool
 {
@@ -15,86 +17,54 @@ public class TodoUpdate : Tool
         todoDatabase = toolFactory.Resolve<TodoDatabase>();
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new() 
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "todo_update",
-            description = "Update a todo",
-            parameters = new
+            Name = "todo_update",
+            Description = "Update a todo",
+            Parameters = new() 
             {
-                type = "object",
-                properties = new
+                Properties = new() 
                 {
-                    title = new
-                    {
-                        type = "string",
-                        description = "Title of the todo"
-                    },
-                    group = new
-                    {
-                        type = "string",
-                        description = "Name of the group that contains this todo"
-                    },
-                    newTitle = new
-                    {
-                        type = "string",
-                        description = "New title of the todo"
-                    },
-                    newDescription = new
-                    {
-                        type = "string",
-                        description = "New description of the todo"
-                    },
-                    newGroup = new
-                    {
-                        type = "string",
-                        description = "New group of the todo"
-                    },
-                    newDueDate = new
-                    {
-                        type = "string",
-                        description = "New due date of the todo"
-                    },
-                    newCompleted = new
-                    {
-                        type = "boolean",
-                        description = "New completed state of the todo"
-                    }
+                    { "title", new() { Type = "string", Description = "Title of the todo" } },
+                    { "group", new() { Type = "string", Description = "Name of the group that contains this todo" } },
+                    { "newTitle", new() { Type = "string", Description = "New title of the todo" } },
+                    { "newDescription", new() { Type = "string", Description = "New description of the todo" } },
+                    { "newGroup", new() { Type = "string", Description = "New group of the todo" } },
+                    { "newDueDate", new() { Type = "string", Description = "New due date of the todo" } },
+                    { "newCompleted", new() { Type = "boolean", Description = "New completed state of the todo" } },
                 },
-                required = new[] { "title", "group" }
+                Required = ["title", "group"]
             }
         }
-    });
+    };
 
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
-        var title = parameters["title"]?.ToString();
-        if (string.IsNullOrEmpty(title))
+        if (!parameters.TryGetValueString("title", string.Empty, out var title) || string.IsNullOrEmpty(title))
         {
-            result.Add("error", $"{nameof(title)} is null or empty");
-            return Task.FromResult<JToken>(result);
+            result.Add("error", "title is null or empty");
+            return Task.FromResult<JsonNode>(result);
         }
 
-        var group = parameters["group"]?.ToString();
-        if (string.IsNullOrEmpty(group))
+        if (!parameters.TryGetValueString("group", string.Empty, out var group) || string.IsNullOrEmpty(group))
         {
-            result.Add("error", $"{nameof(group)} is null or empty");
-            return Task.FromResult<JToken>(result);
+            result.Add("error", "group is null or empty");
+            return Task.FromResult<JsonNode>(result);
         }
 
         try
         {
-            string? newTitle = parameters.Value<string>("newTitle");
-            string? newDescription = parameters.Value<string>("newDescription");
-            string? newGroup = parameters.Value<string>("newGroup");
-            string? newDueDate = parameters.Value<string>("newDueDate");
-            bool? newCompleted = parameters.Value<bool>("newCompleted");
+            parameters.TryGetValueString("newTitle", string.Empty, out var newTitle);
+            parameters.TryGetValueString("newDescription", string.Empty, out var newDescription);
+            parameters.TryGetValueString("newGroup", string.Empty, out var newGroup);
+            parameters.TryGetValueString("newDueDate", string.Empty, out var newDueDate);
+            var parsedNewCompleted = parameters.TryGetValueBool("newCompleted", false, out var newCompleted);
 
-            var success = todoDatabase.UpdateTodo(session, title, group, newTitle, newGroup, newDescription, newDueDate, newCompleted);
+            var success = todoDatabase.UpdateTodo(session, title, group, newTitle, newGroup, newDescription, newDueDate, parsedNewCompleted ? newCompleted : null);
             result.Add("success", success);
         }
         catch (Exception e)
@@ -102,7 +72,7 @@ public class TodoUpdate : Tool
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 }
 

@@ -1,8 +1,11 @@
 namespace LlmAgents.Tools;
 
-using LlmAgents.State;
-using Newtonsoft.Json.Linq;
 using System;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.State;
 
 public class SqliteSqlRun : Tool
 {
@@ -11,50 +14,38 @@ public class SqliteSqlRun : Tool
     {
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "sqlite_sql_run",
-            description = "Read/process sql statement against a sqlite database",
-            parameters = new
+            Name = "sqlite_sql_run",
+            Description = "Read/process sql statement against a sqlite database",
+            Parameters = new()
             {
-                type = "object",
-                properties = new
+                Properties = new()
                 {
-                    sql = new
-                    {
-                        type = "string",
-                        description = "SQL statement to run"
-                    },
-                    db = new
-                    {
-                        type = "string",
-                        description = "Path to a sqlite database file"
-                    }
+                    { "sql", new() { Type = "string", Description = "SQL statement to run" } },
+                    { "db", new() { Type = "string", Description = "Path to a sqlite database file" } }
                 },
-                required = new[] { "sql", "db" }
+                Required = [ "sql", "db" ]
             }
         }
-    });
+    };
 
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
-        var sql = parameters["sql"]?.ToString();
-        if (string.IsNullOrEmpty(sql))
+        if (!parameters.TryGetValueString("sql", string.Empty, out var sql) || string.IsNullOrEmpty(sql))
         {
             result.Add("error", "sql parameter is null or empty");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
-        var db = parameters["db"]?.ToString();
-        if (string.IsNullOrEmpty(db))
+        if (!parameters.TryGetValueString("db", string.Empty, out var db) || string.IsNullOrEmpty(db))
         {
             result.Add("error", "db parameter is null or empty");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
         try
@@ -77,6 +68,6 @@ public class SqliteSqlRun : Tool
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 }

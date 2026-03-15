@@ -1,4 +1,5 @@
 using LlmAgents.Communication;
+using LlmAgents.Configuration;
 using LlmAgents.LlmApi.Content;
 using System.Reactive.Linq;
 using System.Xml.Linq;
@@ -30,8 +31,8 @@ public class XmppCommunication : IAgentCommunication
 
     private readonly FileTransferStateMachine fileTransferStateMachine;
 
-    public XmppCommunication(XmppParameters xmppParameters)
-        : this(xmppParameters.XmppUsername, xmppParameters.XmppDomain, xmppParameters.XmppPassword, null, null, null, xmppParameters.XmppTrustHost)
+    public XmppCommunication(XmppConfig xmppConfig)
+        : this(xmppConfig.XmppUsername, xmppConfig.XmppDomain, xmppConfig.XmppPassword, null, null, null, xmppConfig.XmppTrustHost)
     {
     }
 
@@ -103,16 +104,16 @@ public class XmppCommunication : IAgentCommunication
         Presence = show;
     }
 
-    public async Task<IEnumerable<IMessageContent>?> WaitForContent(CancellationToken cancellationToken = default)
+    public Task<IEnumerable<IMessageContent>?> WaitForContent(CancellationToken cancellationToken = default)
     {
         if (!Connected)
         {
-            return null;
+            return Task.FromResult<IEnumerable<IMessageContent>?>(null);
         }
 
         if (string.IsNullOrEmpty(TargetJid))
         {
-            return null;
+            return Task.FromResult<IEnumerable<IMessageContent>?>(null);
         }
 
         incomingMessageStateMachine.SetIncomingMessageAddress(TargetJid);
@@ -138,7 +139,7 @@ public class XmppCommunication : IAgentCommunication
 
         if (incomingMessageStateMachine.Result == null)
         {
-            return [];
+            return Task.FromResult<IEnumerable<IMessageContent>?>([]);
         }
 
         var content = new List<IMessageContent>();
@@ -149,7 +150,7 @@ public class XmppCommunication : IAgentCommunication
             content.AddRange(fileTransferStateMachine.Result);
         }
 
-        return content;
+        return Task.FromResult<IEnumerable<IMessageContent>?>(content);
     }
 
     public async Task SendMessage(string message, bool newLine)
@@ -192,13 +193,13 @@ public class XmppCommunication : IAgentCommunication
 
     private void HandleDiscoInfo()
     {
-        Func<string, XmppXElement> CreateFeature = var =>
+        static XmppXElement CreateFeature(string var)
         {
             var el = new XmppXElement(XName.Get("feature", "http://jabber.org/protocol/disco#info"));
             el.SetAttribute("var", var);
 
             return el;
-        };
+        }
         XmppClient.XmppXElementReceived
             .Where(el =>
             {

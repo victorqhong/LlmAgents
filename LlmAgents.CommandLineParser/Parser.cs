@@ -1,9 +1,9 @@
-﻿using LlmAgents.Agents;
-using LlmAgents.LlmApi;
+﻿using System.CommandLine;
+using System.Text.Json;
+using LlmAgents.Agents;
+using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.State;
 using LlmAgents.Tools;
-using Newtonsoft.Json.Linq;
-using System.CommandLine;
 
 namespace LlmAgents.CommandLineParser;
 
@@ -11,22 +11,24 @@ public static class Parser
 {
     public static LlmApiOpenAiParameters? ParseApiParameters(ParseResult parseResult)
     {
-        string? apiEndpoint;
-        string? apiKey;
-        int contextSize;
-        int maxCompletionTokens;
-        string? apiModel;
+        string? apiEndpoint = null;
+        string? apiKey = null;
+        int contextSize = 0;
+        int? maxCompletionTokens = null;
+        string? apiModel = null;
 
         var apiConfigValue = parseResult.GetValue(Options.ApiConfig);
         if (!string.IsNullOrEmpty(apiConfigValue) && File.Exists(apiConfigValue))
         {
-            var apiConfig = JObject.Parse(File.ReadAllText(apiConfigValue));
-
-            apiEndpoint = apiConfig.Value<string>("apiEndpoint");
-            apiKey = apiConfig.Value<string>("apiKey");
-            apiModel = apiConfig.Value<string>("apiModel");
-            contextSize = apiConfig.Value<int>("contextSize");
-            maxCompletionTokens = apiConfig.Value<int>("maxCompletionTokens");
+            var apiConfig = JsonSerializer.Deserialize<LlmApiOpenAiParameters>(File.ReadAllText(apiConfigValue));
+            if (apiConfig != null)
+            {
+                apiEndpoint = apiConfig.ApiEndpoint;
+                apiKey = apiConfig.ApiKey;
+                apiModel = apiConfig.ApiModel;
+                contextSize = apiConfig.ContextSize;
+                maxCompletionTokens = apiConfig.MaxCompletionTokens;
+            }
         }
         else
         {

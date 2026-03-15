@@ -1,9 +1,12 @@
 namespace LlmAgents.Tools;
 
-using Newtonsoft.Json.Linq;
-using LlmAgents.Tools.Todo;
 using System;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
+using LlmAgents.Tools.Todo;
+
 public class TodoGroupList : Tool
 {
     private readonly TodoDatabase todoDatabase;
@@ -14,24 +17,24 @@ public class TodoGroupList : Tool
         todoDatabase = toolFactory.Resolve<TodoDatabase>();
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "todo_group_list",
-            description = "List all todo groups and associated todos",
-            parameters = new
+            Name = "todo_group_list",
+            Description = "List all todo groups and associated todos",
+            Parameters = new()
             {
-                type = "object",
-                properties = new { },
-            }
+                Type = "object",
+                Properties = [],
+                Required = []
+            },
         }
-    });
+    };
 
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
         try
         {
@@ -42,7 +45,7 @@ public class TodoGroupList : Tool
             }
             else
             {
-                return Task.FromResult<JToken>(JArray.FromObject(todoContainers));
+                result.Add("result", JsonSerializer.Serialize(todoContainers));
             }
         }
         catch (Exception e)
@@ -50,6 +53,6 @@ public class TodoGroupList : Tool
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 }

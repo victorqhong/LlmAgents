@@ -1,6 +1,5 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
+﻿using System.Text.Json;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 namespace LlmAgents.State;
 
 public class Session
@@ -12,7 +11,7 @@ public class Session
 
     public string PersistentMessagesPath { get; set; } = Environment.CurrentDirectory;
 
-    private readonly List<JObject> messages = [];
+    private readonly List<ChatCompletionMessageParam> messages = [];
 
     public static Session New(string? sessionId = null)
     {
@@ -22,12 +21,12 @@ public class Session
         };
     }
 
-    public void AddMessages(ICollection<JObject> messages)
+    public void AddMessages(ICollection<ChatCompletionMessageParam> messages)
     {
         this.messages.AddRange(messages);
     }
 
-    public ICollection<JObject> GetMessages()
+    public ICollection<ChatCompletionMessageParam> GetMessages()
     {
         return messages;
     }
@@ -42,7 +41,7 @@ public class Session
             return;
         }
 
-        List<JObject>? messages = JsonConvert.DeserializeObject<List<JObject>>(File.ReadAllText(messagesFilePath));
+        List<ChatCompletionMessageParam>? messages = JsonSerializer.Deserialize<List<ChatCompletionMessageParam>>(File.ReadAllText(messagesFilePath));
         if (messages == null)
         {
             return;
@@ -51,12 +50,12 @@ public class Session
         AddMessages(messages);
     }
 
-    public void Save(ICollection<JObject> messages)
+    public void Save(ICollection<ChatCompletionMessageParam> messages)
     {
         var messagesFileName = GetMessagesFilename(SessionId);
         var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
 
-        File.WriteAllText(messagesFilePath, JsonConvert.SerializeObject(messages));
+        File.WriteAllText(messagesFilePath, JsonSerializer.Serialize(messages));
     }
 
     private static string GetMessagesFilename(string id)

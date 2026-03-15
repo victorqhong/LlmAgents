@@ -2,10 +2,12 @@ namespace LlmAgents.Tools;
 
 using LlmAgents.Communication;
 using LlmAgents.LlmApi.Content;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
-using Newtonsoft.Json.Linq;
 using System;
-
+using System.Text.Json.Nodes;
+using System.Text.Json;
+using LlmAgents.Extensions;
 public class AskQuestion : Tool
 {
     private readonly IAgentCommunication agentCommunication;
@@ -16,35 +18,28 @@ public class AskQuestion : Tool
         agentCommunication = toolFactory.Resolve<IAgentCommunication>();
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "question_ask",
-            description = "Ask a question to someone knowledgeable only when there is a choice to be made",
-            parameters = new
+            Name = "question_ask",
+            Description = "Ask a question to someone knowledgeable only when there is a choice to be made",
+            Parameters = new()
             {
-                type = "object",
-                properties = new
+                Properties = new()
                 {
-                    question = new
-                    {
-                        type = "string",
-                        description = "The question to ask"
-                    }
+                    { "question", new() { Type = "string", Description = "The question to ask" } }
                 },
-                required = new[] { "question" }
+                Required = ["question"]
             }
         }
-    });
+    };
 
-    public override async Task<JToken> Function(Session session, JObject parameters)
+    public override async Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
-        var question = parameters["question"]?.ToString();
-        if (string.IsNullOrEmpty(question))
+        if (!parameters.TryGetValueString("question", string.Empty, out var question) || string.IsNullOrEmpty(question))
         {
             result.Add("error", "question is null or empty");
             return result;
@@ -66,13 +61,11 @@ public class AskQuestion : Tool
                 foreach (var message in content)
                 {
                     if (message is MessageContentText textContent)
-                    {
-                        answer = textContent.Text;
-                        break;
+                    { answer = textContent.Text; break;
                     }
                 }
 
-                Thread.Sleep(1000);
+                await Task.Delay(1000);
             }
 
             result.Add("answer", answer);

@@ -1,7 +1,10 @@
 namespace LlmAgents.Tools;
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
-using Newtonsoft.Json.Linq;
 
 public class YtDlp : Tool
 {
@@ -13,38 +16,31 @@ public class YtDlp : Tool
         workingDirectory = toolFactory.GetParameter("basePath") ?? Environment.CurrentDirectory;
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "ytdlp_audio_extract",
-            description = "Extract the audio of a YouTube video with yt-dlp",
-            parameters = new
+            Name = "ytdlp_audio_extract",
+            Description = "Extract the audio of a YouTube video with yt-dlp",
+            Parameters = new() 
             {
-                type = "object",
-                properties = new
+                Properties = new() 
                 {
-                    videoUrl = new
-                    {
-                        type = "string",
-                        description = "URL of the video to extract audio"
-                    }
+                    { "videoUrl", new() { Type = "string", Description = "URL of the video to extract audio" } }
                 },
-                required = new[] { "videoUrl" }
+                Required = ["videoUrl"]
             }
         }
-    });
+    };
 
-    public override Task<JToken> Function(Session? session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
-        var videoUrl = parameters["videoUrl"]?.ToString();
-        if (string.IsNullOrEmpty(videoUrl))
+        if (!parameters.TryGetValueString("videoUrl", string.Empty, out var videoUrl) || string.IsNullOrEmpty(videoUrl))
         {
             result.Add("error", "videoUrl parameter is null or empty");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
         try
@@ -76,6 +72,6 @@ public class YtDlp : Tool
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 }

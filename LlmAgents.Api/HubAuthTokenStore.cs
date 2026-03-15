@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json;
 
 namespace LlmAgents.Api;
 
@@ -23,7 +23,7 @@ public class HubAuthTokenStore
         try
         {
             var json = File.ReadAllText(tokenPath);
-            return JsonConvert.DeserializeObject<HubAuthToken>(json);
+            return JsonSerializer.Deserialize<HubAuthToken>(json);
         }
         catch
         {
@@ -49,7 +49,7 @@ public class HubAuthTokenStore
             Directory.CreateDirectory(configDir);
         }
 
-        var json = JsonConvert.SerializeObject(token, Formatting.Indented);
+        var json = JsonSerializer.Serialize(token);
         File.WriteAllText(tokenPath, json);
     }
 
