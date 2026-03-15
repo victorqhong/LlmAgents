@@ -1,4 +1,4 @@
-﻿using LlmAgents.State;
+using LlmAgents.State;
 using Microsoft.Extensions.Logging;
 using System.CommandLine;
 using LlmAgentsOptions = LlmAgents.CommandLineParser.Options;

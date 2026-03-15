@@ -1,4 +1,4 @@
-﻿namespace LlmAgents.LlmApi;
+namespace LlmAgents.LlmApi;
 
 public interface ILlmApiMessageProvider
 {

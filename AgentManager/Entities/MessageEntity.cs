@@ -1,4 +1,4 @@
-﻿
+
 namespace AgentManager.Entities;
 
 public class MessageEntity

@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 namespace LlmAgents.State;
 

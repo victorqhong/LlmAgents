@@ -1,4 +1,4 @@
-﻿using LlmAgents;
+using LlmAgents;
 using LlmAgents.CommandLineParser;
 using Microsoft.Extensions.Logging;
 using System.CommandLine;
