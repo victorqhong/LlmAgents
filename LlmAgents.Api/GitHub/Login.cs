@@ -115,6 +115,11 @@ public static class Login
             return null;
         }
 
+        if (string.IsNullOrEmpty(tokenResponse.AccessToken))
+        {
+            return null;
+        }
+
         var content = JsonContent.Create(new TokenRequest { AccessToken = tokenResponse.AccessToken });
         var response = await client.PostAsync($"{agentHubUri}auth/github", content, cancellationToken);
         if (!response.IsSuccessStatusCode)

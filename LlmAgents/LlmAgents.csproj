@@ -20,4 +20,8 @@
     <PackageReference Include="ModelContextProtocol" Version="0.3.0-preview.4" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\LlmAgents.Api\LlmAgents.Api.csproj" />
+  </ItemGroup>
+
 </Project>

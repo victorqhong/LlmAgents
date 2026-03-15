@@ -1,10 +1,8 @@
 using LlmAgents;
 using LlmAgents.Agents;
-using LlmAgents.Api.GitHub;
 using LlmAgents.CommandLineParser;
 using LlmAgents.Communication;
 using LlmAgents.Extensions;
-using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using System.CommandLine;
 using LlmAgentsOptions = LlmAgents.CommandLineParser.Options;
@@ -99,23 +97,7 @@ internal class DefaultCommand : RootCommand
 
         if (agentParameters.AgentManagerUrl != null)
         {
-            var hubUrl = new Uri(agentParameters.AgentManagerUrl, "hubs/agent");
-            var hub = new HubConnectionBuilder()
-                .WithUrl(hubUrl, options =>
-                {
-                    options.AccessTokenProvider = () =>
-                    {
-                        return Task.Run(async () =>
-                        {
-                            return await Login.GetHubLoginToken(consoleCommunication, agentParameters.AgentManagerUrl, cancellationToken);
-                        });
-                    };
-                })
-                .WithAutomaticReconnect()
-                .Build();
-
-            await hub.StartAsync(cancellationToken);
-            await agent.ConfigureAgentHub(hub);
+            await agent.ConfigureAgentHub(agentParameters.AgentManagerUrl, consoleCommunication);
         }
 
         await agent.Run(cancellationToken);

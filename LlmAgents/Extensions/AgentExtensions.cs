@@ -1,13 +1,32 @@
 using System.Text.Json;
 using LlmAgents.Agents;
+using LlmAgents.Api.GitHub;
+using LlmAgents.Communication;
 using Microsoft.AspNetCore.SignalR.Client;
 
 namespace LlmAgents.Extensions;
 
 public static class AgentExtensions
 {
-    public static async Task ConfigureAgentHub(this LlmAgent agent, HubConnection hub)
+    public static async Task<HubConnection> ConfigureAgentHub(this LlmAgent agent, Uri agentManagerUrl, IAgentCommunication agentCommunication)
     {
+        var hubUrl = new Uri(agentManagerUrl, "hubs/agent");
+        var hub = new HubConnectionBuilder()
+            .WithUrl(hubUrl, options =>
+            {
+                options.AccessTokenProvider = () =>
+                {
+                    return Task.Run(async () =>
+                    {
+                        return await Login.GetHubLoginToken(agentCommunication, agentManagerUrl, CancellationToken.None);
+                    });
+                };
+            })
+            .WithAutomaticReconnect()
+            .Build();
+
+        await hub.StartAsync(CancellationToken.None);
+
         agent.PreWaitForContent += async () =>
         {
             await hub.InvokeAsync("UpdateStatus", agent.Session.SessionId, "WAITING", CancellationToken.None);
@@ -35,5 +54,7 @@ public static class AgentExtensions
         };
 
         await hub.InvokeAsync("Register", agent.Id, agent.Session.SessionId, agent.Persistent, CancellationToken.None);
+
+        return hub;
     }
 }

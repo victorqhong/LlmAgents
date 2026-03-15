@@ -32,7 +32,7 @@ internal class DefaultCommand : RootCommand
         var agentsConfigValue = parseResult.GetValue(XmppOptions.AgentsConfig);
         if (string.IsNullOrEmpty(agentsConfigValue) || !File.Exists(agentsConfigValue))
         {
-            Console.WriteLine("agentsConfig is invalid or does not exist");
+            logger.LogError("agentsConfig is invalid or does not exist");
             return;
         }
 

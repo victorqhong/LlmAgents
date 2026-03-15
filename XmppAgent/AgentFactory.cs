@@ -1,12 +1,10 @@
 using LlmAgents.Agents;
 using LlmAgents.Agents.Work;
-using LlmAgents.Api.GitHub;
 using LlmAgents.Configuration;
 using LlmAgents.Extensions;
 using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.State;
 using LlmAgents.Tools;
-using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using XmppAgent.Communication;
 
@@ -46,23 +44,7 @@ internal static class AgentFactory
 
             if (agentParameters.AgentManagerUrl != null)
             {
-                var hubUrl = new Uri(agentParameters.AgentManagerUrl, "hubs/agent");
-                var hub = new HubConnectionBuilder()
-                    .WithUrl(hubUrl, options =>
-                    {
-                        options.AccessTokenProvider = () =>
-                        {
-                            return Task.Run(async () =>
-                            {
-                                return await Login.GetHubLoginToken(xmppCommunication, agentParameters.AgentManagerUrl, cancellationToken);
-                            });
-                        };
-                    })
-                    .WithAutomaticReconnect()
-                    .Build();
-
-                await hub.StartAsync(cancellationToken);
-                await agent.ConfigureAgentHub(hub);
+                await agent.ConfigureAgentHub(agentParameters.AgentManagerUrl, xmppCommunication);
             }
 
             await agent.Run(cancellationToken);
