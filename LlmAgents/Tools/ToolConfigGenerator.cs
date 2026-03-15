@@ -1,11 +1,11 @@
 using System.Reflection;
-using Newtonsoft.Json.Linq;
+using LlmAgents.Configuration;
 
 namespace LlmAgents.Tools;
 
 public static class ToolsConfigGenerator
 {
-    public static JObject? GenerateToolConfig(string assemblyPath)
+    public static ToolsConfig? GenerateToolConfig(string assemblyPath)
     {
         if (!File.Exists(assemblyPath))
         {
@@ -44,7 +44,15 @@ public static class ToolsConfigGenerator
             parameters = new Dictionary<string, string>()
         };
 
-        return JObject.FromObject(config);
+        return new ToolsConfig
+        {
+            Assemblies = new Dictionary<string, string>
+            {
+                { assemblyDisplayName, assemblyPath }
+            },
+            Types = toolTypes.Select(t => t.AssemblyQualifiedName!).ToList(),
+            Parameters = [] 
+        };
     }
 
     private static Type? FindToolBaseType(Assembly assembly)

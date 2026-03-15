@@ -1,8 +1,9 @@
 namespace LlmAgents.Tools;
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
-using Newtonsoft.Json.Linq;
-using System;
 
 public abstract class Tool
 {
@@ -13,23 +14,17 @@ public abstract class Tool
         this.toolFactory = toolFactory;
     }
 
-    public abstract JObject Schema { get; protected set; }
+    public abstract ChatCompletionFunctionTool Schema { get; protected set; }
 
     public string Name
     {
         get
         {
-            var name = Schema["function"]?["name"]?.Value<string>();
-            if (string.IsNullOrEmpty(name))
-            {
-                throw new NullReferenceException();
-            }
-
-            return name;
+            return Schema.Function.Name;
         }
     }
 
-    public abstract Task<JToken> Function(Session session, JObject parameters);
+    public abstract Task<JsonNode> Function(Session session, JsonDocument parameters);
 
     public virtual void Save(Session session, StateDatabase stateDatabase) { }
 

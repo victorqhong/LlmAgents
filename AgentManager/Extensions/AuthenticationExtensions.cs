@@ -201,7 +201,7 @@ public static class AuthenticationExtensions
 
             var refreshTokenService = httpContext.RequestServices.GetRequiredService<RefreshTokenService>();
             var token = await refreshTokenService.FindAsync(hash);
-            if (token == null)
+            if (token == null || token.User == null)
             {
                 return Results.BadRequest();
             }

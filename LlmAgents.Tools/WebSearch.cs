@@ -1,8 +1,12 @@
 ﻿namespace LlmAgents.Tools;
 
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
-using Newtonsoft.Json.Linq;
 using System;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 public class WebSearch : Tool
 {
@@ -17,37 +21,27 @@ public class WebSearch : Tool
         baseUrl = toolFactory.GetParameter("WebSearch.BaseUrl") ?? "https://api.tavily.com/search";
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "web_search",
-            description = "Search the web using a query",
-            parameters = new
+            Name = "web_search",
+            Description = "Search the web using a query",
+            Parameters = new()
             {
-                type = "object",
-                properties = new
+                Properties = new()
                 {
-                    query = new
-                    {
-                        type = "string",
-                        description = "A query to search"
-                    },
-                    count = new
-                    {
-                        type = "number",
-                        description = "The integer number of results to return (default 5)"
-                    }
+                    { "query", new() { Type = "string", Description = "A query to search" } },
+                    { "count", new() { Type = "number", Description = "The integer number of results to return (default 5)" } },
                 },
-                required = new[] { "query" }
+                Required = ["query"]
             }
         }
-    });
+    };
 
-    public async override Task<JToken> Function(Session session, JObject parameters)
+    public async override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
         if (string.IsNullOrEmpty(apiKey))
         {
@@ -55,23 +49,25 @@ public class WebSearch : Tool
             return result;
         }
 
-        var query = parameters["query"]?.ToString();
-        if (string.IsNullOrEmpty(query))
+        if (!parameters.TryGetValueString("query", string.Empty, out var query) || string.IsNullOrEmpty(query))
         {
             result.Add("error", "query is null or empty");
             return result;
         }
 
-        var count = parameters["count"]?.Value<int>() ?? 5;
+        if (!parameters.TryGetValueInt("count", out var count))
+        {
+            count = 5;
+        }
 
         try
         {
-            JObject? response = null;
+            JsonDocument? response = null;
             using (var httpClient = new HttpClient())
             {
                 var httpRequest = new HttpRequestMessage(HttpMethod.Post, baseUrl);
                 httpRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
-                httpRequest.Content = new StringContent(JObject.FromObject(new { query, max_results = count }).ToString(), System.Text.Encoding.UTF8, "application/json");
+                httpRequest.Content = JsonContent.Create(new { query, max_results = count });
 
                 var httpResponse = httpClient.Send(httpRequest);
                 httpResponse.EnsureSuccessStatusCode();
@@ -83,7 +79,7 @@ public class WebSearch : Tool
                     return result;
                 }
 
-                response = JObject.Parse(content);
+                response = JsonDocument.Parse(content);
             }
 
             if (response == null)
@@ -92,25 +88,25 @@ public class WebSearch : Tool
                 return result;
             }
 
-            if (!response.ContainsKey("results") || response.Value<JArray>("results") is not JArray results)
+            if (!response.RootElement.TryGetProperty("results", out var results))
             {
                 result.Add("error", "could not parse results");
                 return result;
             }
 
-            var searchResults = new JArray();
-            foreach (var searchResult in results)
+            var searchResults = new JsonArray();
+            foreach (var searchResult in results.EnumerateArray())
             {
-                var title = searchResult.Value<string>("title");
-                var url = searchResult.Value<string>("url");
-                var content = searchResult.Value<string>("content");
+                var title = searchResult.GetProperty("title").GetString();
+                var url = searchResult.GetProperty("url").GetString();
+                var content = searchResult.GetProperty("content").GetString();
 
                 if (string.IsNullOrEmpty(title) || string.IsNullOrEmpty(url) || string.IsNullOrEmpty(content))
                 {
                     continue;
                 }
 
-                searchResults.Add(JObject.FromObject(new { title, url, content }));
+                searchResults.Add(JsonSerializer.SerializeToNode(new { title, url, content }));
             }
 
             return searchResults;

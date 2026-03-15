@@ -1,23 +1,25 @@
 namespace LlmAgents.Tools;
 
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
-using Newtonsoft.Json.Linq;
 using System;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 public class GenericTool : Tool
 {
-    private readonly Func<Session, JObject, Task<JToken>> function;
+    private readonly Func<Session, JsonDocument, Task<JsonNode>> function;
 
-    public GenericTool(JObject schema, Func<Session, JObject, Task<JToken>> function, ToolFactory toolFactory)
+    public GenericTool(ChatCompletionFunctionTool schema, Func<Session, JsonDocument, Task<JsonNode>> function, ToolFactory toolFactory)
         : base(toolFactory)
     {
         Schema = schema;
         this.function = function;
     }
 
-    public override JObject Schema { get; protected set; }
+    public override ChatCompletionFunctionTool Schema { get; protected set; }
 
-    public override async Task<JToken> Function(Session session, JObject parameters)
+    public override async Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
         return await function(session, parameters);
     }

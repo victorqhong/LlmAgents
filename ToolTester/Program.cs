@@ -1,11 +1,11 @@
 ﻿using LlmAgents.Communication;
+using LlmAgents.Configuration;
 using LlmAgents.LlmApi;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 using System.CommandLine;
-
+using System.Text.Json;
 using Options = LlmAgents.CommandLineParser.Options;
 
 var rootCommand = new RootCommand("XmppAgent");
@@ -28,7 +28,6 @@ static async Task RootCommandHandler(ParseResult parseResult, CancellationToken 
     using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
     var toolEventBus = new ToolEventBus();
-    var toolsFile = JObject.Parse(File.ReadAllText(toolsConfigValue));
     var toolFactory = new ToolFactory(loggerFactory);
 
     var stateDatabase = new StateDatabase(loggerFactory, ":memory:");
@@ -40,6 +39,13 @@ static async Task RootCommandHandler(ParseResult parseResult, CancellationToken 
     toolFactory.Register(stateDatabase);
 
     toolFactory.AddParameter("basePath", workingDirectoryValue);
+
+    var toolsFile = JsonSerializer.Deserialize<ToolsConfig>(File.ReadAllText(toolsConfigValue));
+    if (toolsFile == null)
+    {
+        Console.Error.WriteLine("Tools could not be created");
+        return;
+    }
 
     var tools = toolFactory.Load(toolsFile);
     if (tools == null || tools.Length == 0)
@@ -77,14 +83,14 @@ static async Task RootCommandHandler(ParseResult parseResult, CancellationToken 
         
         toolChoice -= 1;
 
-        Console.WriteLine(tools[toolChoice].Schema);
+        Console.WriteLine(JsonSerializer.Serialize(tools[toolChoice].Schema));
         Console.WriteLine();
 
         Console.Write("Tool parameters (JSON)> ");
         var toolParametersInput = Console.ReadLine();
         if (!string.IsNullOrEmpty(toolParametersInput))
         {
-            var toolParameters = JObject.Parse(toolParametersInput);
+            var toolParameters = JsonDocument.Parse(toolParametersInput);
             var toolOutput = await tools[toolChoice].Function(session, toolParameters);
             Console.WriteLine(toolOutput);
         }

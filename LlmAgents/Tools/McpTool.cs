@@ -1,8 +1,10 @@
 namespace LlmAgents.Tools;
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
 using ModelContextProtocol.Client;
-using Newtonsoft.Json.Linq;
 
 public class McpTool : Tool
 {
@@ -16,29 +18,28 @@ public class McpTool : Tool
         this.mcpClientTool = mcpClientTool;
         this.mcpClient = mcpClient;
 
-        Schema = new JObject
+        Schema = new ChatCompletionFunctionTool
         {
-            { "type", "function" },
-            { "function", new JObject()
-                {
-                    { "name", mcpClientTool.Name },
-                    { "description", mcpClientTool.Description },
-                    { "parameters", JObject.Parse(mcpClientTool.JsonSchema.ToString()) }
-                }
+            Type = "function",
+            Function = new ChatCompletionFunctionDefinition
+            {
+                Name = mcpClientTool.Name,
+                Description = mcpClientTool.Description,
+                Parameters = mcpClientTool.JsonSchema.Deserialize<ChatCompletionFunctionParameters>()
             }
         };
     }
 
-    public override JObject Schema { get; protected set; }
+    public override ChatCompletionFunctionTool Schema { get; protected set; }
 
-    public override async Task<JToken> Function(Session session, JObject parameters)
+    public override async Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var arguments = parameters.ToObject<IReadOnlyDictionary<string, object?>>();
+        var arguments = parameters.Deserialize<IReadOnlyDictionary<string, object?>>();
         var toolCallResult = await mcpClient.CallToolAsync(mcpClientTool.Name, arguments);
 
         if (toolCallResult.StructuredContent != null)
         {
-            return JToken.Parse(toolCallResult.StructuredContent.ToString());
+            return toolCallResult.StructuredContent;
         }
         else
         {

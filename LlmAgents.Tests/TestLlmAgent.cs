@@ -1,13 +1,14 @@
-﻿using LlmAgents.Agents;
+﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
+using LlmAgents.Agents;
 using LlmAgents.Agents.Work;
-using LlmAgents.LlmApi;
+using LlmAgents.LlmApi.OpenAi;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.Tests.Communication;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace LlmAgents.Tests;
 
@@ -46,6 +47,7 @@ public sealed class TestLlmAgent
         var cts = new CancellationTokenSource();
         cts.CancelAfter(15_000);
 
+        var loggerFactory = new LoggerFactory();
         var agent = CreateAgent(out var communication);
 
         var messages = agent.RenderConversation();
@@ -55,12 +57,12 @@ public sealed class TestLlmAgent
         var userInputWork = await agent.RunWork(new GetUserInputWork(agent), null, cts.Token);
         messages = agent.RenderConversation();
         Assert.AreEqual(1, messages.Count);
-        Assert.AreEqual("user", messages[0].Value<string>("role"));
+        Assert.AreEqual("user", messages[0].Role);
 
-        await agent.RunWork(new GetAssistantResponseWork(agent), userInputWork, cts.Token);
+        await agent.RunWork(new GetAssistantResponseWork(loggerFactory, agent), userInputWork, cts.Token);
         messages = agent.RenderConversation();
         Assert.AreEqual(2, messages.Count);
-        Assert.AreEqual("assistant", messages[1].Value<string>("role"));
+        Assert.AreEqual("assistant", messages[1].Role);
     }
 
     [TestMethod]
@@ -87,10 +89,10 @@ public sealed class TestLlmAgent
         messages = agent.RenderConversation();
         Assert.AreEqual(1, messages.Count);
 
-        var assistantResponse = await agent.RunWork(new GetAssistantResponseWork(agent), userInputWork, cts.Token);
+        var assistantResponse = await agent.RunWork(new GetAssistantResponseWork(loggerFactory, agent), userInputWork, cts.Token);
         messages = agent.RenderConversation();
         Assert.AreEqual(2, messages.Count);
         Assert.IsNotNull(assistantResponse.Parser);
-        Assert.AreEqual("tool_calls", assistantResponse.Parser.FinishReason);
+        Assert.AreEqual(ChatCompletionChoiceFinishReason.ToolCalls, assistantResponse.Parser.FinishReason);
     }
 }

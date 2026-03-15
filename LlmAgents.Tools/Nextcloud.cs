@@ -1,7 +1,5 @@
 namespace LlmAgents.Tools;
 
-using System;
-
 public abstract class Nextcloud : Tool
 {
     protected readonly string username;

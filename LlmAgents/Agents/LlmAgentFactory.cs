@@ -1,10 +1,12 @@
+using System.Text.Json;
 using LlmAgents.Communication;
-using LlmAgents.LlmApi;
+using LlmAgents.Configuration;
+using LlmAgents.LlmApi.OpenAi;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
-using Newtonsoft.Json.Linq;
 
 namespace LlmAgents.Agents;
 
@@ -68,65 +70,60 @@ public static class LlmAgentFactory
         }
         else if (!string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
         {
-            session.AddMessages([JObject.FromObject(new { role = "system", content = File.ReadAllText(sessionParameters.SystemPromptFile) })]);
+            var textContent = new ChatCompletionMessageParam
+            {
+                Role = "system",
+                Content = new ChatCompletionMessageParamContentString { Content = File.ReadAllText(sessionParameters.SystemPromptFile) },
+            };
+            session.AddMessages([textContent]);
         }
 
         agent.LoadSession(session, stateDatabase);
 
         List<Tool> tools = [];
 
-        if (File.Exists(toolParameters.McpConfigPath))
+        if (File.Exists(toolParameters.McpConfigPath) && JsonSerializer.Deserialize<McpConfig>(File.ReadAllText(toolParameters.McpConfigPath)) is McpConfig mcpConfig)
         {
-            var mcpJson = JObject.Parse(File.ReadAllText(toolParameters.McpConfigPath));
-            if (mcpJson.ContainsKey("servers") && mcpJson.Value<JObject>("servers") is JObject servers)
+            foreach (var kvp in mcpConfig.Servers)
             {
-                foreach (var property in servers.Properties())
+                var mcpServer = kvp.Value;
+                if (mcpServer is McpServerConfigHttp httpMcpServer)
                 {
-                    if (property.Value is not JObject server)
+                    if (!Uri.TryCreate(httpMcpServer.Url, UriKind.Absolute, out var toolServerUri))
                     {
                         continue;
                     }
 
-                    var type = server.Value<string>("type");
-                    if (string.Equals(type, "http") && server.ContainsKey("url") && server.Value<string>("url") is string url)
+                    var httpClient = new HttpClient();
+                    if (httpMcpServer.Headers != null)
                     {
-                        if (!Uri.TryCreate(url, UriKind.Absolute, out var toolServerUri))
+                        foreach (var header in httpMcpServer.Headers)
                         {
-                            continue;
+                            httpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
                         }
-
-                        var httpClient = new HttpClient();
-                        if (server.ContainsKey("headers") && server.Value<JObject>("headers") is JObject headers)
-                        {
-                            foreach (var header in headers.Properties())
-                            {
-                                httpClient.DefaultRequestHeaders.Add(header.Name, header.Value.Value<string>());
-                            }
-                        }
-
-                        httpClient.DefaultRequestHeaders.Add("X-Session-Id", session.SessionId);
-                        httpClient.DefaultRequestHeaders.Add("X-Agent-Id", agent.Id);
-
-                        var clientTransport = new SseClientTransport(
-                            new SseClientTransportOptions { Endpoint = toolServerUri },
-                            httpClient
-                        );
-
-                        var toolFactory = new ToolFactory(loggerFactory);
-                        tools.AddRange(await CreateMcpTools(clientTransport, toolFactory));
                     }
-                    else if (string.Equals(type, "stdio") && server.Value<string>("command") is string command && server.Value<JArray>("args") is JArray args)
+
+                    httpClient.DefaultRequestHeaders.Add("X-Session-Id", session.SessionId);
+                    httpClient.DefaultRequestHeaders.Add("X-Agent-Id", agent.Id);
+
+                    var clientTransport = new SseClientTransport(
+                        new SseClientTransportOptions { Endpoint = toolServerUri },
+                        httpClient
+                    );
+
+                    var toolFactory = new ToolFactory(loggerFactory);
+                    tools.AddRange(await CreateMcpTools(clientTransport, toolFactory));
+                }
+                else if (mcpServer is McpServerConfigStdio stdioMcpServer)
+                {
+                    var stdioTransport = new StdioClientTransport(new StdioClientTransportOptions
                     {
-                        var arguments = args.Select(token => token.Value<string>() ?? "").ToList();
-                        var stdioTransport = new StdioClientTransport(new StdioClientTransportOptions
-                        {
-                            Command = command,
-                            Arguments = arguments
-                        });
+                        Command = stdioMcpServer.Command,
+                        Arguments = stdioMcpServer.Args 
+                    });
 
-                        var toolFactory = new ToolFactory(loggerFactory);
-                        tools.AddRange(await CreateMcpTools(stdioTransport, toolFactory));
-                    }
+                    var toolFactory = new ToolFactory(loggerFactory);
+                    tools.AddRange(await CreateMcpTools(stdioTransport, toolFactory));
                 }
             }
         }
@@ -134,7 +131,6 @@ public static class LlmAgentFactory
         if (!string.IsNullOrEmpty(toolParameters.ToolsConfig) && File.Exists(toolParameters.ToolsConfig))
         {
             var toolEventBus = new ToolEventBus();
-            var toolsFile = JObject.Parse(File.ReadAllText(toolParameters.ToolsConfig));
             var toolFactory = new ToolFactory(loggerFactory);
 
             toolFactory.Register(agentCommunication);
@@ -145,10 +141,10 @@ public static class LlmAgentFactory
             toolFactory.AddParameter("basePath", sessionParameters.WorkingDirectory);
             toolFactory.AddParameter("storageDirectory", llmAgentParameters.StorageDirectory);
 
-            var localTools = toolFactory.Load(toolsFile, session, stateDatabase);
-            if (localTools != null)
+            var toolsFile = JsonSerializer.Deserialize<ToolsConfig>(File.ReadAllText(toolParameters.ToolsConfig));
+            if (toolsFile != null)
             {
-                tools.AddRange(localTools);
+                tools.AddRange(toolFactory.Load(toolsFile, session, stateDatabase));
             }
 
             agent.ToolEventBus = toolEventBus;

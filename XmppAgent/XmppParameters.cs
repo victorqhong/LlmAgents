@@ -1,16 +1,11 @@
-﻿using Newtonsoft.Json.Linq;
-using System.CommandLine;
+﻿using System.CommandLine;
+using System.Text.Json;
+using LlmAgents.Configuration;
 namespace XmppAgent;
 
-public class XmppParameters
+public static class XmppParameterParser
 {
-    public required string XmppTargetJid;
-    public required string XmppDomain;
-    public required string XmppUsername;
-    public required string XmppPassword;
-    public bool XmppTrustHost = false;
-
-    public static XmppParameters? ParseXmppParameters(ParseResult parseResult)
+    public static XmppConfig? ParseXmppParameters(ParseResult parseResult)
     {
         string? xmppDomain = null;
         string? xmppUsername = null;
@@ -21,14 +16,14 @@ public class XmppParameters
         var xmppConfigValue = parseResult.GetValue(Options.XmppConfig);
         if (!string.IsNullOrEmpty(xmppConfigValue) && File.Exists(xmppConfigValue))
         {
-            var xmppConfig = JObject.Parse(File.ReadAllText(xmppConfigValue));
+            var xmppConfig = JsonSerializer.Deserialize<XmppConfig>(File.ReadAllText(xmppConfigValue));
             if (xmppConfig != null)
             {
-                xmppDomain = xmppConfig.Value<string>("xmppDomain");
-                xmppUsername = xmppConfig.Value<string>("xmppUsername");
-                xmppPassword = xmppConfig.Value<string>("xmppPassword");
-                xmppTargetJid = xmppConfig.Value<string>("xmppTargetJid");
-                xmppTrustHost = xmppConfig.Value<bool>("xmppTrustHost");
+                xmppDomain = xmppConfig.XmppDomain;
+                xmppUsername = xmppConfig.XmppUsername;
+                xmppPassword = xmppConfig.XmppPassword;
+                xmppTargetJid = xmppConfig.XmppTargetJid;
+                xmppTrustHost = xmppConfig.XmppTrustHost;
             }
         }
         else
@@ -46,7 +41,7 @@ public class XmppParameters
             return null;
         }
 
-        return new XmppParameters
+        return new XmppConfig
         {
             XmppDomain = xmppDomain,
             XmppUsername = xmppUsername,

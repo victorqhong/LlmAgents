@@ -1,15 +1,12 @@
 namespace LlmAgents.Agents.Work;
 
-using LlmAgents.LlmApi;
+using System.Text.Json;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 public class ToolCalls : LlmAgentWork
 {
     private readonly ILogger logger;
-
-    public LlmApiOpenAiStreamingCompletionParser? Parser { get; private set; }
 
     public ToolCalls(ILoggerFactory loggerFactory, LlmAgent agent)
         : base(agent)
@@ -17,104 +14,68 @@ public class ToolCalls : LlmAgentWork
         logger = loggerFactory.CreateLogger(nameof(ToolCalls));
     }
 
-    public override Task<ICollection<JObject>?> GetState(CancellationToken ct)
+    public override Task<ICollection<ChatCompletionMessageParam>?> GetState(CancellationToken ct)
     {
-        return Task.FromResult<ICollection<JObject>?>(null);
+        return Task.FromResult<ICollection<ChatCompletionMessageParam>?>(null);
     }
 
     public async override Task Run(CancellationToken cancellationToken)
     {
         var conversation = agent.RenderConversation();
-        Messages = await ProcessToolCalls(conversation);
-    }
-
-    private async Task<ICollection<JObject>?> ProcessToolCalls(List<JObject> messages)
-    {
-        var toolCalls = messages[^1].Value<JArray>("tool_calls");
-        if (toolCalls == null)
+        if (conversation.Count < 1)
         {
-            return null;
+            return;
         }
 
-        var toolMessages = new List<JObject>(); 
-        foreach (JObject toolCall in toolCalls.Cast<JObject>())
+        if (conversation[^1] is not ChatCompletionMessageParamAssistant assistantMessage)
         {
-            var id = toolCall.Value<string>("id");
+            return;
+        }
 
-            var function = toolCall.Value<JObject>("function");
-            if (function == null)
-            {
-                toolMessages.Add(JObject.FromObject(new
-                {
-                    role = "tool",
-                    tool_call_id = id,
-                    content = $"Invalid tool call: tool call does not contain 'function' property"
-                }));
+        Messages = await ProcessToolCalls(assistantMessage, cancellationToken);
+    }
 
-                continue;
-            }
+    private async Task<ICollection<ChatCompletionMessageParam>?> ProcessToolCalls(ChatCompletionMessageParamAssistant assistantMessage, CancellationToken cancellationToken)
+    {
+        if (assistantMessage.ToolCalls == null)
+        {
+            return [];
+        }
 
-            var name = function.Value<string>("name");
-            if (string.IsNullOrEmpty(name))
-            {
-                toolMessages.Add(JObject.FromObject(new
-                {
-                    role = "tool",
-                    tool_call_id = id,
-                    name,
-                    content = $"Invalid tool call: tool call does not contain 'name' property"
-                }));
-
-                continue;
-            }
-
-            var arguments = function.Value<string>("arguments");
-            if (arguments == null)
-            {
-                toolMessages.Add(JObject.FromObject(new
-                {
-                    role = "tool",
-                    tool_call_id = id,
-                    name,
-                    content = $"Invalid tool call: tool call does not contain 'arguments' property"
-                }));
-
-                continue;
-            }
-
+        var toolMessages = new List<ChatCompletionMessageParam>(); 
+        foreach (var toolCall in assistantMessage.ToolCalls)
+        {
             string toolContent;
             try
             {
-                logger.LogInformation($"Calling tool '{name}' with arguments '{arguments}'");
+                logger.LogInformation("Calling tool '{name}' with arguments '{arguments}'", toolCall.Function.Name, toolCall.Function.Arguments);
 
-                var toolResult = await agent.CallTool(name, JObject.Parse(arguments));
+                var toolResult = await agent.CallTool(toolCall.Function.Name, JsonDocument.Parse(toolCall.Function.Arguments));
                 if (toolResult == null)
                 {
-                    toolMessages.Add(JObject.FromObject(new
+                    toolMessages.Add(new ChatCompletionMessageParamTool
                     {
-                        role = "tool",
-                        tool_call_id = id,
-                        name,
-                        content = $"Invalid tool call: tool {name} could not be found"
-                    }));
+                        Role = "tool",
+                        ToolCallId = toolCall.Id,
+                        Content = new ChatCompletionMessageParamContentString { Content = $"Invalid tool call: tool {toolCall.Function.Name} could not be found" },
+                    });
 
                     continue;
                 }
 
-                toolContent = JsonConvert.SerializeObject(toolResult);
+                toolContent = toolResult.ToJsonString();
             }
             catch (Exception ex)
             {
                 toolContent = $"Got exception: {ex.Message}";
             }
 
-            toolMessages.Add(JObject.FromObject(new
+            toolMessages.Add(new ChatCompletionMessageParamTool
             {
-                role = "tool",
-                tool_call_id = id,
-                name,
-                content = toolContent
-            }));
+                Role = "tool",
+                ToolCallId = toolCall.Id,
+                Content = new ChatCompletionMessageParamContentString { Content = toolContent },
+            });
         }
 
         return toolMessages;

@@ -1,8 +1,11 @@
-﻿using LlmAgents.LlmApi;
-using LlmAgents.State;
-using Newtonsoft.Json.Linq;
+﻿namespace LlmAgents.Tools;
 
-namespace LlmAgents.Tools;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.State;
 
 public class AgentContextPrune : Tool
 {
@@ -14,41 +17,39 @@ public class AgentContextPrune : Tool
         messageProvider = toolFactory.Resolve<ILlmApiMessageProvider>();
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "agent_context_prune",
-            description = "Prune the conversation context",
-            parameters = new
+            Name = "agent_context_prune",
+            Description = "Prune the conversation context",
+            Parameters = new()
             {
-                type = "object",
-                properties = new
+                Properties = new()
                 {
-                    messages_keep = new
-                    {
-                        type = "number",
-                        description = "The number of messages to keep"
-                    }
+                    { "messages_keep", new() { Type = "number", Description = "The number of messages to keep" } }
                 },
-                required = new[] { "messages_keep" }
+                Required = ["messages_keep"]
             }
         }
-    });
+    };
 
-    public override async Task<JToken> Function(Session session, JObject parameters)
+    public override async Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
-        var messagesKeep = parameters.Value<int?>("messages_keep");
-        if (messagesKeep == null)
+        if (!parameters.TryGetValueInt("messages_keep", out var messagesKeep))
         {
             result.Add("error", "messages_keep is null or invalid");
             return result;
         }
 
-        var messageCount = await messageProvider.CountMessages();
+        if (messagesKeep == null)
+        {
+            result.Add("error", "could not get value for messages_keep");
+            return result;
+        }
+
         result.Add("message_count_before", await messageProvider.CountMessages());
 
         try
@@ -61,7 +62,6 @@ public class AgentContextPrune : Tool
             result.Add("exception", e.Message);
         }
 
-        messageCount = await messageProvider.CountMessages();
         result.Add("message_count_after", await messageProvider.CountMessages());
 
         return result;

@@ -1,15 +1,15 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace LlmAgents.Api.GitHub;
 
 public class TokenResponse
 {
-    [JsonProperty("access_token")]
+    [JsonPropertyName("access_token")]
     public required string AccessToken;
 
-    [JsonProperty("token_type")]
+    [JsonPropertyName("token_type")]
     public required string TokenType;
 
-    [JsonProperty("scope")]
+    [JsonPropertyName("scope")]
     public required string Scope;
 }

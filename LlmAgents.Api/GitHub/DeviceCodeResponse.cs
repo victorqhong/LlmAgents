@@ -1,21 +1,21 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace LlmAgents.Api.GitHub;
 
 public class DeviceCodeResponse
 {
-    [JsonProperty("device_code")]
+    [JsonPropertyName("device_code")]
     public required string DeviceCode { get; set; }
 
-    [JsonProperty("user_code")]
+    [JsonPropertyName("user_code")]
     public required string UserCode { get; set; }
 
-    [JsonProperty("verification_uri")]
+    [JsonPropertyName("verification_uri")]
     public required string VerificationUri { get; set; }
 
-    [JsonProperty("expires_in")]
+    [JsonPropertyName("expires_in")]
     public required int ExpiresIn { get; set; }
 
-    [JsonProperty("interval")]
+    [JsonPropertyName("interval")]
     public required int Interval { get; set; }
 }

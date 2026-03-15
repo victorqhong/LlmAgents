@@ -1,6 +1,6 @@
-﻿using LlmAgents.State;
+﻿using LlmAgents.Configuration;
+using LlmAgents.State;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 using System.Reflection;
 
 namespace LlmAgents.Tools;
@@ -9,13 +9,13 @@ public class ToolFactory
 {
     private readonly ILogger log;
 
-    private readonly Dictionary<string, string> assemblyMap = new Dictionary<string, string>();
+    private readonly Dictionary<string, string> assemblyMap = [];
 
-    private readonly Dictionary<string, Assembly> assemblies = new Dictionary<string, Assembly>();
+    private readonly Dictionary<string, Assembly> assemblies = [];
 
-    private readonly Dictionary<Type, object> container = new Dictionary<Type, object>();
+    private readonly Dictionary<Type, object> container = [];
 
-    private readonly Dictionary<string, string> parameters = new Dictionary<string, string>();
+    private readonly Dictionary<string, string> parameters = [];
 
     public ToolFactory(ILoggerFactory loggerFactory)
     {
@@ -95,35 +95,22 @@ public class ToolFactory
         }
     }
 
-    public Tool[]? Load(JObject? toolDefinitions = null, Session? session = null, StateDatabase? stateDatabase = null)
+    public Tool[] Load(ToolsConfig toolsConfig, Session? session = null, StateDatabase? stateDatabase = null)
     {
-        if (toolDefinitions == null)
+        if (toolsConfig.Parameters != null)
         {
-            return null;
-        }
-
-        var toolParameters = toolDefinitions.Value<JObject>("parameters");
-        if (toolParameters != null)
-        {
-            foreach (var property in toolParameters.Properties())
+            foreach (var kvp in toolsConfig.Parameters)
             {
-                var value = property.Value.Value<string>();
-                if (string.IsNullOrEmpty(value))
-                {
-                    continue;
-                }
-
-                AddParameter(property.Name, value);
+                AddParameter(kvp.Key, kvp.Value);
             }
         }
 
-        var assemblies = toolDefinitions.Value<JObject>("assemblies");
-        if (assemblies != null)
+        if (toolsConfig.Assemblies != null)
         {
-            foreach (var assembly in assemblies.Properties())
+            foreach (var assembly in toolsConfig.Assemblies)
             {
-                var name = assembly.Name;
-                var path = assembly.Value.Value<string>();
+                var name = assembly.Key;
+                var path = assembly.Value;
 
                 if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(path))
                 {
@@ -134,27 +121,20 @@ public class ToolFactory
             }
         }
 
-        var types = toolDefinitions.Value<JArray>("types");
-        if (types == null)
+        var tools = new List<Tool>();
+        if (toolsConfig.Types == null)
         {
-            return null;
+            return [];
         }
 
-        var tools = new List<Tool>();
-        foreach (var type in types)
+        foreach (var type in toolsConfig.Types)
         {
-            var typeName = type.Value<string>();
-            if (string.IsNullOrEmpty(typeName))
-            {
-                continue;
-            }
+            var parts = type.Split(',', 2);
 
-            var parts = typeName.Split(',', 2);
-
-            typeName = parts[0].Trim();
+            var typeName = parts[0].Trim();
             var assemblyName = parts[1].Trim();
 
-            if (!this.assemblies.ContainsKey(assemblyName))
+            if (!assemblies.ContainsKey(assemblyName))
             {
                 if (!assemblyMap.ContainsKey(assemblyName))
                 {
@@ -179,15 +159,24 @@ public class ToolFactory
                         continue;
                     }
 
-                    var toolAssemblyInitType = assembly.GetTypes().FirstOrDefault(t => t.GetCustomAttribute<ToolAssemblyInitAttribute>() != null && typeof(IToolAssemblyInitializer).IsAssignableFrom(t));
-                    if (toolAssemblyInitType != null)
-                    {
-                        var toolAssemblyInit = Activator.CreateInstance(toolAssemblyInitType);
-                        var methodInfo = typeof(IToolAssemblyInitializer).GetMethod(nameof(IToolAssemblyInitializer.Initialize));
-                        methodInfo?.Invoke(toolAssemblyInit, [this]);
-                    }
+                    assemblies[assemblyName] = assembly;
 
-                    this.assemblies[assemblyName] = assembly;
+                    var toolAssemblyInitTypes = assembly.GetTypes() 
+                            .Where(t => t.GetCustomAttribute<ToolAssemblyInitAttribute>() != null && typeof(IToolAssemblyInitializer).IsAssignableFrom(t));
+                    foreach (var toolAssemblyInitType in toolAssemblyInitTypes)
+                    {
+                        if (toolAssemblyInitType == null)
+                        {
+                            continue;
+                        }
+
+                        if (Activator.CreateInstance(toolAssemblyInitType) is not IToolAssemblyInitializer toolAssemblyInit)
+                        {
+                            continue;
+                        }
+
+                        toolAssemblyInit.Initialize(this);
+                    }
                 }
                 catch (Exception e)
                 {
@@ -196,7 +185,7 @@ public class ToolFactory
                 }
             }
 
-            var toolType = this.assemblies[assemblyName].GetType(typeName);
+            var toolType = assemblies[assemblyName].GetType(typeName);
             if (toolType == null)
             {
                 log.LogError("Could not load type from assembly: {typeName}", typeName);

@@ -13,18 +13,21 @@ public static class LxcClientExtensions
         var apiConfigFile = builder.Configuration["Provisioning:ApiConfigFile"];
         var containerImage = builder.Configuration["Provisioning:ContainerImage"];
         var xmppTargetJid = builder.Configuration["Provisioning:XmppTargetJid"];
+        var agentManagerUrl = builder.Configuration["Provisioning:AgentManagerUrl"];
 
         ArgumentException.ThrowIfNullOrEmpty(userConfigFile);
         ArgumentException.ThrowIfNullOrEmpty(apiConfigFile);
         ArgumentException.ThrowIfNullOrEmpty(containerImage);
         ArgumentException.ThrowIfNullOrEmpty(xmppTargetJid);
+        ArgumentException.ThrowIfNullOrEmpty(agentManagerUrl);
 
         var provisioningOptions = new ProvisioningOptions
         {
             UserConfigFile = userConfigFile,
             ApiConfigFile = apiConfigFile,
             ContainerImage = containerImage,
-            XmppTargetJid = xmppTargetJid
+            XmppTargetJid = xmppTargetJid,
+            AgentManagerUrl = agentManagerUrl
         };
 
         builder.Services.AddSingleton(provisioningOptions);

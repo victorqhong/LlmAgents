@@ -1,9 +1,13 @@
 namespace LlmAgents.Tools;
 
-using Newtonsoft.Json.Linq;
-using LlmAgents.Tools.Todo;
 using System;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
+using LlmAgents.Tools.Todo;
+
 public class TodoDelete : Tool
 {
     private readonly TodoDatabase todoDatabase;
@@ -14,50 +18,39 @@ public class TodoDelete : Tool
         todoDatabase = toolFactory.Resolve<TodoDatabase>();
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "todo_delete",
-            description = "Delete a todo",
-            parameters = new
+            Name = "todo_delete",
+            Description = "Delete a todo",
+            Parameters = new()
             {
-                type = "object",
-                properties = new
+
+                Properties = new()
                 {
-                    title = new
-                    {
-                        type = "string",
-                        description = "Title of the todo"
-                    },
-                    group = new
-                    {
-                        type = "string",
-                        description = "Name of the that contains this todo"
-                    }
+                    { "title", new() { Type = "string", Description = "Title of the todo" } },
+                    { "group", new() { Type = "string", Description = "Name of the that contains this todo" } }
                 },
-                required = new[] { "title", "group" }
+                Required = [ "title", "group" ]
             }
         }
-    });
+    };
 
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
-        var title = parameters["title"]?.ToString();
-        if (string.IsNullOrEmpty(title))
+        if (!parameters.TryGetValueString("title", string.Empty, out var title) || string.IsNullOrEmpty(title))
         {
             result.Add("error", "title is null or empty");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
-        var group = parameters["group"]?.ToString();
-        if (string.IsNullOrEmpty(group))
+        if (!parameters.TryGetValueString("group", string.Empty, out var group) || string.IsNullOrEmpty(group))
         {
             result.Add("error", "group is null or empty");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
         try
@@ -70,6 +63,6 @@ public class TodoDelete : Tool
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 }

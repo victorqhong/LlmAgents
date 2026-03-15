@@ -1,9 +1,12 @@
 namespace LlmAgents.Tools;
 
-using LlmAgents.State;
-using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.State;
 
 public class FileRead : Tool
 {
@@ -26,9 +29,9 @@ public class FileRead : Tool
 
     private Task OnChangeDirectory(ToolEvent e)
     {
-        if (e is ToolCallEvent tce)
+        if (e is ToolCallEvent tce && tce.Result.AsObject() is JsonObject jsonObject && jsonObject.TryGetPropertyValue("currentDirectory", out var property))
         {
-            currentDirectory = tce.Result.Value<string>("currentDirectory") ?? currentDirectory;
+            currentDirectory = property?.GetValue<string>() ?? currentDirectory;
         }
         else if (e is Events.ChangeDirectoryEvent cde)
         {
@@ -38,38 +41,31 @@ public class FileRead : Tool
         return Task.CompletedTask;
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "file_read",
-            description = "Read the string contents of the file at the specified path",
-            parameters = new
+            Name = "file_read",
+            Description = "Read the string contents of the file at the specified path",
+            Parameters = new()
             {
-                type = "object",
-                properties = new
+                Properties = new()
                 {
-                    path = new
-                    {
-                        type = "string",
-                        description = "The path of the file to write"
-                    }
+                    { "path", new() { Type = "string", Description = "The path of the file to write" } }
                 },
-                required = new[] { "path" }
+                Required = ["path"]
             }
         }
-    });
+    };
 
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
-        var path = parameters["path"]?.ToString();
-        if (string.IsNullOrEmpty(path))
+        if (!parameters.TryGetValueString("path", string.Empty, out var path) || string.IsNullOrEmpty(path))
         {
             result.Add("error", "path is null or empty");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
         try
@@ -84,13 +80,13 @@ public class FileRead : Tool
             if (restrictToBasePath && !path.StartsWith(basePath))
             {
                 result.Add("error", $"files outside {basePath} can not be read");
-                return Task.FromResult<JToken>(result);
+                return Task.FromResult<JsonNode>(result);
             }
 
             if (!File.Exists(path))
             {
                 result.Add("error", $"file at {path} does not exist or cannot be read");
-                return Task.FromResult<JToken>(result);
+                return Task.FromResult<JsonNode>(result);
             }
 
             var text = File.ReadAllText(path);
@@ -101,6 +97,6 @@ public class FileRead : Tool
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 }

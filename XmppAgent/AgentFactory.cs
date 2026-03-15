@@ -1,8 +1,9 @@
 using LlmAgents.Agents;
 using LlmAgents.Agents.Work;
 using LlmAgents.Api.GitHub;
+using LlmAgents.Configuration;
 using LlmAgents.Extensions;
-using LlmAgents.LlmApi;
+using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -13,7 +14,7 @@ namespace XmppAgent;
 
 internal static class AgentFactory
 {
-    public static async Task RunAgent(LlmApiOpenAiParameters apiParameters, LlmAgentParameters agentParameters, ToolParameters toolParameters, SessionParameters sessionParameters, XmppParameters xmppParameters, CancellationToken cancellationToken = default)
+    public static async Task RunAgent(LlmApiOpenAiParameters apiParameters, LlmAgentParameters agentParameters, ToolParameters toolParameters, SessionParameters sessionParameters, XmppConfig xmppParameters, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -36,7 +37,7 @@ internal static class AgentFactory
 
             agent.CreateAssistantResponseWork = agent =>
             {
-                return new GetAssistantResponseWork(agent)
+                return new GetAssistantResponseWork(loggerFactory, agent)
                 {
                     AssistantMessagePrefix = string.Empty,
                     OutputNewLine = false

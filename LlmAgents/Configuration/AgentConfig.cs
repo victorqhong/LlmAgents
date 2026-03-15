@@ -8,4 +8,5 @@ public class AgentConfig
     public required bool Persistent { get; set; }
     public required string WorkingDirectory { get; set; }
     public required string AgentDirectory { get; set; }
+    public string? SystemPromptFile { get; set; }
 }

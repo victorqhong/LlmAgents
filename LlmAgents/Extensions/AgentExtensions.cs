@@ -1,6 +1,6 @@
+using System.Text.Json;
 using LlmAgents.Agents;
 using Microsoft.AspNetCore.SignalR.Client;
-using Newtonsoft.Json;
 
 namespace LlmAgents.Extensions;
 
@@ -27,7 +27,7 @@ public static class AgentExtensions
                 return;
             }
 
-            await hub.InvokeAsync("AddMessages", agent.Session.SessionId, JsonConvert.SerializeObject(work.Messages), CancellationToken.None);
+            await hub.InvokeAsync("AddMessages", agent.Session.SessionId, JsonSerializer.Serialize(work.Messages), CancellationToken.None);
         };
         agent.PostReceiveContent += async () =>
         {

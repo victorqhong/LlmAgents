@@ -1,7 +1,10 @@
-using Newtonsoft.Json.Linq;
-using LlmAgents.State;
-
 namespace LlmAgents.Tools.BackgroundJob;
+
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.State;
 
 public class JobOutputTool : Tool
 {
@@ -10,58 +13,55 @@ public class JobOutputTool : Tool
     public JobOutputTool(ToolFactory toolFactory) : base(toolFactory)
     {
         jobManager = toolFactory.Resolve<JobManager>();
-        Schema = new JObject
-        {
-            ["type"] = "function",
-            ["function"] = new JObject
-            {
-                ["name"] = "job_output",
-                ["description"] = "Retrieve the captured stdout/stderr of a background job.",
-                ["parameters"] = new JObject
-                {
-                    ["type"] = "object",
-                    ["properties"] = new JObject
-                    {
-                        ["job_id"] = new JObject
-                        {
-                            ["type"] = "string",
-                            ["description"] = "Identifier returned by start_job."
-                        },
-                        ["max_bytes"] = new JObject
-                        {
-                            ["type"] = "integer",
-                            ["description"] = "Maximum number of bytes to return (optional)."
-                        }
-                    },
-                    ["required"] = new JArray { "job_id" }
-                }
-            }
-        };
     }
 
-    public override JObject Schema { get; protected set; }
-
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        var jobIdStr = parameters["job_id"]?.ToString();
-        if (!Guid.TryParse(jobIdStr, out var jobId))
+        Function = new() 
         {
-            return Task.FromResult<JToken>(new JObject { ["error"] = "invalid job_id" });
+            Name = "job_output",
+            Description = "Retrieve the captured stdout/stderr of a background job.",
+            Parameters = new()
+            {
+                Properties = new()
+                {
+                    { "job_id", new() { Type = "string", Description = "Identifier returned by start_job." } },
+                    { "max_bytes", new() { Type = "integer", Description = "Maximum number of bytes to return (optional)." } },
+                },
+                Required = ["job_id"]
+            }
         }
+    };
+
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
+    {
+        var result = new JsonObject();
+
+        if (!parameters.TryGetValueString("job_id", string.Empty, out var jobIdStr) || !Guid.TryParse(jobIdStr, out var jobId))
+        {
+            result.Add("error", "invalid job_id");
+            return Task.FromResult<JsonNode>(result);
+        }
+
         var info = jobManager.Get(jobId);
         if (info == null)
         {
-            return Task.FromResult<JToken>(new JObject { ["error"] = "job not found" });
+            result.Add("error", "job not found");
+            return Task.FromResult<JsonNode>(result);
         }
+
         var output = info.Output.ToString();
-        if (parameters["max_bytes"] != null && int.TryParse(parameters["max_bytes"]?.ToString(), out var max))
+        if (parameters.TryGetValueInt("max_bytes", out var maxBytes))
         {
             var bytes = System.Text.Encoding.UTF8.GetBytes(output);
-            if (bytes.Length > max)
+            if (bytes.Length > maxBytes)
             {
-                output = System.Text.Encoding.UTF8.GetString(bytes, 0, max);
+                output = System.Text.Encoding.UTF8.GetString(bytes, 0, maxBytes.Value);
             }
         }
-        return Task.FromResult<JToken>(new JObject { ["output"] = output });
+
+        result.Add("output", output);
+
+        return Task.FromResult<JsonNode>(result);
     }
 }

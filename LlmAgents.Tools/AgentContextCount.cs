@@ -1,8 +1,10 @@
-﻿using LlmAgents.LlmApi;
-using LlmAgents.State;
-using Newtonsoft.Json.Linq;
+﻿namespace LlmAgents.Tools;
 
-namespace LlmAgents.Tools;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.LlmApi;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.State;
 
 public class AgentContextCount : Tool
 {
@@ -14,24 +16,23 @@ public class AgentContextCount : Tool
         messageProvider = toolFactory.Resolve<ILlmApiMessageProvider>();
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "agent_context_count",
-            description = "Count the number of messages in the conversation context",
-            parameters = new
+            Name = "agent_context_count",
+            Description = "Count the number of messages in the conversation context",
+            Parameters = new()
             {
-                type = "object",
-                properties = new {}
+                Properties = [],
+                Required = []
             }
         }
-    });
+    };
 
-    public override async Task<JToken> Function(Session session, JObject parameters)
+    public override async Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
         try
         {

@@ -6,4 +6,5 @@ public class ProvisioningOptions
     public required string ContainerImage { get; set; }
     public required string ApiConfigFile { get; set; }
     public required string XmppTargetJid { get; set; }
+    public required string AgentManagerUrl { get; set; }
 }

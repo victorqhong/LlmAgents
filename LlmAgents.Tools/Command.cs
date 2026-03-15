@@ -1,7 +1,8 @@
 namespace LlmAgents.Tools;
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using LlmAgents.State;
-using Newtonsoft.Json.Linq;
 
 public abstract class Command : Tool
 {
@@ -15,17 +16,17 @@ public abstract class Command : Tool
 
     public required string FileName { get; set; }
 
-    public required Func<JObject, string?> Arguments { get; set; }
+    public required Func<JsonDocument, string?> Arguments { get; set; }
 
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
         var arguments = Arguments(parameters);
         if (arguments == null)
         {
             result.Add("error", "arguments is null");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
         try
@@ -48,6 +49,6 @@ public abstract class Command : Tool
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 }

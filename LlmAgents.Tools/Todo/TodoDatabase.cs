@@ -265,14 +265,7 @@ public class TodoDatabase
                 using var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
-                    groupTodos.Add(new Todo
-                    {
-                        id = reader.GetInt32(0),
-                        groupId = reader.GetInt32(1),
-                        title = reader.GetString(2),
-                        description = reader.GetString(3),
-                        dueDate = reader.GetString(4),
-                        completed = reader.GetBoolean(5),
+                    groupTodos.Add(new Todo { id = reader.GetInt32(0), groupId = reader.GetInt32(1), title = reader.GetString(2), description = reader.GetString(3), dueDate = reader.GetString(4), completed = reader.GetBoolean(5),
                     });
                 }
             });
@@ -350,30 +343,9 @@ public class TodoDatabase
 
                     using var reader = command.ExecuteReader();
                     while (reader.Read())
-                    {
-                        var todoId = reader.GetInt32(0);
-                        var todoGroup = reader.GetInt32(1);
-                        var todoTitle = reader.GetString(2);
-                        var todoDescription = reader.GetString(3);
-                        var todoDueDate = reader.GetString(4);
-                        var todoCompleted = reader.GetBoolean(5);
-                        var todoPriority = reader.GetInt32(6);
-
-                        if (!groupTodos.TryGetValue(todoGroup, out List<Todo>? value))
-                        {
-                            value = [];
-                            groupTodos.Add(todoGroup, value);
-                        }
-
-                        value.Add(new Todo
-                        {
-                            id = todoId,
-                            groupId = todoGroup,
-                            title = todoTitle,
-                            description = todoDescription,
-                            dueDate = todoDueDate,
-                            completed = todoCompleted,
-                        });
+                    { var todoId = reader.GetInt32(0); var todoGroup = reader.GetInt32(1); var todoTitle = reader.GetString(2); var todoDescription = reader.GetString(3); var todoDueDate = reader.GetString(4); var todoCompleted = reader.GetBoolean(5); var todoPriority = reader.GetInt32(6);
+ if (!groupTodos.TryGetValue(todoGroup, out List<Todo>? value)) {     value = [];     groupTodos.Add(todoGroup, value); }
+ value.Add(new Todo {     id = todoId,     groupId = todoGroup,     title = todoTitle,     description = todoDescription,     dueDate = todoDueDate,     completed = todoCompleted, });
                     }
                 });
 
@@ -381,34 +353,12 @@ public class TodoDatabase
                 foreach (var kvp in groupTodos)
                 {
                     stateDatabase.Read(command =>
-                    {
-                        command.CommandText = "SELECT * FROM todo_groups WHERE id = $id AND session_id = $sessionId;";
-                        command.Parameters.AddWithValue("$id", kvp.Key);
-                        command.Parameters.AddWithValue("$sessionId", session.SessionId);
-
-                        using var reader = command.ExecuteReader();
-
-                        if (!reader.Read())
-                        {
-                            Log.LogInformation("Could not find group with id: {id}", kvp.Key);
-                            return;
-                        }
-
-                        var group = new TodoGroup
-                        {
-                            id = reader.GetInt32(0),
-                            name = reader.GetString(1),
-                            description = reader.GetString(2),
-                            todos = kvp.Value.ToArray()
-                        };
-
-                        if (reader.Read())
-                        {
-                            Log.LogInformation("More than one result found for id: {id}", kvp.Key);
-                            return;
-                        }
-
-                        groups.Add(group);
+                    { command.CommandText = "SELECT * FROM todo_groups WHERE id = $id AND session_id = $sessionId;"; command.Parameters.AddWithValue("$id", kvp.Key); command.Parameters.AddWithValue("$sessionId", session.SessionId);
+ using var reader = command.ExecuteReader();
+ if (!reader.Read()) {     Log.LogInformation("Could not find group with id: {id}", kvp.Key);     return; }
+ var group = new TodoGroup {     id = reader.GetInt32(0),     name = reader.GetString(1),     description = reader.GetString(2),     todos = kvp.Value.ToArray() };
+ if (reader.Read()) {     Log.LogInformation("More than one result found for id: {id}", kvp.Key);     return; }
+ groups.Add(group);
                     });
                 }
 
@@ -424,14 +374,7 @@ public class TodoDatabase
 
                     using var reader = command.ExecuteReader();
                     while (reader.Read())
-                    {
-                        groups.Add(new TodoGroup
-                        {
-                            id = reader.GetInt32(0),
-                            name = reader.GetString(1),
-                            description = reader.GetString(2),
-                            todos = []
-                        });
+                    { groups.Add(new TodoGroup {     id = reader.GetInt32(0),     name = reader.GetString(1),     description = reader.GetString(2),     todos = [] });
                     }
                 });
 

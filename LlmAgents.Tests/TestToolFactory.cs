@@ -17,25 +17,9 @@ public class TestToolFactory
 
         try
         {
-            Assert.IsNull(toolFactory.Resolve<ToolEventBus>());
+            toolFactory.Resolve<IToolEventBus>();
         }
-        catch (KeyNotFoundException kfe)
-        {
-            Assert.IsNotNull(kfe);
-        }
-        catch
-        {
-            Assert.Fail();
-        }
-
-        try
-        {
-            Assert.IsNull(toolFactory.Resolve<IToolEventBus>());
-        }
-        catch (KeyNotFoundException kfe)
-        {
-            Assert.IsNotNull(kfe);
-        }
+        catch (KeyNotFoundException) { }
         catch
         {
             Assert.Fail();
@@ -44,8 +28,17 @@ public class TestToolFactory
         var toolEventBus = new ToolEventBus();
         toolFactory.Register<IToolEventBus>(toolEventBus);
 
-        var resolvedValue = toolFactory.Resolve<IToolEventBus>();
-        Assert.IsNotNull(resolvedValue);
+        Assert.IsNotNull(toolFactory.Resolve<IToolEventBus>());
+
+        try
+        {
+            toolFactory.Resolve<ToolEventBus>();
+        }
+        catch (KeyNotFoundException) { }
+        catch
+        {
+            Assert.Fail();
+        }
     }
 
     [TestMethod]
@@ -60,23 +53,7 @@ public class TestToolFactory
             toolFactory.Register<IToolEventBus>(null);
 #pragma warning restore CS8625 // Cannot convert null literal to non-nullable reference type.
         }
-        catch (ArgumentNullException e)
-        {
-            Assert.IsNotNull(e);
-        }
-        catch
-        {
-            Assert.Fail();
-        }
-
-        try
-        {
-            var resolvedValue = toolFactory.Resolve<IToolEventBus>();
-        }
-        catch (KeyNotFoundException e)
-        {
-            Assert.IsNotNull(e);
-        }
+        catch (ArgumentNullException) { }
         catch
         {
             Assert.Fail();

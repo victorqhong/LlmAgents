@@ -1,6 +1,5 @@
-﻿using LlmAgents.LlmApi;
+﻿using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.Tools;
-using Newtonsoft.Json.Linq;
 using System.Runtime.InteropServices;
 
 namespace LlmAgents.CommandLineParser;
@@ -85,16 +84,18 @@ public static class Config
             return null;
         }
 
-        var apiConfig = new JObject
+        var apiConfig = new LlmApiOpenAiParameters
         {
-            ["apiEndpoint"] = endpoint,
-            ["apiKey"] = apiKey,
-            ["apiModel"] = model
+            ApiEndpoint = endpoint,
+            ApiKey = apiKey,
+            ApiModel = model,
+            MaxCompletionTokens = maxCompletionTokens,
+            ContextSize = contextSize,
         };
 
         EnsureConfigDirectoryExists();
 
-        string configPath = Config.GetProfileConfig("api.json");
+        string configPath = GetProfileConfig("api.json");
         File.WriteAllText(configPath, apiConfig.ToString());
         Console.WriteLine($"Saved API config to: {configPath}");
 

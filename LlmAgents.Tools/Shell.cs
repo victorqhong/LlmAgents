@@ -1,13 +1,16 @@
 namespace LlmAgents.Tools;
 
-using LlmAgents.State;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.State;
+using Microsoft.Extensions.Logging;
 
 public class Shell : Tool
 {
@@ -108,7 +111,7 @@ public class Shell : Tool
         receivedOutput = true;
         Process.StandardInput.WriteLine("$PSStyle.OutputRendering='Plain'");
 
-        var toolEventBus = toolFactory.Resolve<IToolEventBus>();
+        var toolEventBus = toolFactory.ResolveWithDefault<IToolEventBus>();
         toolEventBus?.SubscribeToolEvent<DirectoryChange>(OnChangeDirectory);
     }
 
@@ -116,38 +119,31 @@ public class Shell : Tool
 
     public CancellationTokenSource CancellationTokenSource { get; private set; } = new();
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "shell",
-            description = $"Runs a shell command in {shellName}. Prefer the 'file_write' tool for writing files.",
-            parameters = new
+            Name = "shell",
+            Description = $"Runs a shell command in {shellName}. Prefer the 'file_write' tool for writing files.",
+            Parameters = new()
             {
-                type = "object",
-                properties = new
+                Properties = new()
                 {
-                    command = new
-                    {
-                        type = "string",
-                        description = "Shell command and arguments to run"
-                    }
+                    { "command", new() { Type = "string", Description = "Shell command and arguments to run" } }
                 },
-                required = new[] { "command" }
+                Required = [ "command" ]
             }
         }
-    });
+    };
 
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
-        var command = parameters["command"]?.ToString();
-        if (string.IsNullOrEmpty(command))
+        if (!parameters.TryGetValueString("command", string.Empty, out var command) || string.IsNullOrEmpty(command))
         {
             result.Add("error", "command is null or empty");
-            return Task.FromResult<JToken>(result);
+            return Task.FromResult<JsonNode>(result);
         }
 
         try
@@ -196,14 +192,14 @@ public class Shell : Tool
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 
     private Task OnChangeDirectory(ToolEvent e)
     {
-        if (e is ToolCallEvent tce)
+        if (e is ToolCallEvent tce && tce.Result.AsObject() is JsonObject jsonObject && jsonObject.TryGetPropertyValue("currentDirectory", out var property))
         {
-            currentDirectory = tce.Result.Value<string>("currentDirectory") ?? currentDirectory;
+            currentDirectory = property?.GetValue<string>() ?? currentDirectory;
         }
         else if (e is Events.ChangeDirectoryEvent cde)
         {

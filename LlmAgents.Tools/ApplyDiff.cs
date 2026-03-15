@@ -1,11 +1,14 @@
 ﻿namespace LlmAgents.Tools;
 
-using LlmAgents.State;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LlmAgents.Extensions;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.State;
 
 public class ApplyDiff : Tool
 {
@@ -28,9 +31,9 @@ public class ApplyDiff : Tool
 
     private Task OnChangeDirectory(ToolEvent e)
     {
-        if (e is ToolCallEvent tce)
+        if (e is ToolCallEvent tce && tce.Result.AsObject() is JsonObject jsonObject && jsonObject.TryGetPropertyValue("currentDirectory", out var property))
         {
-            currentDirectory = tce.Result.Value<string>("currentDirectory") ?? currentDirectory;
+            currentDirectory = property?.GetValue<string>() ?? currentDirectory;
         }
         else if (e is Events.ChangeDirectoryEvent cde)
         {
@@ -40,51 +43,38 @@ public class ApplyDiff : Tool
         return Task.CompletedTask;
     }
 
-    public override JObject Schema { get; protected set; } = JObject.FromObject(new
+    public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
     {
-        type = "function",
-        function = new
+        Function = new()
         {
-            name = "apply_diff",
-            description = "Applies the provided unified diff contents to a file and modifies it in-place. Use the 'number_lines' tool to generate line numbers for an accurate diff.",
-            parameters = new
+            Name = "apply_diff",
+            Description = "Applies the provided unified diff contents to a file and modifies it in-place. Use the 'number_lines' tool to generate line numbers for an accurate diff.",
+            Parameters = new()
             {
-                type = "object",
-                properties = new
+                Properties = new()
                 {
-                    path = new
-                    {
-                        type = "string",
-                        description = "The path of the file to modify in-place"
-                    },
-                    diffContent = new
-                    {
-                        type = "string",
-                        description = "The contents of the unified diff (patch) to apply. Ensure hunk headers are included."
-                    }
+                    { "path", new() { Type = "string", Description = "The path of the file to modify in-place"  } },
+                    { "diffContent", new() { Type = "string", Description = "The contents of the unified diff (patch) to apply. Ensure hunk headers are included." } },
                 },
-                required = new[] { "path", "diffContent" }
+                Required = ["path", "diffContent"]
             }
         }
-    });
+    };
 
-    public override Task<JToken> Function(Session session, JObject parameters)
+    public override Task<JsonNode> Function(Session session, JsonDocument parameters)
     {
-        var result = new JObject();
+        var result = new JsonObject();
 
-        var path = parameters["path"]?.ToString();
-        var diffContent = parameters["diffContent"]?.ToString();
-
-        // Validate input parameters
-        if (string.IsNullOrEmpty(path))
+        if (!parameters.TryGetValueString("path", string.Empty, out var path) || string.IsNullOrEmpty(path))
         {
-            result.Add("error", "Path is null or empty");
-            return Task.FromResult<JToken>(result);
+            result.Add("error", "path is null or empty");
+            return Task.FromResult<JsonNode>(result);
         }
-        if (string.IsNullOrEmpty(diffContent))
+
+        if (!parameters.TryGetValueString("diffContent", string.Empty, out var diffContent) || string.IsNullOrEmpty(diffContent))
         {
-            result.Add("error", "Diff content is null or empty");
-            return Task.FromResult<JToken>(result);
+            result.Add("error", "diffContent is null or empty");
+            return Task.FromResult<JsonNode>(result);
         }
 
         try
@@ -99,14 +89,14 @@ public class ApplyDiff : Tool
             if (restrictToBasePath && !path.StartsWith(basePath))
             {
                 result.Add("error", $"File outside {basePath} cannot be modified");
-                return Task.FromResult<JToken>(result);
+                return Task.FromResult<JsonNode>(result);
             }
 
             // Check if the file exists
             if (!File.Exists(path))
             {
                 result.Add("error", $"File not found: {path}");
-                return Task.FromResult<JToken>(result);
+                return Task.FromResult<JsonNode>(result);
             }
 
             // Read the original file
@@ -126,7 +116,7 @@ public class ApplyDiff : Tool
             result.Add("exception", e.Message);
         }
 
-        return Task.FromResult<JToken>(result);
+        return Task.FromResult<JsonNode>(result);
     }
 
     private List<string> Apply(List<string> original, List<string> diff)
@@ -147,14 +137,12 @@ public class ApplyDiff : Tool
                 {
                     string[] parts = line.Split(' ');
                     if (parts.Length < 2)
-                    {
-                        throw new FormatException("Invalid hunk header format in diff");
+                    { throw new FormatException("Invalid hunk header format in diff");
                     }
                     string originalRange = parts[1]; // e.g., "-1,5"
                     string[] rangeParts = originalRange.Split(',');
                     if (!int.TryParse(rangeParts[0].Substring(1), out originalStart))
-                    {
-                        throw new FormatException("Failed to parse starting line in hunk header");
+                    { throw new FormatException("Failed to parse starting line in hunk header");
                     }
                     originalStart -= 1; // Convert to 0-based index
                     originalLength = rangeParts.Length > 1 && int.TryParse(rangeParts[1].TrimEnd(']'), out int length) ? length : 1;
@@ -167,8 +155,7 @@ public class ApplyDiff : Tool
                 while (currentLine < originalStart)
                 {
                     if (currentLine < original.Count)
-                    {
-                        result.Add(original[currentLine]);
+                    { result.Add(original[currentLine]);
                     }
                     currentLine++;
                 }
