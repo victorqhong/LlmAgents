@@ -2,7 +2,7 @@ namespace LlmAgents.LlmApi.OpenAi.ChatCompletion;
 
 using System.Text.Json.Serialization;
 
-public class ChatCompletionContentPartText : ChatCompletionContentPart
+public class ChatCompletionContentPartText : IChatCompletionContentPart
 {
     [JsonPropertyName("text")]
     public required string Text { get; set; }

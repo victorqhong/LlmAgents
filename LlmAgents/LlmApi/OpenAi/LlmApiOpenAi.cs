@@ -127,7 +127,7 @@ public class LlmApiOpenAi
 
             if (errorResponse == null)
             {
-                Log.LogError("Error deserializing error response: {responseContent}", responseContent);
+                Log.LogError("Error response: {responseContent}", responseContent);
                 return null;
             }
 

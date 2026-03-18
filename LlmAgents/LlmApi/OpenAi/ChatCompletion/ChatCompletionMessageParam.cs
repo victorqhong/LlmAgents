@@ -9,7 +9,6 @@ public class ChatCompletionMessageParam
     public required string Role { get; set; }
 
     [JsonPropertyName("content")]
-    [JsonConverter(typeof(ChatCompletionMessageParamContentConverter))]
     public required IChatCompletionMessageParamContent Content { get; set; }
 
     [JsonPropertyName("reasoning_content")]
@@ -17,15 +16,18 @@ public class ChatCompletionMessageParam
     public string? ReasoningContent { get; set; }
 }
 
+[JsonConverter(typeof(ChatCompletionMessageParamContentConverter))]
 public interface IChatCompletionMessageParamContent { }
 
 public class ChatCompletionMessageParamContentParts : IChatCompletionMessageParamContent
 {
-    public required List<ChatCompletionContentPart> Content { get; set; } = [];
+    [JsonPropertyName("content")]
+    public required List<IChatCompletionContentPart> Content { get; set; } = [];
 }
 
 public class ChatCompletionMessageParamContentString : IChatCompletionMessageParamContent
 {
+    [JsonPropertyName("content")]
     public required string Content { get; set; }
 }
 
@@ -42,7 +44,7 @@ public class ChatCompletionMessageParamContentConverter : JsonConverter<IChatCom
         }
         else if (reader.TokenType == JsonTokenType.StartArray)
         {
-            var contentParts = JsonSerializer.Deserialize<List<ChatCompletionContentPart>>(ref reader, options) ?? throw new JsonException();
+            var contentParts = JsonSerializer.Deserialize<List<IChatCompletionContentPart>>(ref reader, options) ?? throw new JsonException();
             return new ChatCompletionMessageParamContentParts
             {
                 Content = contentParts
@@ -73,3 +75,4 @@ public class ChatCompletionMessageParamContentConverter : JsonConverter<IChatCom
         }
     }
 }
+

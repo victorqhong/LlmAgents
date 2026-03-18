@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
@@ -32,7 +31,6 @@ public class TestSerialization
 
         var json = JsonSerializer.Serialize(chatCompletionRequest);
         Assert.IsFalse(string.IsNullOrEmpty(json));
-        Console.WriteLine(json);
 
         var deserialized = JsonSerializer.Deserialize<ChatCompletionRequest>(json);
         Assert.IsNotNull(deserialized);
@@ -164,5 +162,31 @@ public class TestSerialization
         Assert.IsNotNull(deserialized.Tools);
         Assert.IsTrue(deserialized.Tools.Count > 0);
         Assert.AreEqual("shell", deserialized.Tools[0].Function.Name);
+    }
+
+    [TestMethod]
+    public void TestMessageParam_ContentPartsText()
+    {
+        var json = """[{"role":"user","content":[{"text":"hi","type":"text"}]},{"role":"assistant","content":"Hello! How can I assist you today? I\u0027m here to help with any questions or tasks you have. Whether you need information, want to work with files, run commands, or anything else, just let me know what you need!","reasoning_content":"Hello! How can I assist you today? I\u0027m ready to help with any questions or tasks you have. Whether you need information, want to work with files, run commands, or anything else, just let me know what you need!\n"}]""";
+
+        List<ChatCompletionMessageParam>? messages = JsonSerializer.Deserialize<List<ChatCompletionMessageParam>>(json);
+
+        Assert.IsNotNull(messages);
+        Assert.AreEqual(2, messages.Count);
+        Assert.AreEqual("user", messages[0].Role);
+        Assert.IsInstanceOfType<ChatCompletionMessageParamContentParts>(messages[0].Content);
+
+        var contentParts = messages[0].Content as ChatCompletionMessageParamContentParts;
+        Assert.IsNotNull(contentParts);
+
+        Assert.AreEqual(1, contentParts.Content.Count);
+
+        var part = contentParts.Content[0];
+        Assert.IsInstanceOfType<ChatCompletionContentPartText>(part);
+
+        var textPart = part as ChatCompletionContentPartText;
+        Assert.IsNotNull(textPart);
+        Assert.AreEqual("text", textPart.Type);
+        Assert.AreEqual("hi", textPart.Text);
     }
 }

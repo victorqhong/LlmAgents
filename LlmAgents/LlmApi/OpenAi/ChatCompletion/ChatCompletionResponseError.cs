@@ -8,5 +8,8 @@ public class ChatCompletionResponseError
     public required string Message { get; set; }
 
     [JsonPropertyName("code")]
-    public required string Code { get; set; } 
+    public required int Code { get; set; }
+
+    [JsonPropertyName("type")]
+    public required string Type { get; set; }
 }
