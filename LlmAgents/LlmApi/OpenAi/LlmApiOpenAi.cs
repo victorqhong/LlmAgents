@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
@@ -95,9 +95,19 @@ public class LlmApiOpenAi
             Content = JsonContent.Create(completionRequest)
         };
 
+        HttpResponseMessage? response = null;
         try
         {
-            var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        }
+        catch (Exception e)
+        {
+            Log.LogError(e, "Exception while sending request");
+            return null;
+        }
+
+        try
+        {
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -105,7 +115,16 @@ public class LlmApiOpenAi
 
             var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
 
-            var errorResponse = JsonSerializer.Deserialize<ChatCompletionErrorResponse>(responseContent);
+            ChatCompletionErrorResponse? errorResponse = null;
+            try
+            {
+                errorResponse = JsonSerializer.Deserialize<ChatCompletionErrorResponse>(responseContent);
+            }
+            catch (Exception e)
+            {
+                Log.LogError(e, "Exception while deserializing error response");
+            }
+
             if (errorResponse == null)
             {
                 Log.LogError("Error deserializing error response: {responseContent}", responseContent);

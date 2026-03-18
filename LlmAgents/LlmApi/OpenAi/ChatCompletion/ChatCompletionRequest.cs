@@ -16,7 +16,8 @@ public class ChatCompletionRequest
     public int? MaxCompletionTokens { get; set; }
 
     [JsonPropertyName("temperature")]
-    public required double Temperature { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? Temperature { get; set; }
 
     [JsonPropertyName("tools")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -38,10 +39,10 @@ public class ChatCompletionRequest
     {
     }
 
-    public ChatCompletionRequest(bool stream)
+    public ChatCompletionRequest(bool? stream)
     {
         Stream = stream;
-        if (stream)
+        if (stream.HasValue && stream.Value)
         {
             StreamOptions = new Dictionary<string, dynamic>()
             {

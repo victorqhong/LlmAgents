@@ -37,7 +37,7 @@ public static class AgentExtensions
         };
         agent.ToolCalled += async (tool, arguments, result) =>
         {
-            await hub.InvokeAsync("Log", agent.Session.SessionId, "Tool", $"{{ \"Name\": \"{tool}\", \"Arguments\": {arguments}, \"Result\": {result} }}", "INFO", CancellationToken.None);
+            await hub.InvokeAsync("Log", agent.Session.SessionId, "Tool", $"{{ \"Name\": \"{tool}\", \"Arguments\": {JsonSerializer.Serialize(arguments)}, \"Result\": {JsonSerializer.Serialize(result)} }}", "INFO", CancellationToken.None);
         };
         agent.PostRunWork += async work =>
         {
@@ -54,6 +54,10 @@ public static class AgentExtensions
         };
 
         await hub.InvokeAsync("Register", agent.Id, agent.Session.SessionId, agent.Persistent, CancellationToken.None);
+        hub.Reconnected += async connectionId =>
+        {
+            await hub.InvokeAsync("Register", agent.Id, agent.Session.SessionId, agent.Persistent, CancellationToken.None);
+        };
 
         return hub;
     }

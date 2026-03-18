@@ -32,7 +32,7 @@ public class AgentHub : Hub<IAgentClient>
     {
         if (!Guid.TryParse(sessionId, out Guid id))
         {
-            throw new ArgumentException(nameof(sessionId));
+            throw new ArgumentException("sessionId is not a GUID", nameof(sessionId));
         }
 
         var registerSession = new RegisterSessionDto(id, agentName, persistent);
@@ -44,7 +44,7 @@ public class AgentHub : Hub<IAgentClient>
     {
         if (!Guid.TryParse(sessionId, out Guid id))
         {
-            throw new ArgumentException(nameof(sessionId));
+            throw new ArgumentException("sessionId is not a GUID", nameof(sessionId));
         }
 
         var updateStatus = new UpdateStatusDto(id, status);
@@ -55,7 +55,7 @@ public class AgentHub : Hub<IAgentClient>
     {
         if (!Guid.TryParse(sessionId, out Guid id))
         {
-            throw new ArgumentException(nameof(sessionId));
+            throw new ArgumentException("sessionId is not a GUID", nameof(sessionId));
         }
 
         var session = await agentSessionService.GetSessionById(id);
@@ -71,7 +71,7 @@ public class AgentHub : Hub<IAgentClient>
     {
         if (!Guid.TryParse(sessionId, out Guid id))
         {
-            throw new ArgumentException(nameof(sessionId));
+            throw new ArgumentException("sessionId is not a GUID", nameof(sessionId));
         }
 
         var session = await agentSessionService.GetSessionById(id);
@@ -95,7 +95,7 @@ public class AgentHub : Hub<IAgentClient>
     {
         if (!Guid.TryParse(sessionId, out Guid id))
         {
-            throw new ArgumentException(nameof(sessionId));
+            throw new ArgumentException("sessionId is not a GUID", nameof(sessionId));
         }
 
         var session = await agentSessionService.GetSessionById(id);
