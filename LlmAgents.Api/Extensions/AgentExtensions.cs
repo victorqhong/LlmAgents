@@ -3,13 +3,21 @@ using LlmAgents.Agents;
 using LlmAgents.Api.GitHub;
 using LlmAgents.Communication;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.Logging;
 
 namespace LlmAgents.Api.Extensions;
 
 public static class AgentExtensions
 {
-    public static async Task<HubConnection> ConfigureAgentHub(this LlmAgent agent, Uri agentManagerUrl, IAgentCommunication agentCommunication)
+    public static async Task<HubConnection?> ConfigureAgentHub(this LlmAgent agent, Uri agentManagerUrl, IAgentCommunication agentCommunication, ILogger logger)
     {
+        var token = await Login.GetHubLoginToken(agentCommunication, agentManagerUrl, CancellationToken.None);
+        if (string.IsNullOrEmpty(token))
+        {
+            await agentCommunication.SendMessage("Could not login to AgentManager", true);
+            return null;
+        }
+
         var hubUrl = new Uri(agentManagerUrl, "hubs/agent");
         var hub = new HubConnectionBuilder()
             .WithUrl(hubUrl, options =>
@@ -22,8 +30,27 @@ public static class AgentExtensions
                     });
                 };
             })
+            .WithStatefulReconnect()
             .WithAutomaticReconnect()
             .Build();
+
+        hub.Reconnected += async connectionId =>
+        {
+            logger.LogInformation("Reconnected to hub");
+            await hub.InvokeAsync("Register", agent.Id, agent.Session.SessionId, agent.Persistent, CancellationToken.None);
+        };
+
+        hub.Closed += e =>
+        {
+            logger.LogInformation("Connection to hub closed: {message}", e?.Message ?? "no exception");
+            return Task.CompletedTask;
+        };
+
+        hub.Reconnecting += e =>
+        {
+            logger.LogInformation("Reconnecting to hub: {message}", e?.Message ?? "no exception");
+            return Task.CompletedTask;
+        };
 
         await hub.StartAsync(CancellationToken.None);
 
@@ -54,10 +81,6 @@ public static class AgentExtensions
         };
 
         await hub.InvokeAsync("Register", agent.Id, agent.Session.SessionId, agent.Persistent, CancellationToken.None);
-        hub.Reconnected += async connectionId =>
-        {
-            await hub.InvokeAsync("Register", agent.Id, agent.Session.SessionId, agent.Persistent, CancellationToken.None);
-        };
 
         return hub;
     }

@@ -44,7 +44,7 @@ internal static class AgentFactory
 
             if (agentParameters.AgentManagerUrl != null)
             {
-                await agent.ConfigureAgentHub(agentParameters.AgentManagerUrl, xmppCommunication);
+                await agent.ConfigureAgentHub(agentParameters.AgentManagerUrl, xmppCommunication, loggerFactory.CreateLogger<LlmAgent>());
             }
 
             await agent.Run(cancellationToken);

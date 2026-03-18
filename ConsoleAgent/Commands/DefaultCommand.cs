@@ -97,7 +97,7 @@ internal class DefaultCommand : RootCommand
 
         if (agentParameters.AgentManagerUrl != null)
         {
-            await agent.ConfigureAgentHub(agentParameters.AgentManagerUrl, consoleCommunication);
+            await agent.ConfigureAgentHub(agentParameters.AgentManagerUrl, consoleCommunication, loggerFactory.CreateLogger<LlmAgent>());
         }
 
         await agent.Run(cancellationToken);
