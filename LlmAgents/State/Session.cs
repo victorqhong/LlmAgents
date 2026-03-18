@@ -28,7 +28,7 @@ public class Session
 
     public ICollection<ChatCompletionMessageParam> GetMessages()
     {
-        return messages;
+        return messages.ToArray();
     }
 
     public void Load()
@@ -56,6 +56,9 @@ public class Session
         var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
 
         File.WriteAllText(messagesFilePath, JsonSerializer.Serialize(messages));
+
+        this.messages.Clear();
+        this.messages.AddRange(messages);
     }
 
     private static string GetMessagesFilename(string id)

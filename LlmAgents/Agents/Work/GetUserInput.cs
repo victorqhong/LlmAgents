@@ -33,7 +33,7 @@ public class GetUserInputWork : LlmAgentWork
     {
         ArgumentNullException.ThrowIfNull(messageContents);
 
-        var content = new List<ChatCompletionContentPart>();
+        var content = new List<IChatCompletionContentPart>();
 
         foreach (var messageContent in messageContents)
         {
