@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using LlmAgents.Api;
 using LlmAgents.Communication;
+using LlmAgents.LlmApi.Content;
 
 public static class Login
 {
@@ -82,6 +83,29 @@ public static class Login
 
         var deviceCode = JsonSerializer.Deserialize<DeviceCodeResponse>(deviceCodeContent);
         if (deviceCode == null || string.IsNullOrEmpty(deviceCode.DeviceCode))
+        {
+            return null;
+        }
+
+        bool? startAuthentication = false;
+        await communication.SendMessage("Logging in to AgentManager with GitHub. Continue? (y/n): ", false);
+        var messageContents = await communication.WaitForContent(cancellationToken);
+        if (messageContents == null)
+        {
+            return null;
+        }
+
+        foreach (var c in messageContents)
+        {
+            if (c is not MessageContentText textContent)
+            {
+                continue;
+            }
+
+            startAuthentication = string.Equals("y", textContent.Text);
+        }
+
+        if (startAuthentication == null || !startAuthentication.Value)
         {
             return null;
         }

@@ -77,19 +77,11 @@ public static class Config
             return null;
         }
 
-        Console.Write("Max completion tokens: ");
-        string? maxCompletionTokensInput = Console.ReadLine();
-        if (string.IsNullOrEmpty(maxCompletionTokensInput) || int.TryParse(maxCompletionTokensInput, out var maxCompletionTokens))
-        {
-            return null;
-        }
-
         var apiConfig = new LlmApiOpenAiParameters
         {
             ApiEndpoint = endpoint,
             ApiKey = apiKey,
             ApiModel = model,
-            MaxCompletionTokens = maxCompletionTokens,
             ContextSize = contextSize,
         };
 
@@ -99,14 +91,7 @@ public static class Config
         File.WriteAllText(configPath, apiConfig.ToString());
         Console.WriteLine($"Saved API config to: {configPath}");
 
-        return new LlmApiOpenAiParameters
-        {
-            ApiEndpoint = endpoint,
-            ApiKey = apiKey,
-            ApiModel = model,
-            ContextSize = contextSize,
-            MaxCompletionTokens = maxCompletionTokens,
-        };
+        return apiConfig;
     }
 
     public static string? InteractiveToolsConfigSetup()
