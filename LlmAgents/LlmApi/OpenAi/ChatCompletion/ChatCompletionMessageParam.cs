@@ -3,13 +3,15 @@ using System.Text.Json.Serialization;
 
 namespace LlmAgents.LlmApi.OpenAi.ChatCompletion;
 
-public class ChatCompletionMessageParam
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "role")]
+[JsonDerivedType(typeof(ChatCompletionMessageParamAssistant), "assistant")]
+[JsonDerivedType(typeof(ChatCompletionMessageParamTool), "tool")]
+[JsonDerivedType(typeof(ChatCompletionMessageParamUser), "user")]
+[JsonDerivedType(typeof(ChatCompletionMessageParamSystem), "system")]
+public abstract class ChatCompletionMessageParam
 {
-    [JsonPropertyName("role")]
-    public required string Role { get; set; }
-
     [JsonPropertyName("content")]
-    public required IChatCompletionMessageParamContent Content { get; set; }
+    public IChatCompletionMessageParamContent? Content { get; set; }
 
     [JsonPropertyName("reasoning_content")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

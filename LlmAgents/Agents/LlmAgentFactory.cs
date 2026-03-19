@@ -70,9 +70,8 @@ public static class LlmAgentFactory
         }
         else if (!string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
         {
-            var textContent = new ChatCompletionMessageParam
+            var textContent = new ChatCompletionMessageParamSystem
             {
-                Role = "system",
                 Content = new ChatCompletionMessageParamContentString { Content = File.ReadAllText(sessionParameters.SystemPromptFile) },
             };
             session.AddMessages([textContent]);

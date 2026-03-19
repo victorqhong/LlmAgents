@@ -57,12 +57,12 @@ public sealed class TestLlmAgent
         var userInputWork = await agent.RunWork(new GetUserInputWork(agent), null, cts.Token);
         messages = agent.RenderConversation();
         Assert.AreEqual(1, messages.Count);
-        Assert.AreEqual("user", messages[0].Role);
+        Assert.IsInstanceOfType<ChatCompletionMessageParamUser>(messages[0]);
 
         await agent.RunWork(new GetAssistantResponseWork(loggerFactory, agent), userInputWork, cts.Token);
         messages = agent.RenderConversation();
         Assert.AreEqual(2, messages.Count);
-        Assert.AreEqual("assistant", messages[1].Role);
+        Assert.IsInstanceOfType<ChatCompletionMessageParamAssistant>(messages[1]);
     }
 
     [TestMethod]

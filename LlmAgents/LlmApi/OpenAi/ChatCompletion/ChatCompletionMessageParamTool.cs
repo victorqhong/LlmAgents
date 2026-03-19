@@ -7,8 +7,7 @@ public class ChatCompletionMessageParamTool : ChatCompletionMessageParam
     [JsonPropertyName("tool_call_id")]
     public required string ToolCallId { get; set; }
 
-    public ChatCompletionMessageParamTool()
-    {
-        Role = "tool";
-    }
+    [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; set; }
 }

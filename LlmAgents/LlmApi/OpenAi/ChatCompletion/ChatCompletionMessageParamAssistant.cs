@@ -9,10 +9,6 @@ public class ChatCompletionMessageParamAssistant : ChatCompletionMessageParam
     public string? Name { get; set; }
 
     [JsonPropertyName("tool_calls")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<ChatCompletionMessageFunctionToolCall>? ToolCalls { get; set; }
-
-    public ChatCompletionMessageParamAssistant()
-    {
-        Role = "assistant";
-    }
 }
