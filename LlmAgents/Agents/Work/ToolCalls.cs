@@ -55,7 +55,6 @@ public class ToolCalls : LlmAgentWork
                 {
                     toolMessages.Add(new ChatCompletionMessageParamTool
                     {
-                        Role = "tool",
                         ToolCallId = toolCall.Id,
                         Content = new ChatCompletionMessageParamContentString { Content = $"Invalid tool call: tool {toolCall.Function.Name} could not be found" },
                     });
@@ -72,8 +71,8 @@ public class ToolCalls : LlmAgentWork
 
             toolMessages.Add(new ChatCompletionMessageParamTool
             {
-                Role = "tool",
                 ToolCallId = toolCall.Id,
+                Name = toolCall.Function.Name,
                 Content = new ChatCompletionMessageParamContentString { Content = toolContent },
             });
         }

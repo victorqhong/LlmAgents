@@ -188,7 +188,6 @@ public class ChatCompletionStreamParser
         {
             Messages.Add(new ChatCompletionMessageParamAssistant
             {
-                Role = role,
                 Content = new ChatCompletionMessageParamContentString { Content = content },
                 ReasoningContent = reasoningContent
             });
@@ -213,7 +212,6 @@ public class ChatCompletionStreamParser
 
             Messages.Add(new ChatCompletionMessageParamAssistant
             {
-                Role = role,
                 Content = new ChatCompletionMessageParamContentString { Content = content },
                 ReasoningContent = reasoningContent,
                 ToolCalls = toolCalls

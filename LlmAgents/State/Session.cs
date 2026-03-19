@@ -4,6 +4,16 @@ namespace LlmAgents.State;
 
 public class Session
 {
+    private readonly static JsonSerializerOptions serializerOptions;
+
+    static Session()
+    {
+        serializerOptions = new()
+        {
+            WriteIndented = true
+        };
+    }
+
     public required string SessionId;
     public DateTime StartTime { get; set; } = DateTime.UtcNow;
     public DateTime LastActive { get; set; } = DateTime.UtcNow;
@@ -55,7 +65,7 @@ public class Session
         var messagesFileName = GetMessagesFilename(SessionId);
         var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
 
-        File.WriteAllText(messagesFilePath, JsonSerializer.Serialize(messages));
+        File.WriteAllText(messagesFilePath, JsonSerializer.Serialize(messages, serializerOptions));
 
         this.messages.Clear();
         this.messages.AddRange(messages);

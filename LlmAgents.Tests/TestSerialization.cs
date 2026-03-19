@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
@@ -14,9 +15,9 @@ public class TestSerialization
         var model = "gpt-4o";
         var messages = new List<ChatCompletionMessageParam>()
         {
-            new() { Role = "system", Content = new ChatCompletionMessageParamContentString { Content = "this is the system prompt" } },
-            new() { Role = "user", Content = new ChatCompletionMessageParamContentString { Content = "this is the user message" } },
-            new() { Role = "assistant", Content = new ChatCompletionMessageParamContentString { Content = "this is the assistant message" } }
+            new ChatCompletionMessageParamSystem() { Content = new ChatCompletionMessageParamContentString { Content = "this is the system prompt" } },
+            new ChatCompletionMessageParamUser() { Content = new ChatCompletionMessageParamContentString { Content = "this is the user message" } },
+            new ChatCompletionMessageParamAssistant() { Content = new ChatCompletionMessageParamContentString { Content = "this is the assistant message" } }
         };
         var maxTokens = 100;
         var temperature = 0.7;
@@ -44,9 +45,9 @@ public class TestSerialization
         var model = "gpt-4o";
         var messages = new List<ChatCompletionMessageParam>()
         {
-            new() { Role = "system", Content = new ChatCompletionMessageParamContentString { Content = "this is the system prompt" } },
-            new() { Role = "user", Content = new ChatCompletionMessageParamContentParts { Content = [new ChatCompletionContentPartText { Text = "this is the user message" }]}},
-            new() { Role = "assistant", Content = new ChatCompletionMessageParamContentString { Content = "this is the assistant message" } }
+            new ChatCompletionMessageParamSystem() { Content = new ChatCompletionMessageParamContentString { Content = "this is the system prompt" } },
+            new ChatCompletionMessageParamUser() { Content = new ChatCompletionMessageParamContentParts { Content = [new ChatCompletionContentPartText { Text = "this is the user message" }]}},
+            new ChatCompletionMessageParamAssistant() { Content = new ChatCompletionMessageParamContentString { Content = "this is the assistant message" } }
         };
         var maxTokens = 100;
         var temperature = 0.7;
@@ -173,7 +174,7 @@ public class TestSerialization
 
         Assert.IsNotNull(messages);
         Assert.AreEqual(2, messages.Count);
-        Assert.AreEqual("user", messages[0].Role);
+        Assert.IsInstanceOfType<ChatCompletionMessageParamUser>(messages[0]);
         Assert.IsInstanceOfType<ChatCompletionMessageParamContentParts>(messages[0].Content);
 
         var contentParts = messages[0].Content as ChatCompletionMessageParamContentParts;
@@ -188,5 +189,69 @@ public class TestSerialization
         Assert.IsNotNull(textPart);
         Assert.AreEqual("text", textPart.Type);
         Assert.AreEqual("hi", textPart.Text);
+    }
+
+    [TestMethod]
+    public void TestMessageParam_ToolCall()
+    {
+        var messages = new List<ChatCompletionMessageParam>();
+
+        var systemMessage = new ChatCompletionMessageParamSystem
+        {
+            Content = new ChatCompletionMessageParamContentString { Content = "You are a helpful assistant" }
+        };
+        messages.Add(systemMessage);
+
+        var userMessage = new ChatCompletionMessageParamUser
+        {
+            Content = new ChatCompletionMessageParamContentString { Content = "What's the weather in Paris?" }
+        };
+        messages.Add(userMessage);
+
+        var assistantMessage = new ChatCompletionMessageParamAssistant
+        {
+            Content = null,
+            ToolCalls = [
+                new ChatCompletionMessageFunctionToolCall
+                {
+                    Id = "abc123",
+                    Type = "function",
+                    Function = new ChatCompletionMessageFunctionToolCallFunction
+                    {
+                        Name = "get_weather",
+                        Arguments = "{\"location\":\"Paris\"}"
+                    }
+                }
+
+            ]
+        };
+        messages.Add(assistantMessage);
+
+        var toolMessage = new ChatCompletionMessageParamTool
+        {
+            ToolCallId = "abc123",
+            Content = new ChatCompletionMessageParamContentString { Content = "{\"temperature\":80}" },
+            Name = "get_weather"
+        };
+        messages.Add(toolMessage);
+
+        var json = JsonSerializer.Serialize(messages);
+
+        messages.Clear();
+        Assert.AreEqual(0, messages.Count);
+
+        messages = JsonSerializer.Deserialize<List<ChatCompletionMessageParam>>(json);
+        Assert.IsNotNull(messages);
+        Assert.AreEqual(4, messages.Count);
+        Assert.IsInstanceOfType<ChatCompletionMessageParamAssistant>(messages[2]);
+
+        var message = messages[2] as ChatCompletionMessageParamAssistant;
+        Assert.IsNotNull(message);
+        Assert.IsNotNull(message.ToolCalls);
+        Assert.AreEqual(1, message.ToolCalls.Count);
+        Assert.AreEqual("abc123", message.ToolCalls[0].Id);
+        Assert.AreEqual("get_weather", message.ToolCalls[0].Function.Name);
+        Assert.AreEqual("{\"location\":\"Paris\"}", message.ToolCalls[0].Function.Arguments);
+
     }
 }

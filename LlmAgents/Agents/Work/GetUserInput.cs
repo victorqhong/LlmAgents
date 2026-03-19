@@ -58,9 +58,8 @@ public class GetUserInputWork : LlmAgentWork
             }
         }
 
-        return new ChatCompletionMessageParam
+        return new ChatCompletionMessageParamUser
         {
-            Role = "user",
             Content = new ChatCompletionMessageParamContentParts { Content = content }
         };
     }
