@@ -1,7 +1,7 @@
 ﻿using System.CommandLine;
 using System.Text.Json;
 using LlmAgents.Agents;
-using LlmAgents.LlmApi.OpenAi;
+using LlmAgents.Configuration;
 using LlmAgents.State;
 using LlmAgents.Tools;
 
@@ -9,7 +9,7 @@ namespace LlmAgents.CommandLineParser;
 
 public static class Parser
 {
-    public static LlmApiOpenAiParameters? ParseApiParameters(ParseResult parseResult)
+    public static LlmApiConfig? ParseApiParameters(ParseResult parseResult)
     {
         string? apiEndpoint = null;
         string? apiKey = null;
@@ -20,14 +20,10 @@ public static class Parser
         var apiConfigValue = parseResult.GetValue(Options.ApiConfig);
         if (!string.IsNullOrEmpty(apiConfigValue) && File.Exists(apiConfigValue))
         {
-            var apiConfig = JsonSerializer.Deserialize<LlmApiOpenAiParameters>(File.ReadAllText(apiConfigValue));
+            var apiConfig = JsonSerializer.Deserialize<LlmApiConfig>(File.ReadAllText(apiConfigValue));
             if (apiConfig != null)
             {
-                apiEndpoint = apiConfig.ApiEndpoint;
-                apiKey = apiConfig.ApiKey;
-                apiModel = apiConfig.ApiModel;
-                contextSize = apiConfig.ContextSize;
-                maxCompletionTokens = apiConfig.MaxCompletionTokens;
+                return apiConfig;
             }
         }
         else
@@ -44,7 +40,7 @@ public static class Parser
             return null;
         }
 
-        return new LlmApiOpenAiParameters
+        return new LlmApiConfig
         {
             ApiEndpoint = apiEndpoint,
             ApiKey = apiKey,

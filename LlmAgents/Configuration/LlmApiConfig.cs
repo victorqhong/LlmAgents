@@ -1,8 +1,8 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace LlmAgents.LlmApi.OpenAi;
+namespace LlmAgents.Configuration;
 
-public class LlmApiOpenAiParameters
+public class LlmApiConfig
 {
     [JsonPropertyName("apiEndpoint")]
     public required string ApiEndpoint { get; set; }
@@ -17,7 +17,16 @@ public class LlmApiOpenAiParameters
     public required int ContextSize { get; set; }
 
     [JsonPropertyName("maxCompletionTokens")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? MaxCompletionTokens { get; set; }
+
+    [JsonPropertyName("temperature")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? Temperature { get; set; } = 1.0;
+
+    [JsonPropertyName("llamacpp")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public LlamacppApiConfig? Llamacpp { get; set; }
 
     public bool Valid()
     {

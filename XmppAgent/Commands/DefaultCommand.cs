@@ -1,6 +1,5 @@
 using LlmAgents.Agents;
 using LlmAgents.Configuration;
-using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
@@ -62,7 +61,7 @@ internal class DefaultCommand : RootCommand
             var systemPromptFile = agentProperty.Value.SystemPromptFile;
             var persistent = agentProperty.Value.Persistent;
 
-            var apiParameters = JsonSerializer.Deserialize<LlmApiOpenAiParameters>(File.ReadAllText(apiConfigPath));
+            var apiParameters = JsonSerializer.Deserialize<LlmApiConfig>(File.ReadAllText(apiConfigPath));
             var xmppParameters = JsonSerializer.Deserialize<XmppConfig>(File.ReadAllText(xmppConfigPath));
 
             if (apiParameters == null || !apiParameters.Valid())
