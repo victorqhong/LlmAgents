@@ -1,8 +1,10 @@
 
 using System.Text.Json.Serialization;
+using LlmAgents.LlmApi.Llamacpp;
 
 namespace LlmAgents.LlmApi.OpenAi.ChatCompletion;
 
+[JsonDerivedType(typeof(LlamacppChatCompletionRequest))]
 public class ChatCompletionRequest
 {
     [JsonPropertyName("model")]

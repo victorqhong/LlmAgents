@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LlmAgents.Communication;
 using LlmAgents.Configuration;
+using LlmAgents.LlmApi.Llamacpp;
 using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
@@ -14,12 +15,12 @@ public static class LlmAgentFactory
 {
     public static async Task<LlmAgent> CreateAgent(
         ILoggerFactory loggerFactory, IAgentCommunication agentCommunication,
-        LlmApiOpenAiParameters llmApiParameters,
+        LlmApiConfig llmApiParameters,
         LlmAgentParameters llmAgentParameters,
         ToolParameters toolParameters,
         SessionParameters sessionParameters)
     {
-        var llmApi = new LlmApiOpenAi(loggerFactory, llmApiParameters);
+        var llmApi = llmApiParameters.Llamacpp != null ? new LlmApiLlamacpp(loggerFactory, llmApiParameters) : new LlmApiOpenAi(loggerFactory, llmApiParameters);
         var agent = new LlmAgent(llmAgentParameters, llmApi, agentCommunication, loggerFactory);
 
         if (string.IsNullOrEmpty(sessionParameters.WorkingDirectory))

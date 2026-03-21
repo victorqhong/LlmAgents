@@ -5,7 +5,7 @@ using System.Text.Json;
 using AgentManager.Configuration;
 using AgentManager.Models.Containers;
 using AgentManager.Services.Containers;
-using LlmAgents.LlmApi.OpenAi;
+using LlmAgents.Configuration;
 
 namespace AgentManager.Services;
 
@@ -14,7 +14,7 @@ public class ContainerService
     private readonly ProvisioningOptions provisioningOptions;
     private readonly LxdApi api;
 
-    private readonly LlmApiOpenAiParameters llmApiParameters;
+    private readonly LlmApiConfig llmApiParameters;
     private readonly Dictionary<string, string> xmppUsers = [];
     private readonly ConcurrentBag<string> allocatedUsers = [];
     private readonly ConcurrentBag<string> availableUsers = [];
@@ -34,7 +34,7 @@ public class ContainerService
             throw new FileNotFoundException();
         }
 
-        llmApiParameters = JsonSerializer.Deserialize<LlmApiOpenAiParameters>(File.ReadAllText(provisioningOptions.ApiConfigFile)) ?? throw new SerializationException();
+        llmApiParameters = JsonSerializer.Deserialize<LlmApiConfig>(File.ReadAllText(provisioningOptions.ApiConfigFile)) ?? throw new SerializationException();
 
         if (!File.Exists(provisioningOptions.UserConfigFile))
         {

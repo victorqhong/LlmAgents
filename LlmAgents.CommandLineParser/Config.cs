@@ -1,4 +1,4 @@
-﻿using LlmAgents.LlmApi.OpenAi;
+﻿using LlmAgents.Configuration;
 using LlmAgents.Tools;
 using System.Runtime.InteropServices;
 
@@ -45,7 +45,7 @@ public static class Config
         }
     }
 
-    public static LlmApiOpenAiParameters? InteractiveApiConfigSetup()
+    public static LlmApiConfig? InteractiveApiConfigSetup()
     {
         Console.WriteLine("Interactive API setup. Leave blank to cancel.");
 
@@ -77,7 +77,7 @@ public static class Config
             return null;
         }
 
-        var apiConfig = new LlmApiOpenAiParameters
+        var apiConfig = new LlmApiConfig
         {
             ApiEndpoint = endpoint,
             ApiKey = apiKey,

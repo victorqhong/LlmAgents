@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using LlmAgents.Configuration;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using Microsoft.Extensions.Logging;
 
@@ -10,37 +11,13 @@ public class LlmApiOpenAi
 {
     private readonly ILogger Log;
 
-    public LlmApiOpenAi(ILoggerFactory loggerFactory, LlmApiOpenAiParameters parameters)
-        : this(loggerFactory, parameters.ApiEndpoint, parameters.ApiKey, parameters.ApiModel)
-    {
-        ContextSize = parameters.ContextSize;
-        MaxCompletionTokens = parameters.MaxCompletionTokens;
-    }
+    public readonly LlmApiConfig ApiConfig;
 
-    public LlmApiOpenAi(ILoggerFactory loggerFactory, string apiEndpoint, string apiKey, string model)
+    public LlmApiOpenAi(ILoggerFactory loggerFactory, LlmApiConfig llmApiConfig)
     {
-        ArgumentException.ThrowIfNullOrEmpty(apiEndpoint);
-        ArgumentException.ThrowIfNullOrEmpty(apiKey);
-        ArgumentException.ThrowIfNullOrEmpty(model);
-
         Log = loggerFactory.CreateLogger(nameof(LlmApiOpenAi));
-
-        ApiEndpoint = apiEndpoint;
-        ApiKey = apiKey;
-        Model = model;
+        ApiConfig = llmApiConfig;
     }
-
-    public string ApiEndpoint { get; private set; }
-
-    public string ApiKey { get; private set; }
-
-    public string Model { get; set; }
-
-    public int? MaxCompletionTokens { get; set; } = null;
-
-    public int ContextSize { get; set; } = 8192;
-
-    public double Temperature { get; set; } = 1.0;
 
     public int MaxRetryOnThrottledAttempts { get; set; } = 3;
 
@@ -48,7 +25,18 @@ public class LlmApiOpenAi
 
     public async Task<ChatCompletionStreamParser?> GetStreamingCompletion(List<ChatCompletionMessageParam> messages, List<ChatCompletionFunctionTool>? tools = null, string toolChoice = "auto", bool outputReasoning = true, CancellationToken cancellationToken = default)
     {
-        var stream = await GetCompletionStream(messages, tools, toolChoice, cancellationToken);
+        if (messages == null || messages.Count < 1)
+        {
+            throw new ArgumentException($"{nameof(messages)} is null or doesn't contain messages", nameof(messages));
+        }
+
+        var payload = CreateChatCompletionRequest(messages, ApiConfig.Temperature, ApiConfig.MaxCompletionTokens, tools, toolChoice);
+        return await GetStreamingCompletion(payload, outputReasoning, cancellationToken);
+    }
+
+    public async Task<ChatCompletionStreamParser?> GetStreamingCompletion(ChatCompletionRequest request, bool outputReasoning, CancellationToken cancellationToken)
+    {
+        var stream = await GetCompletionStream(request, retryAttempt: 0, cancellationToken);
         if (stream == null)
         {
             return null;
@@ -60,42 +48,22 @@ public class LlmApiOpenAi
         return streamParser;
     }
 
-    private async Task<Stream?> GetCompletionStream(List<ChatCompletionMessageParam> messages, List<ChatCompletionFunctionTool>? tools = null, string toolChoice = "auto", CancellationToken cancellationToken = default)
-    {
-        if (messages == null || messages.Count < 1)
-        {
-            throw new ArgumentException($"{nameof(messages)} is null or doesn't contain messages", nameof(messages));
-        }
-
-        var payload = new ChatCompletionRequest(true)
-        {
-            Model = Model,
-            Messages = messages,
-            MaxCompletionTokens = MaxCompletionTokens,
-            Temperature = Temperature,
-            Tools = tools,
-            ToolChoice = toolChoice,
-        };
-
-        return await GetCompletionStream(payload, retryAttempt: 0, cancellationToken);
-    }
-
-    private async Task<Stream?> GetCompletionStream(ChatCompletionRequest completionRequest, int retryAttempt = 0, CancellationToken cancellationToken = default)
+    protected async Task<Stream?> GetCompletionStream(ChatCompletionRequest completionRequest, int retryAttempt = 0, CancellationToken cancellationToken = default)
     {
         var client = new HttpClient()
         {
             Timeout = HttpTimeout
         };
 
-        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {ApiKey}");
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {ApiConfig.ApiKey}");
         client.DefaultRequestHeaders.Add("Accept", "text/event-stream");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, ApiEndpoint)
+        var request = new HttpRequestMessage(HttpMethod.Post, ApiConfig.ApiEndpoint)
         {
             Content = JsonContent.Create(completionRequest)
         };
 
-        HttpResponseMessage? response = null;
+        HttpResponseMessage? response;
         try
         {
             response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -162,5 +130,18 @@ public class LlmApiOpenAi
         }
 
         return null;
+    }
+
+    protected virtual ChatCompletionRequest CreateChatCompletionRequest(List<ChatCompletionMessageParam> messages, double? temperature, int? maxCompletionTokens, List<ChatCompletionFunctionTool>? tools, string? toolChoice)
+    {
+        return new ChatCompletionRequest(true)
+        {
+            Model = ApiConfig.ApiModel,
+            Messages = messages,
+            MaxCompletionTokens = maxCompletionTokens,
+            Temperature = temperature,
+            Tools = tools,
+            ToolChoice = toolChoice,
+        };
     }
 }

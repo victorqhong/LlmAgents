@@ -2,7 +2,6 @@ using LlmAgents.Agents;
 using LlmAgents.Agents.Work;
 using LlmAgents.Api.Extensions;
 using LlmAgents.Configuration;
-using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
@@ -12,7 +11,7 @@ namespace XmppAgent;
 
 internal static class AgentFactory
 {
-    public static async Task RunAgent(LlmApiOpenAiParameters apiParameters, LlmAgentParameters agentParameters, ToolParameters toolParameters, SessionParameters sessionParameters, XmppConfig xmppParameters, CancellationToken cancellationToken = default)
+    public static async Task RunAgent(LlmApiConfig apiConfig, LlmAgentParameters agentParameters, ToolParameters toolParameters, SessionParameters sessionParameters, XmppConfig xmppParameters, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -28,7 +27,7 @@ internal static class AgentFactory
 
             using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
-            var agent = await LlmAgentFactory.CreateAgent(loggerFactory, xmppCommunication, apiParameters, agentParameters, toolParameters, sessionParameters);
+            var agent = await LlmAgentFactory.CreateAgent(loggerFactory, xmppCommunication, apiConfig, agentParameters, toolParameters, sessionParameters);
 
             agent.PreGetResponse = () => Task.Run(() => xmppCommunication.SendComposing());
             agent.PostSendMessage = () => Task.Run(() => xmppCommunication.SendActive());

@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using LlmAgents.Agents;
 using LlmAgents.Agents.Work;
+using LlmAgents.Configuration;
 using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.Tests.Communication;
@@ -27,7 +28,7 @@ public sealed class TestLlmAgent
         };
 
         var loggerFactory = new LoggerFactory();
-        var llmApiParameters = new LlmApiOpenAiParameters
+        var llmApiParameters = new LlmApiConfig
         {
             ContextSize = 8192,
             MaxCompletionTokens = 8192,

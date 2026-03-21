@@ -1,6 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using LlmAgents.LlmApi.Llamacpp;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -253,5 +253,32 @@ public class TestSerialization
         Assert.AreEqual("get_weather", message.ToolCalls[0].Function.Name);
         Assert.AreEqual("{\"location\":\"Paris\"}", message.ToolCalls[0].Function.Arguments);
 
+    }
+
+    [TestMethod]
+    public void LlamacppChatCompletionRequest_Serialization()
+    {
+        var messages = new List<ChatCompletionMessageParam>()
+        {
+            new ChatCompletionMessageParamSystem() { Content = new ChatCompletionMessageParamContentString { Content = "this is the system prompt" } },
+            new ChatCompletionMessageParamUser() { Content = new ChatCompletionMessageParamContentString { Content = "this is the user message" } },
+            new ChatCompletionMessageParamAssistant() { Content = new ChatCompletionMessageParamContentString { Content = "this is the assistant message" } }
+        };
+
+        LlamacppChatCompletionRequest request = new()
+        {
+            Model = "test",
+            Messages = messages,
+            SlotId = 0
+        };
+
+        var json = JsonSerializer.Serialize(request);
+        Assert.IsTrue(json.Contains("id_slot"));
+
+        var deserialized = JsonSerializer.Deserialize<LlamacppChatCompletionRequest>(json);
+        Assert.IsNotNull(deserialized);
+        Assert.AreEqual(0, deserialized.SlotId);
+        Assert.AreEqual(3, deserialized.Messages.Count);
+        Assert.AreEqual("test", deserialized.Model);
     }
 }
