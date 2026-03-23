@@ -26,6 +26,7 @@ builder.Services.AddSignalR();
 builder.ConfigureBlazor();
 builder.ConfigureLxcClient();
 builder.ConfigureProvisioning();
+builder.ConfigureGogs();
 builder.ConfigureAuthentication();
 
 var app = builder.Build();

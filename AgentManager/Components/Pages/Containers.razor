@@ -17,6 +17,15 @@
     <MudDataGrid Items="@allocatedInstances" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@loading" T="string">
 	<Columns>
 	    <PropertyColumn Property="x => x" Title="Allocated Agents" />
+	    <TemplateColumn Title="Provision" CellClass="d-flex justify-between">
+		<CellTemplate Context="item">
+		    <MudIconButton
+			Icon="@Icons.Material.Filled.Build"
+			Color="Color.Primary"
+			Size="Size.Small"
+			OnClick="@(() => ProvisionInstance(item.Item))" />
+		</CellTemplate>
+	    </TemplateColumn>
 	    <TemplateColumn Title="Deallocate" CellClass="d-flex justify-between">
 		<CellTemplate Context="item">
 		    <MudIconButton
@@ -82,5 +91,10 @@
     private async Task DeallocateInstance(string instance)
     {
 	await ContainerService.DeallocateXmppAgent(instance);
+    }
+
+    public async Task ProvisionInstance(string instance)
+    {
+	await ContainerService.ProvisionXmppAgent(instance);
     }
 }
