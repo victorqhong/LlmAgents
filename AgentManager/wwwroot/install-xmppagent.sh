@@ -12,7 +12,7 @@ Description=Agent Manager
 After=network.target
 
 [Service]
-ExecStart=/opt/LlmAgents/XmppAgent/bin/Debug/net9.0/XmppAgent agent --xmppConfig /opt/xmpp.json --apiConfig /opt/api.json --toolsConfig /opt/tools.json --persistent
+ExecStart=/opt/LlmAgents/XmppAgent/bin/Debug/net9.0/XmppAgent agent --xmppConfig /opt/xmpp.json --apiConfig /opt/api.json --toolsConfig /opt/tools.json --persistent --managerUrl https://agents.victorqhong.tech
 Restart=always
 User=root
 WorkingDirectory=/root
@@ -24,3 +24,6 @@ WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
 systemctl enable --now XmppAgent
+
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""
+

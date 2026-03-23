@@ -12,6 +12,7 @@ namespace AgentManager.Services;
 public class ContainerService
 {
     private readonly ProvisioningOptions provisioningOptions;
+    private readonly GogsService gogsService;
     private readonly LxdApi api;
 
     private readonly LlmApiConfig llmApiParameters;
@@ -23,9 +24,10 @@ public class ContainerService
 
     public Action? OnContainerUpdated;
 
-    public ContainerService(LxcHttpClient httpClient, WebsocketManager websocketManager, ProvisioningOptions provisioningOptions)
+    public ContainerService(LxcHttpClient httpClient, WebsocketManager websocketManager, ProvisioningOptions provisioningOptions, GogsService gogsService)
     {
         this.provisioningOptions = provisioningOptions;
+        this.gogsService = gogsService;
 
         api = new LxdApi(httpClient, websocketManager);
 
@@ -197,6 +199,42 @@ public class ContainerService
             Width = 212,
             Height = 56
         });
+
+        await api.ExecInstance(instanceName, new InstanceExecPost
+        {
+            Command = ["git", "config", "--global", "user.email", key],
+            CurrentWorkingDirectory = "/opt",
+            Environment = [],
+            User = 0,
+            Group = 0,
+            WaitForWebsocket = true,
+            Interactive = false,
+            Width = 212,
+            Height = 56
+        });
+
+        await api.ExecInstance(instanceName, new InstanceExecPost
+        {
+            Command = ["git", "config", "--global", "user.name", username],
+            CurrentWorkingDirectory = "/opt",
+            Environment = [],
+            User = 0,
+            Group = 0,
+            WaitForWebsocket = true,
+            Interactive = false,
+            Width = 212,
+            Height = 56
+        });
+
+        var pubKey = await api.GetFile(instanceName, "/root/.ssh/id_ed25519.pub");
+        if (!await gogsService.UserExists(username))
+        {
+            await gogsService.CreateUser(username, pubKey);
+        }
+        else
+        {
+            await gogsService.CreatePublicKey(username, pubKey);
+        }
     }
 
     public async Task DeallocateXmppAgent(string instanceName)
@@ -215,6 +253,52 @@ public class ContainerService
         availableUsers.Add(instanceName);
 
         OnContainerUpdated?.Invoke();
+    }
+
+    public async Task ProvisionXmppAgent(string instanceName)
+    {
+        await initialized.Task;
+
+        var key = xmppUsers.Keys.First(key => key.StartsWith(instanceName));
+        var parts = key.Split('@');
+        var username = parts[0];
+        var domain = parts[1];
+
+        await api.ExecInstance(instanceName, new InstanceExecPost
+        {
+            Command = ["git", "config", "--global", "user.email", key],
+            CurrentWorkingDirectory = "/opt",
+            Environment = [],
+            User = 0,
+            Group = 0,
+            WaitForWebsocket = true,
+            Interactive = false,
+            Width = 212,
+            Height = 56
+        });
+
+        await api.ExecInstance(instanceName, new InstanceExecPost
+        {
+            Command = ["git", "config", "--global", "user.name", username],
+            CurrentWorkingDirectory = "/opt",
+            Environment = [],
+            User = 0,
+            Group = 0,
+            WaitForWebsocket = true,
+            Interactive = false,
+            Width = 212,
+            Height = 56
+        });
+
+        var pubKey = await api.GetFile(instanceName, "/root/.ssh/id_ed25519.pub");
+        if (!await gogsService.UserExists(username))
+        {
+            await gogsService.CreateUser(username, pubKey);
+        }
+        else
+        {
+            await gogsService.CreatePublicKey(username, pubKey);
+        }
     }
 
     public class LxdApi
@@ -309,6 +393,11 @@ public class ContainerService
             response.EnsureSuccessStatusCode();
             var result = await response.Content.ReadFromJsonAsync<LxdResponse>() ?? throw new SerializationException();
             return result;
+        }
+
+        public async Task<string> GetFile(string instanceName, string path, string project = "default")
+        {
+            return await httpClient.Get($"1.0/instances/{instanceName}/files?path={Uri.EscapeDataString(path)}&project={project}");
         }
 
         public async Task<ManagedWebSocket?> ConnectWebsocket(string id, string operation, string secret)
