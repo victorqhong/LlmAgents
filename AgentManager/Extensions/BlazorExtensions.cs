@@ -17,6 +17,7 @@ public static class BlazorExtensions
         builder.Services.AddSingleton<AgentSessionService>();
         builder.Services.AddSingleton<AgentLogService>();
         builder.Services.AddSingleton<AgentMessageService>();
+        builder.Services.AddSingleton<AgentStateService>();
         builder.Services.AddSingleton<ContainerService>();
         builder.Services.AddSingleton<WebsocketManager>();
     }

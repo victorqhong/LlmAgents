@@ -54,6 +54,18 @@ public static class AgentExtensions
 
         await hub.StartAsync(CancellationToken.None);
 
+        // Wire up Session with HubConnection for remote persistence
+        agent.Session.HubConnection = hub;
+
+        // Wire up StateDatabase to notify Session of state changes for incremental sync
+        if (agent.StateDatabase != null)
+        {
+            agent.StateDatabase.OnStateChange = (sessionId, key, value) =>
+            {
+                agent.Session.OnStateChanged(key, value);
+            };
+        }
+
         agent.PreWaitForContent += async () =>
         {
             await hub.InvokeAsync("UpdateStatus", agent.Session.SessionId, "WAITING", CancellationToken.None);

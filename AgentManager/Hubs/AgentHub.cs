@@ -20,12 +20,14 @@ public class AgentHub : Hub<IAgentClient>
     private readonly AgentSessionService agentSessionService;
     private readonly AgentLogService agentLogService;
     private readonly AgentMessageService agentMessageService;
+    private readonly AgentStateService agentStateService;
 
-    public AgentHub(AgentSessionService agentSessionService, AgentLogService agentLogService, AgentMessageService agentMessageService)
+    public AgentHub(AgentSessionService agentSessionService, AgentLogService agentLogService, AgentMessageService agentMessageService, AgentStateService agentStateService)
     {
         this.agentSessionService = agentSessionService;
         this.agentLogService = agentLogService;
         this.agentMessageService = agentMessageService;
+        this.agentStateService = agentStateService;
     }
 
     public async Task Register(string agentName, string sessionId, bool persistent)
@@ -114,6 +116,38 @@ public class AgentHub : Hub<IAgentClient>
         }
 
         return jsonArray.ToString();
+    }
+
+    public async Task SyncState(string sessionId, string key, string value)
+    {
+        if (!Guid.TryParse(sessionId, out Guid id))
+        {
+            throw new ArgumentException(nameof(sessionId));
+        }
+
+        var session = await agentSessionService.GetSessionById(id);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        await agentStateService.SetState(id, key, value);
+    }
+
+    public async Task<Dictionary<string, string>> GetAllState(string sessionId)
+    {
+        if (!Guid.TryParse(sessionId, out Guid id))
+        {
+            throw new ArgumentException(nameof(sessionId));
+        }
+
+        var session = await agentSessionService.GetSessionById(id);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        return await agentStateService.GetAllState(id);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

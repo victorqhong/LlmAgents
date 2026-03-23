@@ -19,6 +19,9 @@ public class StateDatabase : IDisposable
 
     private readonly Lock writeLock = new();
 
+    // Callback for state change notifications
+    public Action<string, string, string>? OnStateChange { get; set; }
+
     public StateDatabase(ILoggerFactory LoggerFactory, string database)
     {
         Database = database;
@@ -143,7 +146,7 @@ public class StateDatabase : IDisposable
         }
         catch (Exception e)
         {
-            Log.LogError(e, "Exception while getting session");
+            Log.LogError(e, "Exception while getting sessions");
         }
 
         return [];
@@ -190,6 +193,9 @@ public class StateDatabase : IDisposable
                 command.Parameters.AddWithValue("$updatedAt", DateTime.UtcNow);
                 command.ExecuteNonQuery();
             }
+
+            // Notify listeners of state change
+            OnStateChange?.Invoke(sessionId, key, value);
         }
         catch (Exception e)
         {
@@ -230,7 +236,7 @@ public class StateDatabase : IDisposable
         }
         catch (Exception e)
         {
-            Log.LogError(e, "Exception while getting session");
+            Log.LogError(e, "Exception while getting session state");
         }
 
         return null;
@@ -253,7 +259,7 @@ public class StateDatabase : IDisposable
         }
         catch (Exception e)
         {
-            Log.LogError(e, "Exception while getting session");
+            Log.LogError(e, "Exception while getting session state");
         }
 
         return null;
