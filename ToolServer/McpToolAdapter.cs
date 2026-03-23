@@ -23,6 +23,8 @@ public class McpToolAdapter : McpServerTool
         };
     }
 
+    public bool Debug { get; set; } = false;
+
     public override Tool ProtocolTool => protocolTool;
 
     public async override ValueTask<CallToolResult> InvokeAsync(RequestContext<CallToolRequestParams> request, CancellationToken cancellationToken = default)
@@ -74,6 +76,13 @@ public class McpToolAdapter : McpServerTool
             {
                 Text = $"Got exception: {e.Message}"
             });
+            if (Debug)
+            {
+                result.Content.Add(new TextContentBlock()
+                {
+                    Text = $"Stack trace: {e.StackTrace}"
+                });
+            }
         }
 
         return result;
