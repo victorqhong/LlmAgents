@@ -95,4 +95,10 @@ public static class Options
         Description = "URL of the AgentManager server to connect to",
         DefaultValueFactory = result => null
     };
+
+    public readonly static Option<bool> Debug = new("--debug")
+    {
+        Description = "Whether to enable debug logging",
+        DefaultValueFactory = result => false
+    };
 }

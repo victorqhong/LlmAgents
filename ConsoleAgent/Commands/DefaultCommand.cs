@@ -1,10 +1,11 @@
-using System.CommandLine;
 using LlmAgents;
 using LlmAgents.Agents;
+using LlmAgents.Agents.Work;
 using LlmAgents.Api.Extensions;
 using LlmAgents.CommandLineParser;
 using LlmAgents.Communication;
 using Microsoft.Extensions.Logging;
+using System.CommandLine;
 using LlmAgentsOptions = LlmAgents.CommandLineParser.Options;
 using Parser = LlmAgents.CommandLineParser.Parser;
 
@@ -36,6 +37,7 @@ internal class DefaultCommand : RootCommand
         Options.Add(LlmAgentsOptions.ToolsConfig);
         Options.Add(LlmAgentsOptions.McpConfigPath);
         Options.Add(LlmAgentsOptions.AgentManagerUrl);
+        Options.Add(LlmAgentsOptions.Debug);
     }
 
     private async Task CommandHandler(ParseResult parseResult, CancellationToken cancellationToken)
@@ -94,6 +96,17 @@ internal class DefaultCommand : RootCommand
         {
             await consoleCommunication.SendMessage(string.Format("PromptTokens: {0}, CompletionTokens: {1}, TotalTokens: {2}, Context Used: {3}", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, ((double)usage.TotalTokens / agent.llmApi.ApiConfig.ContextSize).ToString("P"), true));
         };
+
+        if (parseResult.GetValue(LlmAgentsOptions.Debug))
+        {
+            agent.CreateAssistantResponseWork = agent =>
+            {
+                return new GetAssistantResponseWork(loggerFactory, agent)
+                {
+                    OutputReasoning = true,
+                };
+            };
+        }
 
         if (agentParameters.AgentManagerUrl != null)
         {

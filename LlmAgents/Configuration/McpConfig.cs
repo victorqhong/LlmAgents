@@ -8,15 +8,13 @@ public class McpConfig
     public required Dictionary<string, IMcpServerConfig> Servers { get; set; }
 }
 
-[JsonDerivedType(typeof(McpServerConfigHttp))]
-[JsonDerivedType(typeof(McpServerConfigStdio))]
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(McpServerConfigHttp), "http")]
+[JsonDerivedType(typeof(McpServerConfigStdio), "stdio")]
 public interface IMcpServerConfig { }
 
-public class McpServerConfigHttp
+public class McpServerConfigHttp : IMcpServerConfig
 {
-    [JsonPropertyName("type")]
-    public required string Type { get; set; }
-
     [JsonPropertyName("url")]
     public required string Url { get; set; }
 
@@ -24,11 +22,8 @@ public class McpServerConfigHttp
     public Dictionary<string, string>? Headers { get; set; }
 }
 
-public class McpServerConfigStdio
+public class McpServerConfigStdio : IMcpServerConfig
 {
-    [JsonPropertyName("type")]
-    public required string Type { get; set; }
-
     [JsonPropertyName("command")]
     public required string Command { get; set; }
 

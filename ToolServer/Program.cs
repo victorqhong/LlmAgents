@@ -27,6 +27,7 @@ rootCommand.Options.Add(listenAddressOption);
 rootCommand.Options.Add(listenPortOption);
 rootCommand.Options.Add(Options.ToolsConfig);
 rootCommand.Options.Add(Options.WorkingDirectory);
+rootCommand.Options.Add(Options.Debug);
 rootCommand.SetAction(RootCommandHandler);
 
 async Task RootCommandHandler(ParseResult parseResult, CancellationToken cancellationToken)
@@ -35,16 +36,17 @@ async Task RootCommandHandler(ParseResult parseResult, CancellationToken cancell
     var listenPort = parseResult.GetValue(listenPortOption);
     var toolsConfigValue = parseResult.GetValue(Options.ToolsConfig);
     var workingDirectoryValue = parseResult.GetValue(Options.WorkingDirectory);
+    var debug = parseResult.GetValue(Options.Debug);
 
     ArgumentException.ThrowIfNullOrEmpty(listenAddress);
     ArgumentException.ThrowIfNullOrEmpty(toolsConfigValue);
 
-    await RunServer(listenAddress, listenPort, toolsConfigValue, workingDirectoryValue, new ConsoleCommunication(), cancellationToken);
+    await RunServer(listenAddress, listenPort, toolsConfigValue, workingDirectoryValue, new ConsoleCommunication(), debug, cancellationToken);
 }
 
 return await rootCommand.Parse(args).InvokeAsync();
 
-async Task RunServer(string listenAddress, int listenPort, string toolsConfigPath, string? workingDirectory, IAgentCommunication agentCommunication, CancellationToken cancellationToken = default)
+async Task RunServer(string listenAddress, int listenPort, string toolsConfigPath, string? workingDirectory, IAgentCommunication agentCommunication, bool debug, CancellationToken cancellationToken = default)
 {
     if (string.IsNullOrEmpty(workingDirectory))
     {
@@ -86,7 +88,7 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
     }
 
     var tools = toolFactory.Load(toolsFile) ?? [];
-    var mcpTools = tools.Select(tool => new McpToolAdapter(tool));
+    var mcpTools = tools.Select(tool => new McpToolAdapter(tool) { Debug = debug });
 
     var mcpBuilder = builder.Services
         .AddMcpServer()
