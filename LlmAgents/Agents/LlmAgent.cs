@@ -14,19 +14,15 @@ public class LlmAgent
 {
     private readonly ILoggerFactory loggerFactory;
 
-    private readonly List<ChatCompletionFunctionTool> ToolDefinitions = [];
-
-    private readonly Dictionary<string, Tool> ToolMap = [];
-
     public readonly LlmApiOpenAi llmApi;
 
     public readonly IAgentCommunication agentCommunication;
 
-    private readonly List<LlmAgentWork> tasks = [];
-
     public readonly string Id;
 
-    public bool Persistent { get; set; }
+    public readonly SessionCapability SessionCapability;
+
+    public readonly ToolCallCapability ToolCallCapability;
 
     public bool StreamOutput { get; set; }
 
@@ -40,15 +36,7 @@ public class LlmAgent
 
     public Action<ChatCompletionUsage>? PostParseUsage { get; set; }
 
-    public Action<string, JsonDocument, JsonNode>? ToolCalled { get; set; }
-
     public Action<LlmAgentWork>? PostRunWork { get; set; }
-
-    public IToolEventBus? ToolEventBus { get; set; }
-
-    public Session Session { get; private set; }
-
-    public StateDatabase? StateDatabase { get; private set; }
 
     public Func<LlmAgent, GetUserInputWork> CreateUserInputWork { get; set; } = agent => new GetUserInputWork(agent);
 
@@ -59,7 +47,6 @@ public class LlmAgent
     public LlmAgent(LlmAgentParameters parameters, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication, ILoggerFactory loggerFactory)
         : this(parameters.AgentId, llmApi, agentCommunication, loggerFactory)
     {
-        Persistent = parameters.Persistent;
         StreamOutput = parameters.StreamOutput;
     }
 
@@ -70,79 +57,15 @@ public class LlmAgent
         this.agentCommunication = agentCommunication;
         this.loggerFactory = loggerFactory;
 
-        Session = Session.New();
-    }
-
-    public void AddTool(params Tool[] tools)
-    {
-        foreach (var tool in tools)
-        {
-            AddTool(tool);
-        }
-    }
-
-    public void AddTool(Tool tool)
-    {
-        ArgumentNullException.ThrowIfNull(tool);
-
-        ToolDefinitions.Add(tool.Schema);
-        ToolMap.Add(tool.Name, tool);
-    }
-
-    public async Task<JsonNode?> CallTool(string toolName, JsonDocument arguments)
-    {
-        if (!ToolMap.TryGetValue(toolName, out var tool))
-        {
-            return null;
-        }
-
-        var result = await tool.Function(Session, arguments);
-        ToolEventBus?.PostCallToolEvent(tool, arguments, result);
-        ToolCalled?.Invoke(toolName, arguments, result);
-
-        if (Session != null && StateDatabase != null)
-        {
-            tool.Save(Session, StateDatabase);
-        }
-
-        return result;
-    }
-
-    public List<ChatCompletionFunctionTool> GetToolDefinitions()
-    {
-        return ToolDefinitions;
-    }
-
-    public List<ChatCompletionMessageParam> RenderConversation()
-    {
-        return tasks.SelectMany((work, selector) =>
-        {
-            if (work.Messages != null)
-            {
-                return work.Messages;
-            }
-
-            var state = work.GetState(default).ConfigureAwait(false).GetAwaiter().GetResult();
-            if (state != null)
-            {
-                return state;
-            }
-
-            return [];
-        }).ToList();
+        SessionCapability = new SessionCapability(loggerFactory, this);
+        ToolCallCapability = new ToolCallCapability(this);
     }
 
     public async Task<T> RunWork<T>(T work, LlmAgentWork? predecessor, CancellationToken cancellationToken) where T : LlmAgentWork
     {
-        AddWorkToTasks(work, predecessor);
         await work.Run(cancellationToken);
 
         PostRunWork?.Invoke(work);
-
-        if (Persistent)
-        {
-            Session.Save(RenderConversation());
-        }
 
         return work;
     }
@@ -166,32 +89,145 @@ public class LlmAgent
 
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
     }
+}
 
-    public void LoadSession(Session session, StateDatabase stateDatabase)
+public class ToolCallCapability : AgentCapability
+{
+    private readonly List<ChatCompletionFunctionTool> ToolDefinitions = [];
+
+    private readonly Dictionary<string, Tool> ToolMap = [];
+
+    public ToolCallCapability(LlmAgent agent)
+        : base(agent)
+    {
+    }
+
+    public Action<string, JsonDocument, JsonNode>? ToolCalled { get; set; }
+
+    public IToolEventBus? ToolEventBus { get; set; }
+
+    public List<ChatCompletionFunctionTool> GetToolDefinitions()
+    {
+        return ToolDefinitions;
+    }
+
+    public void AddTool(params Tool[] tools)
+    {
+        foreach (var tool in tools)
+        {
+            AddTool(tool);
+        }
+    }
+
+    public void AddTool(Tool tool)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+
+        ToolDefinitions.Add(tool.Schema);
+        ToolMap.Add(tool.Name, tool);
+    }
+
+    public async Task<JsonNode?> CallTool(string toolName, JsonDocument arguments, Session session)
+    {
+        if (!ToolMap.TryGetValue(toolName, out var tool))
+        {
+            return null;
+        }
+
+        var result = await tool.Function(session, arguments);
+        ToolEventBus?.PostCallToolEvent(tool, arguments, result);
+        ToolCalled?.Invoke(toolName, arguments, result);
+
+        if (session != null)
+        {
+            await tool.Save(session);
+        }
+
+        return result;
+    }
+}
+
+public class SessionCapability : AgentCapability
+{
+    public SessionCapability(ILoggerFactory loggerFactory, LlmAgent agent)
+        : base(agent)
+    {
+        Session = Session.Ephemeral(loggerFactory);
+
+        agent.PostRunWork += PostRunWork;
+    }
+
+    public bool Persistent { get; set; }
+
+    public bool OutputMessagesOnLoad { get; set; }
+
+    public Session Session { get; private set; }
+
+    public async Task Load(Session session, CancellationToken cancellationToken)
     {
         Session = session;
-        StateDatabase = stateDatabase;
-        AddWorkToTasks(new StaticMessages(Session.GetMessages(), this), null);
+
+        if (OutputMessagesOnLoad)
+        {
+            await OutputMessages();
+        }
     }
 
-    private void AddWorkToTasks(LlmAgentWork work, LlmAgentWork? predecessor)
+    public List<ChatCompletionMessageParam> RenderConversation()
     {
-        if (predecessor == null)
+        return Session.GetMessages().ToList();
+    }
+
+    private async void PostRunWork(LlmAgentWork work)
+    {
+        if (work.Messages != null)
         {
-            tasks.Add(work);
+            Session.AddMessages(work.Messages);
         }
-        else
+
+        if (Persistent)
         {
-            var index = tasks.IndexOf(predecessor);
-            if (index == -1 || index == tasks.Count - 1)
-            {
-                tasks.Add(work);
-            }
-            else
-            {
-                tasks.Insert(index + 1, work);
-            }
+            await Session.Save();
         }
     }
 
+    private async Task OutputMessages()
+    {
+        foreach (var message in Session.GetMessages())
+        {
+            if (message is ChatCompletionMessageParamUser userMessage)
+            {
+                if (userMessage.Content is ChatCompletionMessageParamContentString contentString)
+                {
+                    await agent.agentCommunication.SendMessage($"User: {contentString.Content}", true);
+                }
+                else if (userMessage.Content is ChatCompletionMessageParamContentParts contentParts)
+                {
+                    foreach (var part in contentParts.Content)
+                    {
+                        if (part is not ChatCompletionContentPartText textPart)
+                        {
+                            continue;
+                        }
+
+                        await agent.agentCommunication.SendMessage($"User: {textPart.Text}", true);
+                    }
+                }
+            }
+            else if (message is ChatCompletionMessageParamAssistant assistantMessage && assistantMessage.Content is ChatCompletionMessageParamContentString stringContent && !string.IsNullOrEmpty(stringContent.Content))
+            {
+                await agent.agentCommunication.SendMessage($"Assistant: {stringContent.Content}", true);
+            }
+        }
+    }
+}
+
+public class AgentCapability
+{
+    protected readonly LlmAgent agent;
+
+    public AgentCapability(LlmAgent agent)
+    {
+        this.agent = agent;
+    }
 }

@@ -1,6 +1,6 @@
 using System.Text.Json;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
-using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.Logging;
 
 namespace LlmAgents.State;
 
@@ -16,25 +16,45 @@ public class Session
         };
     }
 
-    public required string SessionId;
-    public DateTime StartTime { get; set; } = DateTime.UtcNow;
-    public DateTime LastActive { get; set; } = DateTime.UtcNow;
+    public static Session Ephemeral(ILoggerFactory loggerFactory)
+    {
+        var stateDatabase = new StateDatabase(loggerFactory, ":memory:");
+        var sessionDatabase = new SessionDatabase(loggerFactory, stateDatabase);
+        var session = new Session(Guid.NewGuid().ToString(), sessionDatabase)
+        {
+            StartTime = DateTime.UtcNow,
+            LastActive = DateTime.UtcNow,
+            Metadata = string.Empty
+        };
+        sessionDatabase.CreateSession(session);
+        return session;
+    }
+
+    public readonly SessionDatabase SessionDatabase;
+
+    public readonly string SessionId;
+
+    public Session(string sessionId, SessionDatabase sessionDatabase)
+    {
+        SessionId = sessionId;
+        SessionDatabase = sessionDatabase;
+    }
+
+    public DateTime StartTime { get; set; } = DateTime.UnixEpoch;
+    public DateTime LastActive { get; set; } = DateTime.UnixEpoch;
     public string Metadata { get; set; } = string.Empty;
     public string PersistentMessagesPath { get; set; } = Environment.CurrentDirectory;
 
-    // Remote persistence support
-    public HubConnection? HubConnection { get; set; }
-    public StateDatabase? StateDatabase { get; set; }
+    protected readonly List<ChatCompletionMessageParam> messages = [];
 
-    private readonly List<ChatCompletionMessageParam> messages = [];
-    private readonly Dictionary<string, string> pendingStateChanges = new();
-
-    public static Session New(string? sessionId = null)
+    public virtual Task<string?> GetState(string key)
     {
-        return new Session
-        {
-            SessionId = sessionId ?? Guid.NewGuid().ToString()
-        };
+        return Task.FromResult<string?>(null);
+    }
+
+    public virtual Task SetState(string key, string value)
+    {
+        return Task.CompletedTask;
     }
 
     public void AddMessages(ICollection<ChatCompletionMessageParam> messages)
@@ -47,131 +67,64 @@ public class Session
         return messages.ToArray();
     }
 
-    // Track state changes for incremental sync
-    public void OnStateChanged(string key, string value)
+    public async virtual Task Load()
     {
-        lock (pendingStateChanges)
+        await LoadMessages();
+        var session = SessionDatabase.GetSession(SessionId);
+        if (session != null)
         {
-            pendingStateChanges[key] = value;
+            StartTime = session.StartTime;
+            LastActive = session.LastActive;
+            Metadata = session.Metadata;
+        }
+        else
+        {
+            SessionDatabase.CreateSession(this);
         }
     }
 
-    // Unified Load: Local + Remote
-    public async Task Load()
+    public async virtual Task Save()
     {
-        // Load local messages from file
-        LoadLocalMessages();
-
-        // Load remote messages and state if connected
-        if (HubConnection != null)
-        {
-            await LoadFromManager();
-        }
+        await SaveMessages();
+        SessionDatabase.UpdateSessionTime(SessionId, DateTime.UtcNow);
     }
 
-    // Unified Save: Local + Remote
-    public async Task Save(ICollection<ChatCompletionMessageParam> conversationMessages)
+    protected virtual Task LoadMessages()
     {
-        // Save local messages to file
-        SaveLocalMessages(conversationMessages);
-
-        // Send to manager if connected
-        if (HubConnection != null)
+        var messages = LoadMessagesFromDisk();
+        if (messages != null)
         {
-            await SaveToManager(conversationMessages);
+            AddMessages(messages);
         }
+
+        return Task.CompletedTask;
     }
 
-    private void LoadLocalMessages()
+    protected virtual Task SaveMessages()
+    {
+        SaveMessagesToDisk(messages);
+        return Task.CompletedTask;
+    }
+
+    private List<ChatCompletionMessageParam>? LoadMessagesFromDisk()
     {
         var messagesFileName = GetMessagesFilename(SessionId);
         var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
 
         if (!File.Exists(messagesFilePath))
         {
-            return;
+            return null;
         }
 
-        List<ChatCompletionMessageParam>? messages = JsonSerializer.Deserialize<List<ChatCompletionMessageParam>>(File.ReadAllText(messagesFilePath));
-        if (messages == null)
-        {
-            return;
-        }
-
-        AddMessages(messages);
+        return JsonSerializer.Deserialize<List<ChatCompletionMessageParam>>(File.ReadAllText(messagesFilePath));
     }
 
-    private void SaveLocalMessages(ICollection<ChatCompletionMessageParam> conversationMessages)
+    private void SaveMessagesToDisk(List<ChatCompletionMessageParam> messages)
     {
         var messagesFileName = GetMessagesFilename(SessionId);
         var messagesFilePath = Path.GetFullPath(Path.Combine(PersistentMessagesPath, messagesFileName));
 
-        File.WriteAllText(messagesFilePath, JsonSerializer.Serialize(conversationMessages, serializerOptions));
-        this.messages.Clear();
-        this.messages.AddRange(conversationMessages);
-    }
-
-    private async Task LoadFromManager()
-    {
-        try
-        {
-            // Get messages from manager
-            var remoteMessagesJson = await HubConnection!.InvokeAsync<string>("GetMessages", SessionId);
-            if (!string.IsNullOrEmpty(remoteMessagesJson))
-            {
-                var remoteMessages = JsonSerializer.Deserialize<List<ChatCompletionMessageParam>>(remoteMessagesJson);
-                if (remoteMessages != null)
-                {
-                    AddMessages(remoteMessages);
-                }
-            }
-
-            // Get state from manager and populate StateDatabase
-            if (StateDatabase != null)
-            {
-                var allState = await HubConnection!.InvokeAsync<Dictionary<string, string>>("GetAllState", SessionId);
-                if (allState != null)
-                {
-                    foreach (var (key, value) in allState)
-                    {
-                        StateDatabase.SetState(SessionId, key, value);
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            // Log error but continue - remote load failure shouldn't break local operation
-            Console.WriteLine($"Failed to load from manager: {ex.Message}");
-        }
-    }
-
-    private async Task SaveToManager(ICollection<ChatCompletionMessageParam> conversationMessages)
-    {
-        try
-        {
-            // Send messages to manager
-            var messagesJson = JsonSerializer.Serialize(conversationMessages);
-            await HubConnection!.InvokeAsync("AddMessages", SessionId, messagesJson);
-
-            // Send pending state changes
-            Dictionary<string, string> changesToSend;
-            lock (pendingStateChanges)
-            {
-                changesToSend = new Dictionary<string, string>(pendingStateChanges);
-                pendingStateChanges.Clear();
-            }
-
-            foreach (var (key, value) in changesToSend)
-            {
-                await HubConnection!.InvokeAsync("SyncState", SessionId, key, value);
-            }
-        }
-        catch (Exception ex)
-        {
-            // Log error but continue - remote save failure shouldn't break local operation
-            Console.WriteLine($"Failed to save to manager: {ex.Message}");
-        }
+        File.WriteAllText(messagesFilePath, JsonSerializer.Serialize(messages, serializerOptions));
     }
 
     private static string GetMessagesFilename(string id)

@@ -40,7 +40,8 @@ internal class SessionsCommand : Command
         }
 
         using var stateDatabase = new StateDatabase(loggerFactory, Path.Combine(storageDirectory, $"{agentId}.db"));
-        var sessions = stateDatabase.GetSessions();
+        var sessionDatabase = new SessionDatabase(loggerFactory, stateDatabase);
+        var sessions = sessionDatabase.GetSessions();
         if (sessions.Count == 0)
         {
             Console.WriteLine("No sessions");

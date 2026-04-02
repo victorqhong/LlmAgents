@@ -20,7 +20,7 @@ public class AgentMessageService
         persistence = new Persistence(dbFactory);
     }
 
-    public async Task AddMessages(AddMessageDto addMessage)
+    public async Task AddMessages(AddMessagesDto addMessage)
     {
         var session = await agentSessionService.GetSessionById(addMessage.SessionId);
         if (session == null)
@@ -31,6 +31,19 @@ public class AgentMessageService
         await persistence.InsertAsync(addMessage.SessionId, addMessage.Messages);
 
         OnMessage?.Invoke(addMessage.Messages);
+    }
+
+    public async Task SaveMessages(SaveMessagesDto saveMessages)
+    {
+        var session = await agentSessionService.GetSessionById(saveMessages.SessionId);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        await persistence.InsertAsync(saveMessages.SessionId, saveMessages.Messages);
+
+        OnMessage?.Invoke(saveMessages.Messages);
     }
 
     public async Task<List<AgentMessage>> GetMessages()
@@ -59,6 +72,32 @@ public class AgentMessageService
     public class Persistence(IDbContextFactory<AppDbContext> dbContextFactory)
     {
         private readonly IDbContextFactory<AppDbContext> _dbFactory = dbContextFactory;
+
+        public async Task ReplaceAsync(Guid sessionId, ICollection<AgentMessage> messages)
+        {
+            using var db = await _dbFactory.CreateDbContextAsync();
+            var sessionEntity = db.Sessions.Find(sessionId);
+            if (sessionEntity == null)
+            {
+                throw new KeyNotFoundException();
+            }
+
+            var sessionMessages = db.Messages.Where(m => m.Session == sessionEntity);
+            db.Messages.RemoveRange(sessionMessages);
+            var messageEntities = messages.Select(m =>
+            {
+                var messageEntity = new MessageEntity
+                {
+                    Id = 0,
+                    Session = sessionEntity,
+                    Json = m.Json
+                };
+
+                return messageEntity;
+            });
+            await db.Messages.AddRangeAsync(messageEntities);
+            await db.SaveChangesAsync();
+        }
 
         public async Task InsertAsync(Guid sessionId, ICollection<AgentMessage> messages)
         {

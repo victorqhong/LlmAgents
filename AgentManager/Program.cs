@@ -21,7 +21,10 @@ if (!string.IsNullOrEmpty(proxyServerIp) && IPAddress.TryParse(proxyServerIp, ou
     });
 }
 
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(o =>
+{
+    o.MaximumReceiveMessageSize = 1 * 1024 * 1024;
+});
 
 builder.ConfigureBlazor();
 builder.ConfigureLxcClient();

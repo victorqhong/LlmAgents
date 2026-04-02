@@ -21,7 +21,7 @@ public class ToolCalls : LlmAgentWork
 
     public async override Task Run(CancellationToken cancellationToken)
     {
-        var conversation = agent.RenderConversation();
+        var conversation = agent.SessionCapability.RenderConversation();
         if (conversation.Count < 1)
         {
             return;
@@ -50,7 +50,8 @@ public class ToolCalls : LlmAgentWork
             {
                 logger.LogInformation("Calling tool '{name}' with arguments '{arguments}'", toolCall.Function.Name, toolCall.Function.Arguments);
 
-                var toolResult = await agent.CallTool(toolCall.Function.Name, JsonDocument.Parse(toolCall.Function.Arguments));
+                // var toolResult = await agent.CallTool(toolCall.Function.Name, JsonDocument.Parse(toolCall.Function.Arguments));
+                var toolResult = await agent.ToolCallCapability.CallTool(toolCall.Function.Name, JsonDocument.Parse(toolCall.Function.Arguments), agent.SessionCapability.Session);
                 if (toolResult == null)
                 {
                     toolMessages.Add(new ChatCompletionMessageParamTool

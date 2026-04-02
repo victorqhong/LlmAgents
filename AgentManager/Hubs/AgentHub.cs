@@ -12,7 +12,8 @@ public record RegisterSessionDto(Guid SessionId, string AgentName, bool Persiste
 public record RegisterConnection(Guid SessionId, string ConnectionId, string? IpAddress);
 public record UpdateStatusDto(Guid SessionId, string Status);
 public record LogOperationDto(Guid SessionId, string Category, string Message, string Level);
-public record AddMessageDto(Guid SessionId, ICollection<AgentMessage> Messages);
+public record AddMessagesDto(Guid SessionId, ICollection<AgentMessage> Messages);
+public record SaveMessagesDto(Guid SessionId, ICollection<AgentMessage> Messages);
 
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AgentHub : Hub<IAgentClient>
@@ -90,7 +91,31 @@ public class AgentHub : Hub<IAgentClient>
             messages.Add(AgentMessage.Parse(element, session));
         }
 
-        await agentMessageService.AddMessages(new AddMessageDto(id, messages));
+        await agentMessageService.AddMessages(new AddMessagesDto(id, messages));
+    }
+
+    public async Task SaveMessages(string sessionId, string messageJson)
+    {
+        if (!Guid.TryParse(sessionId, out Guid id))
+        {
+            throw new ArgumentException("sessionId is not a GUID", nameof(sessionId));
+        }
+
+        var session = await agentSessionService.GetSessionById(id);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        var messages = new List<AgentMessage>();
+
+        using var doc = JsonDocument.Parse(messageJson);
+        foreach (var element in doc.RootElement.EnumerateArray())
+        {
+            messages.Add(AgentMessage.Parse(element, session));
+        }
+
+        await agentMessageService.SaveMessages(new SaveMessagesDto(id, messages));
     }
 
     public async Task<string> GetMessages(string sessionId)
@@ -116,6 +141,22 @@ public class AgentHub : Hub<IAgentClient>
         }
 
         return jsonArray.ToString();
+    }
+
+    public async Task<string> GetLastUpdated(string sessionId)
+    {
+        if (!Guid.TryParse(sessionId, out Guid id))
+        {
+            throw new ArgumentException("sessionId is not a GUID", nameof(sessionId));
+        }
+
+        var session = await agentSessionService.GetSessionById(id);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        return session.UpdatedAt?.ToString() ?? DateTime.UnixEpoch.ToString();
     }
 
     public async Task SyncState(string sessionId, string key, string value)

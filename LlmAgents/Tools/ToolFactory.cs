@@ -95,7 +95,7 @@ public class ToolFactory
         }
     }
 
-    public Tool[] Load(ToolsConfig toolsConfig, Session? session = null, StateDatabase? stateDatabase = null)
+    public async Task<Tool[]> Load(ToolsConfig toolsConfig, Session? session = null)
     {
         if (toolsConfig.Parameters != null)
         {
@@ -202,12 +202,11 @@ public class ToolFactory
             tools.Add(tool);
         }
 
-        if (session != null && stateDatabase != null)
+        if (session != null)
         {
             foreach (var tool in tools)
             {
-                tool.Load(session, stateDatabase);
-                log.LogInformation("Loaded tool: {tool}", tool.GetType().Name);
+                await tool.Load(session);
             }
         }
 

@@ -44,7 +44,7 @@ public class TestToolFactoryLoad
     }
 
     [TestMethod]
-    public void Load_Successful()
+    public async Task Load_Successful()
     {
         // Arrange: definition pointing to DummyTool in the test assembly.
         var assembly = typeof(DummyTool).Assembly;
@@ -53,9 +53,8 @@ public class TestToolFactoryLoad
         var definition = CreateToolDefinition(typeName, assemblyName, assembly.Location);
         var factory = new ToolFactory(LoggerFactory);
 
-        Console.WriteLine(typeName);
         // Act
-        var tools = factory.Load(definition);
+        var tools = await factory.Load(definition);
 
         // Assert
         Assert.IsNotNull(tools);
@@ -67,7 +66,7 @@ public class TestToolFactoryLoad
     }
 
     [TestMethod]
-    public void Load_MissingAssemblyPath_ReturnsEmpty()
+    public async Task Load_MissingAssemblyPath_ReturnsEmpty()
     {
         // Arrange: provide a non-existent path.
         var assembly = typeof(DummyTool).Assembly;
@@ -77,7 +76,7 @@ public class TestToolFactoryLoad
         var factory = new ToolFactory(LoggerFactory);
 
         // Act
-        var tools = factory.Load(definition);
+        var tools = await factory.Load(definition);
 
         // Assert: Load should not throw and return an empty array.
         Assert.IsNotNull(tools);
@@ -85,7 +84,7 @@ public class TestToolFactoryLoad
     }
 
     [TestMethod]
-    public void Load_TypeNotFound_ReturnsEmpty()
+    public async Task Load_TypeNotFound_ReturnsEmpty()
     {
         // Arrange: correct assembly path but wrong type name.
         var assembly = typeof(DummyTool).Assembly;
@@ -94,7 +93,7 @@ public class TestToolFactoryLoad
         var factory = new ToolFactory(LoggerFactory);
 
         // Act
-        var tools = factory.Load(definition);
+        var tools = await factory.Load(definition);
 
         // Assert: Load should not throw and return an empty array.
         Assert.IsNotNull(tools);

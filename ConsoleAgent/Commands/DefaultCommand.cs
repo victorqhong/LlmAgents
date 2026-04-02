@@ -78,7 +78,7 @@ internal class DefaultCommand : RootCommand
 
         var sessionParameters = Parser.ParseSessionParameters(parseResult);
 
-        string? systemPrompt = Prompts.DefaultSystemPrompt;
+        string systemPrompt = Prompts.DefaultSystemPrompt;
         if (!string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
         {
             systemPrompt = File.ReadAllText(sessionParameters.SystemPromptFile);
@@ -87,6 +87,7 @@ internal class DefaultCommand : RootCommand
         var consoleCommunication = new ConsoleCommunication();
 
         var agent = await LlmAgentFactory.CreateAgent(loggerFactory, consoleCommunication, apiParameters, agentParameters, toolParameters, sessionParameters);
+        agent.SessionCapability.OutputMessagesOnLoad = true;
         agent.PreWaitForContent += async () =>
         {
             await consoleCommunication.SendMessage("User: ", false);

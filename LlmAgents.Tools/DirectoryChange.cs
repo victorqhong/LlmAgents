@@ -89,14 +89,14 @@ public class DirectoryChange : Tool
         return Task.FromResult<JsonNode>(result);
     }
 
-    public override void Save(Session session, StateDatabase stateDatabase)
+    public async override Task Save(Session session)
     {
-        stateDatabase.SetState(session.SessionId, $"{nameof(DirectoryChange)}:{nameof(CurrentDirectory)}", CurrentDirectory);
+        await session.SetState($"{nameof(DirectoryChange)}:{nameof(CurrentDirectory)}", CurrentDirectory);
     }
 
-    public override void Load(Session session, StateDatabase stateDatabase)
+    public async override Task Load(Session session)
     {
-        CurrentDirectory = stateDatabase.GetSessionState(session.SessionId, $"{nameof(DirectoryChange)}:{nameof(CurrentDirectory)}") ?? CurrentDirectory;
+        CurrentDirectory = await session.GetState($"{nameof(DirectoryChange)}:{nameof(CurrentDirectory)}") ?? CurrentDirectory;
         toolEventBus?.PostToolEvent(new Events.ChangeDirectoryEvent { Sender = this, Directory = CurrentDirectory });
     }
 }
