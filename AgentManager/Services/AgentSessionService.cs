@@ -31,6 +31,25 @@ public class AgentSessionService
         return await persistence.GetByIdAsync(sessionId);
     }
 
+    public async Task RemoveSessionAsync(Guid sessionId)
+    {
+        var session = await persistence.GetByIdAsync(sessionId);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        if (connections.ContainsKey(sessionId))
+        {
+            throw new InvalidOperationException("Cannot remove an active session.");
+        }
+
+        await persistence.DeleteAsync(sessionId);
+        connections.TryRemove(sessionId, out _);
+
+        OnChange?.Invoke(session);
+    }
+
     public async Task Register(RegisterSessionDto registerSession, RegisterConnection registerConnection)
     {
         var session = await persistence.GetByIdAsync(registerSession.SessionId);
