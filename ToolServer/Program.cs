@@ -62,7 +62,7 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
     var toolFactory = new ToolFactory(loggerFactory);
 
     var stateDatabase = new StateDatabase(loggerFactory, ":memory:");
-    var sessionDatabase = new SessionDatabase(loggerFactory, stateDatabase);
+    var sessionDatabase = new SessionDatabase(stateDatabase);
     var toolEventBus = new ToolEventBus();
 
     toolFactory.Register(agentCommunication);

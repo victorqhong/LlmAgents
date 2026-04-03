@@ -19,7 +19,7 @@ public class Session
     public static Session Ephemeral(ILoggerFactory loggerFactory)
     {
         var stateDatabase = new StateDatabase(loggerFactory, ":memory:");
-        var sessionDatabase = new SessionDatabase(loggerFactory, stateDatabase);
+        var sessionDatabase = new SessionDatabase(stateDatabase);
         var session = new Session(Guid.NewGuid().ToString(), sessionDatabase)
         {
             StartTime = DateTime.UtcNow,
@@ -49,11 +49,12 @@ public class Session
 
     public virtual Task<string?> GetState(string key)
     {
-        return Task.FromResult<string?>(null);
+        return Task.FromResult(SessionDatabase.GetState(SessionId, key));
     }
 
     public virtual Task SetState(string key, string value)
     {
+        SessionDatabase.SetState(SessionId, key, value);
         return Task.CompletedTask;
     }
 

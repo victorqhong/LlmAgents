@@ -2,19 +2,15 @@ namespace LlmAgents.State;
 
 using System;
 using System.Collections.Generic;
-using Microsoft.Extensions.Logging;
 
 public class SessionDatabase
 {
-    private readonly ILoggerFactory loggerFactory;
-
     private readonly StateDatabase stateDatabase;
 
     public Action<string, string, string>? OnStateChange { get; set; }
 
-    public SessionDatabase(ILoggerFactory loggerFactory, StateDatabase stateDatabase)
+    public SessionDatabase(StateDatabase stateDatabase)
     {
-        this.loggerFactory = loggerFactory;
         this.stateDatabase = stateDatabase;
 
         Initialize();
@@ -132,7 +128,7 @@ public class SessionDatabase
         OnStateChange?.Invoke(sessionId, key, value);
     }
 
-    public List<SessionState>? GetSessionState(string sessionId)
+    public List<SessionState>? GetState(string sessionId)
     {
         List<SessionState>? state = null;
         stateDatabase.Read(command =>
@@ -166,7 +162,7 @@ public class SessionDatabase
         return state;
     }
 
-    public string? GetSessionState(string sessionId, string key)
+    public string? GetState(string sessionId, string key)
     {
         string? state = null;
         stateDatabase.Read(command =>
@@ -230,5 +226,4 @@ CREATE TABLE state (
             command.ExecuteNonQuery();
         });
     }
-
 }

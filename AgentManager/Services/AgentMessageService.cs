@@ -41,7 +41,7 @@ public class AgentMessageService
             throw new KeyNotFoundException();
         }
 
-        await persistence.InsertAsync(saveMessages.SessionId, saveMessages.Messages);
+        await persistence.ReplaceAsync(saveMessages.SessionId, saveMessages.Messages);
 
         OnMessage?.Invoke(saveMessages.Messages);
     }

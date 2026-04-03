@@ -22,7 +22,7 @@ public sealed class TestTodoDatabase
         loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
         stateDb = new StateDatabase(loggerFactory, ":memory:");
-        var sessionDb = new SessionDatabase(loggerFactory, stateDb);
+        var sessionDb = new SessionDatabase(stateDb);
         session = new Session(Guid.NewGuid().ToString(), sessionDb);
         session.SessionDatabase.CreateSession(session);
 

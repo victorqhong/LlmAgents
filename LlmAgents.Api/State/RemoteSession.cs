@@ -34,7 +34,7 @@ public class RemoteSession : Session
             Console.WriteLine($"Failed to load from manager: {ex.Message}");
         }
 
-        if (remoteMessages == null)
+        if (remoteMessages == null || remoteLastUpdated == null)
         {
             return;
         }
@@ -52,7 +52,8 @@ public class RemoteSession : Session
 
     protected async override Task SaveMessages()
     {
-        // right now just add the last message
+        // TODO: right now just add the last message, there better logic to detect
+        // specific changes and only replicate that
         try
         {
             var messagesJson = JsonSerializer.Serialize(messages.TakeLast(1));

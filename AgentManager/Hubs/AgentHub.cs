@@ -159,7 +159,7 @@ public class AgentHub : Hub<IAgentClient>
         return session.UpdatedAt?.ToString() ?? DateTime.UnixEpoch.ToString();
     }
 
-    public async Task SyncState(string sessionId, string key, string value)
+    public async Task SetState(string sessionId, string key, string value)
     {
         if (!Guid.TryParse(sessionId, out Guid id))
         {

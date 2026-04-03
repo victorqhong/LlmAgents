@@ -51,7 +51,6 @@ public static class LlmAgentFactory
         var agent = new LlmAgent(llmAgentParameters, llmApi, agentCommunication, loggerFactory);
 
         var session = await CreateSession(factoryParameters);
-        agent.SessionCapability.Persistent = llmAgentParameters.Persistent;
         await agent.SessionCapability.Load(session, CancellationToken.None);
 
         var tools = await CreateTools(agent, factoryParameters);
@@ -69,50 +68,11 @@ public static class LlmAgentFactory
 
     private static async Task<Session> CreateSession(FactoryParameters factoryParameters)
     {
-        var loggerFactory = factoryParameters.loggerFactory;
         var llmAgentParameters = factoryParameters.agentParameters;
         var sessionParameters = factoryParameters.sessionParameters;
         var stateDatabase = factoryParameters.stateDatabase;
 
-        var sessionDatabase = new SessionDatabase(loggerFactory, stateDatabase);
-
-        Session? session = null;
-        if (llmAgentParameters.AgentManagerUrl != null)
-        {
-            session = await CreateRemoteSession(sessionDatabase, factoryParameters);
-        }
-
-        if (session == null)
-        {
-            session = await CreateLocalSession(sessionDatabase, factoryParameters);
-        }
-
-        if (llmAgentParameters.Persistent)
-        {
-            await session.Load();
-        }
-        else if (!string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
-        {
-            var textContent = new ChatCompletionMessageParamSystem
-            {
-                Content = new ChatCompletionMessageParamContentString { Content = File.ReadAllText(sessionParameters.SystemPromptFile) }
-            };
-
-            session.AddMessages([textContent]);
-        }
-
-        return session;
-    }
-
-    private static Task<Session?> CreateRemoteSession(SessionDatabase sessionDatabase, FactoryParameters factoryParameters)
-    {
-        return Task.FromResult<Session?>(null);
-    }
-
-    private static Task<Session> CreateLocalSession(SessionDatabase sessionDatabase, FactoryParameters factoryParameters)
-    {
-        var llmAgentParameters = factoryParameters.agentParameters;
-        var sessionParameters = factoryParameters.sessionParameters;
+        var sessionDatabase = new SessionDatabase(stateDatabase);
 
         Session? session = null;
         if (!string.IsNullOrEmpty(sessionParameters.SessionId))
@@ -132,7 +92,21 @@ public static class LlmAgentFactory
 
         session.PersistentMessagesPath = llmAgentParameters.StorageDirectory;
 
-        return Task.FromResult(session);
+        if (llmAgentParameters.Persistent)
+        {
+            await session.Load();
+        }
+        else if (!string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
+        {
+            var textContent = new ChatCompletionMessageParamSystem
+            {
+                Content = new ChatCompletionMessageParamContentString { Content = File.ReadAllText(sessionParameters.SystemPromptFile) }
+            };
+
+            session.AddMessages([textContent]);
+        }
+
+        return session;
     }
 
     private static async Task<Tool[]> CreateTools(LlmAgent agent, FactoryParameters factoryParameters)
@@ -199,7 +173,7 @@ public static class LlmAgentFactory
 
             toolFactory.Register(agentCommunication);
             toolFactory.Register(loggerFactory);
-            toolFactory.Register< IToolEventBus>(toolEventBus);
+            toolFactory.Register<IToolEventBus>(toolEventBus);
             toolFactory.Register(stateDatabase);
 
             toolFactory.AddParameter("basePath", sessionParameters.WorkingDirectory ?? Environment.CurrentDirectory);

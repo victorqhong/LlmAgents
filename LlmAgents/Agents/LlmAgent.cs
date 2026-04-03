@@ -48,6 +48,8 @@ public class LlmAgent
         : this(parameters.AgentId, llmApi, agentCommunication, loggerFactory)
     {
         StreamOutput = parameters.StreamOutput;
+
+        SessionCapability.Persistent = parameters.Persistent;
     }
 
     public LlmAgent(string id, LlmApiOpenAi llmApi, IAgentCommunication agentCommunication, ILoggerFactory loggerFactory)

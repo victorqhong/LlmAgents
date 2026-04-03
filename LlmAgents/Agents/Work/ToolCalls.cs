@@ -50,7 +50,6 @@ public class ToolCalls : LlmAgentWork
             {
                 logger.LogInformation("Calling tool '{name}' with arguments '{arguments}'", toolCall.Function.Name, toolCall.Function.Arguments);
 
-                // var toolResult = await agent.CallTool(toolCall.Function.Name, JsonDocument.Parse(toolCall.Function.Arguments));
                 var toolResult = await agent.ToolCallCapability.CallTool(toolCall.Function.Name, JsonDocument.Parse(toolCall.Function.Arguments), agent.SessionCapability.Session);
                 if (toolResult == null)
                 {
