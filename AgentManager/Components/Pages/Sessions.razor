@@ -8,6 +8,7 @@
 @using System.Collections.ObjectModel
 
 @inject AgentSessionService AgentSessionService
+@inject ISnackbar Snackbar
 
 <PageTitle>Sessions</PageTitle>
 
@@ -29,6 +30,19 @@
                 <PropertyColumn Property="x => x.AgentName" Title="Agent" />
                 <PropertyColumn Property="x => x.Id" Title="Id" />
                 <PropertyColumn Property="x => x.Status" Title="Status" />
+                <AuthorizeView Roles="Admin">
+                    <Authorized>
+                        <TemplateColumn Title="Actions" CellClass="d-flex justify-center">
+                            <CellTemplate Context="item">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               Disabled="@loading"
+                                               OnClick="@(() => RemoveSessionAsync(item.Item))" />
+                            </CellTemplate>
+                        </TemplateColumn>
+                    </Authorized>
+                </AuthorizeView>
             </Columns>
         </MudDataGrid>
     }
@@ -40,17 +54,16 @@
 
     protected override async Task OnInitializedAsync()
     {
-        loading = true;
-        foreach (var session in await AgentSessionService.GetAllAsync())
-        {
-            sessions.Add(session);
-        }
-        loading = false;
-
+        await LoadSessionsAsync();
         AgentSessionService.OnChange += OnSessionsChange;
     }
 
-    private async void OnSessionsChange(AgentSession session)
+    private void OnSessionsChange(AgentSession session)
+    {
+        _ = InvokeAsync(LoadSessionsAsync);
+    }
+
+    private async Task LoadSessionsAsync()
     {
         sessions.Clear();
         loading = true;
@@ -59,6 +72,27 @@
             sessions.Add(s);
         }
         loading = false;
+    }
+
+    private async Task RemoveSessionAsync(AgentSession session)
+    {
+        try
+        {
+            await AgentSessionService.RemoveSessionAsync(session.Id);
+            Snackbar.Add("Session removed.", Severity.Success);
+        }
+        catch (InvalidOperationException)
+        {
+            Snackbar.Add("Cannot remove an active session.", Severity.Error);
+        }
+        catch (KeyNotFoundException)
+        {
+            Snackbar.Add("Session not found.", Severity.Error);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Failed to remove session.", Severity.Error);
+        }
     }
 
     public void Dispose()
