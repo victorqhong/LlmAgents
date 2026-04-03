@@ -27,7 +27,7 @@ public class Shell : Tool
     private readonly StringBuilder stdout = new StringBuilder();
     private readonly StringBuilder stderr = new StringBuilder();
 
-    private string? commandId;
+    private string? commandSentinel;
     private bool receivedOutput = false;
 
     private string currentDirectory;
@@ -41,75 +41,7 @@ public class Shell : Tool
 
         currentDirectory = toolFactory.GetParameter("basePath") ?? Environment.CurrentDirectory;
 
-        Process = new Process();
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            Process.StartInfo.FileName = "pwsh";
-            Process.StartInfo.ArgumentList.Add("-NoLogo");
-            Process.StartInfo.ArgumentList.Add("-NonInteractive");
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            Process.StartInfo.FileName = "bash";
-        }
-        else
-        {
-            throw new NotImplementedException(RuntimeInformation.RuntimeIdentifier);
-        }
-
-        Process.StartInfo.WorkingDirectory = Path.IsPathFullyQualified(currentDirectory) ? currentDirectory : Path.Combine(Environment.CurrentDirectory, currentDirectory);
-
-        Process.StartInfo.UseShellExecute = false;
-        Process.StartInfo.RedirectStandardOutput = true;
-        Process.StartInfo.RedirectStandardInput = true;
-        Process.StartInfo.RedirectStandardError = true;
-        Process.EnableRaisingEvents = true;
-
-        Process.OutputDataReceived += (sender, e) =>
-        {
-            if (string.IsNullOrEmpty(e.Data))
-            {
-                return;
-            }
-
-            if (string.IsNullOrEmpty(commandId))
-            {
-                return;
-            }
-
-            receivedOutput = e.Data.Contains(commandId);
-            if (receivedOutput)
-            {
-                return;
-            }
-
-            stdout.AppendLine(e.Data);
-            Log.LogInformation("{data}", e.Data);
-        };
-
-        Process.ErrorDataReceived += (sender, e) =>
-        {
-            if (string.IsNullOrEmpty(e.Data))
-            {
-                return;
-            }
-
-            if (receivedOutput)
-            {
-                return;
-            }
-
-            stderr.AppendLine(e.Data);
-            Log.LogInformation("{data}", e.Data);
-        };
-
-        Process.Start();
-        Process.BeginOutputReadLine();
-        Process.BeginErrorReadLine();
-
-        receivedOutput = true;
-        Process.StandardInput.WriteLine("$PSStyle.OutputRendering='Plain'");
+        Process = StartShellProcess();
 
         var toolEventBus = toolFactory.ResolveWithDefault<IToolEventBus>();
         toolEventBus?.SubscribeToolEvent<DirectoryChange>(OnChangeDirectory);
@@ -148,8 +80,8 @@ public class Shell : Tool
 
         try
         {
-            commandId = Guid.NewGuid().ToString();
-            var commandDelimiter = $"{echoCommand} \"{commandId}\"";
+            commandSentinel = $"__llmagents_eoc_{Guid.NewGuid()}__";
+            var commandDelimiter = $"{echoCommand} \"{commandSentinel}\"";
 
             CancellationTokenSource = new CancellationTokenSource();
 
@@ -157,6 +89,7 @@ public class Shell : Tool
 
             stdout.Clear();
             stderr.Clear();
+            EnsureShellProcess();
             Process.StandardInput.WriteLine(command);
             Process.StandardInput.WriteLine(commandDelimiter);
             Process.StandardInput.Flush();
@@ -182,6 +115,7 @@ public class Shell : Tool
             if (!receivedOutput)
             {
                 result.Add("warning", $"shell did not exit and may still be running");
+                RestartShellProcess();
             }
 
             result.Add("stdout", stdout.ToString());
@@ -190,6 +124,7 @@ public class Shell : Tool
         catch (Exception e)
         {
             result.Add("exception", e.Message);
+            RestartShellProcess();
         }
 
         return Task.FromResult<JsonNode>(result);
@@ -206,8 +141,109 @@ public class Shell : Tool
             currentDirectory = cde.Directory;
         }
 
-        Process.StandardInput.WriteLine($"cd {currentDirectory}");
+        EnsureShellProcess();
+        Process.StandardInput.WriteLine($"cd \"{currentDirectory}\"");
 
         return Task.CompletedTask;
+    }
+
+    private Process StartShellProcess()
+    {
+        var process = new Process();
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            process.StartInfo.FileName = "pwsh";
+            process.StartInfo.ArgumentList.Add("-NoLogo");
+            process.StartInfo.ArgumentList.Add("-NonInteractive");
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            process.StartInfo.FileName = "bash";
+        }
+        else
+        {
+            throw new NotImplementedException(RuntimeInformation.RuntimeIdentifier);
+        }
+
+        process.StartInfo.WorkingDirectory = Path.IsPathFullyQualified(currentDirectory) ? currentDirectory : Path.Combine(Environment.CurrentDirectory, currentDirectory);
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardInput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.EnableRaisingEvents = true;
+
+        process.OutputDataReceived += (sender, e) =>
+        {
+            if (string.IsNullOrEmpty(e.Data))
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(commandSentinel) && string.Equals(e.Data.Trim(), commandSentinel, StringComparison.Ordinal))
+            {
+                receivedOutput = true;
+                return;
+            }
+
+            stdout.AppendLine(e.Data);
+            Log.LogInformation("{data}", e.Data);
+        };
+
+        process.ErrorDataReceived += (sender, e) =>
+        {
+            if (string.IsNullOrEmpty(e.Data))
+            {
+                return;
+            }
+
+            stderr.AppendLine(e.Data);
+            Log.LogInformation("{data}", e.Data);
+        };
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        process.StandardInput.WriteLine("$PSStyle.OutputRendering='Plain'");
+        process.StandardInput.Flush();
+
+        return process;
+    }
+
+    private void RestartShellProcess()
+    {
+        DisposeShellProcess();
+        Process = StartShellProcess();
+        receivedOutput = true;
+        commandSentinel = null;
+    }
+
+    private void DisposeShellProcess()
+    {
+        try
+        {
+            if (!Process.HasExited)
+            {
+                Process.Kill(entireProcessTree: true);
+                Process.WaitForExit(2000);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.LogWarning(e, "Exception while disposing shell process");
+        }
+        finally
+        {
+            Process.Dispose();
+        }
+    }
+
+    private void EnsureShellProcess()
+    {
+        if (Process.HasExited)
+        {
+            RestartShellProcess();
+        }
     }
 }
