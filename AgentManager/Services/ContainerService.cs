@@ -176,7 +176,12 @@ public class ContainerService
                 "LlmAgents.Tools.FileList, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
                 "LlmAgents.Tools.FileRead, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
                 "LlmAgents.Tools.FileWrite, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                "LlmAgents.Tools.Shell, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "LlmAgents.Tools.ShellExec, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "LlmAgents.Tools.ShellRead, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "LlmAgents.Tools.ShellWrite, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "LlmAgents.Tools.ShellStatus, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "LlmAgents.Tools.ShellInterrupt, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                "LlmAgents.Tools.ShellStop, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
             }
         });
         var toolsConfig = new MemoryStream();

@@ -77,7 +77,7 @@ public sealed class TestLlmAgent
         var toolFactory = new ToolFactory(loggerFactory);
         toolFactory.Register<ILoggerFactory>(loggerFactory);
         var agent = CreateAgent(out var communication);
-        agent.ToolCallCapability.AddTool(new Shell(toolFactory));
+        agent.ToolCallCapability.AddTool(new ShellExec(toolFactory));
 
         var tools = agent.ToolCallCapability.GetToolDefinitions();
         Assert.IsTrue(tools.Count > 0);
