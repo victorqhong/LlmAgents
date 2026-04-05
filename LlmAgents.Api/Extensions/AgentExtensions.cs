@@ -1,6 +1,8 @@
+using System.Net;
 using System.Text.Json;
 using LlmAgents.Agents;
 using LlmAgents.Api.GitHub;
+using LlmAgents.Api.State;
 using LlmAgents.Communication;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
@@ -37,7 +39,7 @@ public static class AgentExtensions
         hub.Reconnected += async connectionId =>
         {
             logger.LogInformation("Reconnected to hub");
-            await hub.InvokeAsync("Register", agent.Id, agent.Session.SessionId, agent.Persistent, CancellationToken.None);
+            await hub.InvokeAsync("Register", agent.Id, agent.SessionCapability.Session.SessionId, agent.SessionCapability.Persistent, CancellationToken.None);
         };
 
         hub.Closed += e =>
@@ -52,35 +54,56 @@ public static class AgentExtensions
             return Task.CompletedTask;
         };
 
-        await hub.StartAsync(CancellationToken.None);
+        var retry = false;
+        try
+        {
+            await hub.StartAsync(CancellationToken.None);
+        }
+        catch (HttpRequestException e)
+        {
+            if (e.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                HubAuthTokenStore.ClearToken();
+                retry = true;
+            }
+        }
+
+        if (retry)
+        {
+            try
+            {
+                await hub.StartAsync(CancellationToken.None);
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(e, "Exception while connecting to hub");
+                return null;
+            }
+        }
 
         agent.PreWaitForContent += async () =>
         {
-            await hub.InvokeAsync("UpdateStatus", agent.Session.SessionId, "WAITING", CancellationToken.None);
+            await hub.InvokeAsync("UpdateStatus", agent.SessionCapability.Session.SessionId, "WAITING", CancellationToken.None);
         };
         agent.PostParseUsage += async (usage) =>
         {
-            await hub.InvokeAsync("Log", agent.Session.SessionId, "Usage", $"{{ \"PromptTokens\": {usage.PromptTokens}, \"CompletionTokens\": {usage.CompletionTokens}, \"TotalTokens\": {usage.TotalTokens} }}", "INFO", CancellationToken.None);
+            await hub.InvokeAsync("Log", agent.SessionCapability.Session.SessionId, "Usage", $"{{ \"PromptTokens\": {usage.PromptTokens}, \"CompletionTokens\": {usage.CompletionTokens}, \"TotalTokens\": {usage.TotalTokens} }}", "INFO", CancellationToken.None);
         };
-        agent.ToolCalled += async (tool, arguments, result) =>
-        {
-            await hub.InvokeAsync("Log", agent.Session.SessionId, "Tool", $"{{ \"Name\": \"{tool}\", \"Arguments\": {JsonSerializer.Serialize(arguments)}, \"Result\": {JsonSerializer.Serialize(result)} }}", "INFO", CancellationToken.None);
-        };
-        agent.PostRunWork += async work =>
-        {
-            if (work.Messages == null)
-            {
-                return;
-            }
 
-            await hub.InvokeAsync("AddMessages", agent.Session.SessionId, JsonSerializer.Serialize(work.Messages), CancellationToken.None);
+        agent.ToolCallCapability.ToolCalled += async (tool, arguments, result) =>
+        {
+            await hub.InvokeAsync("Log", agent.SessionCapability.Session.SessionId, "Tool", $"{{ \"Name\": \"{tool}\", \"Arguments\": {JsonSerializer.Serialize(arguments)}, \"Result\": {JsonSerializer.Serialize(result)} }}", "INFO", CancellationToken.None);
         };
         agent.PostReceiveContent += async () =>
         {
-            await hub.InvokeAsync("UpdateStatus", agent.Session.SessionId, "WORKING", CancellationToken.None);
+            await hub.InvokeAsync("UpdateStatus", agent.SessionCapability.Session.SessionId, "WORKING", CancellationToken.None);
         };
 
-        await hub.InvokeAsync("Register", agent.Id, agent.Session.SessionId, agent.Persistent, CancellationToken.None);
+        await hub.InvokeAsync("Register", agent.Id, agent.SessionCapability.Session.SessionId, agent.SessionCapability.Persistent, CancellationToken.None);
+
+        var remoteSession = new RemoteSession(agent.SessionCapability.Session.SessionId, hub, agent.SessionCapability.Session.SessionDatabase);
+        await remoteSession.Load();
+        await agent.SessionCapability.Load(remoteSession, CancellationToken.None);
 
         return hub;
     }

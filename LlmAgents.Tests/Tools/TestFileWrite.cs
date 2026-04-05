@@ -34,7 +34,7 @@ public class TestFileWrite
         var toolFactory = new ToolFactory(loggerFactory);
         var tool = new FileWrite(toolFactory);
 
-        var result = await tool.Function(Session.New(), parameters);
+        var result = await tool.Function(Session.Ephemeral(loggerFactory), parameters);
         Assert.IsNotNull(result);
         var obj = result as JsonObject;
         Assert.IsNotNull(obj);

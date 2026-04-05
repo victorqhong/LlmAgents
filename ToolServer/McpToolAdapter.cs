@@ -1,9 +1,10 @@
-﻿namespace ToolServer;
+namespace ToolServer;
 
 using System.Text.Json;
 using LlmAgents.State;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using Microsoft.Extensions.Logging;
 
 public class McpToolAdapter : McpServerTool
 {
@@ -43,8 +44,9 @@ public class McpToolAdapter : McpServerTool
 
         Session? session = null;
         var httpContextAccessor = request.Services?.GetService<IHttpContextAccessor>();
-        var stateDatabase = request.Services?.GetService<StateDatabase>();
-        if (httpContextAccessor != null && stateDatabase != null)
+        var loggerFactory = request.Services?.GetService<ILoggerFactory>() ?? new LoggerFactory();
+        var sessionDatabase = request.Services?.GetService<SessionDatabase>();
+        if (httpContextAccessor != null && sessionDatabase != null)
         {
             var headers = httpContextAccessor.HttpContext?.Request.Headers;
             if (headers != null)
@@ -52,17 +54,20 @@ public class McpToolAdapter : McpServerTool
                 var sessionId = headers["X-Session-Id"].FirstOrDefault();
                 if (!string.IsNullOrEmpty(sessionId))
                 {
-                    session = stateDatabase.GetSession(sessionId);
+                    session = sessionDatabase.GetSession(sessionId);
                     if (session == null)
                     {
-                        session = Session.New(sessionId);
-                        stateDatabase.CreateSession(session);
+                        session = new Session(sessionId, sessionDatabase);
+                        sessionDatabase.CreateSession(session);
                     }
                 }
             }
         }
 
-        session ??= Session.New();
+        if (session == null)
+        {
+            session = Session.Ephemeral(loggerFactory);
+        }
 
         try
         {

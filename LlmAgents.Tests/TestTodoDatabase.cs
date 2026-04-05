@@ -1,3 +1,4 @@
+using System;
 using LlmAgents.State;
 using LlmAgents.Tools.Todo;
 using Microsoft.Extensions.Logging;
@@ -19,12 +20,14 @@ public sealed class TestTodoDatabase
     public TestTodoDatabase()
     {
         loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-        session = Session.New();
 
         stateDb = new StateDatabase(loggerFactory, ":memory:");
-        stateDb.CreateSession(session);
+        var sessionDb = new SessionDatabase(stateDb);
+        session = new Session(Guid.NewGuid().ToString(), sessionDb);
+        session.SessionDatabase.CreateSession(session);
 
         db = CreateDatabase();
+        ClearTables();
     }
 
     private TodoDatabase CreateDatabase()
@@ -32,10 +35,25 @@ public sealed class TestTodoDatabase
         return new TodoDatabase(loggerFactory, stateDb);
     }
 
+    private void ClearTables()
+    {
+        stateDb.Write(command =>
+        {
+            command.CommandText = "DELETE FROM todo_items;";
+            command.ExecuteNonQuery();
+        });
+        stateDb.Write(command =>
+        {
+            command.CommandText = "DELETE FROM todo_groups;";
+            command.ExecuteNonQuery();
+        });
+    }
+
     [TestInitialize]
     public void NewDatabase()
     {
         db = CreateDatabase();
+        ClearTables();
     }
 
     [TestCleanup]

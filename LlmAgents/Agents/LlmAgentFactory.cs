@@ -20,9 +20,6 @@ public static class LlmAgentFactory
         ToolParameters toolParameters,
         SessionParameters sessionParameters)
     {
-        var llmApi = llmApiParameters.Llamacpp != null ? new LlmApiLlamacpp(loggerFactory, llmApiParameters) : new LlmApiOpenAi(loggerFactory, llmApiParameters);
-        var agent = new LlmAgent(llmAgentParameters, llmApi, agentCommunication, loggerFactory);
-
         if (string.IsNullOrEmpty(sessionParameters.WorkingDirectory))
         {
             sessionParameters.WorkingDirectory = Environment.CurrentDirectory;
@@ -39,46 +36,87 @@ public static class LlmAgentFactory
 
         var stateDatabase = new StateDatabase(loggerFactory, Path.Join(llmAgentParameters.StorageDirectory, $"{llmAgentParameters.AgentId}.db"));
 
+        var factoryParameters = new FactoryParameters
+        {
+            loggerFactory = loggerFactory,
+            agentCommunication = agentCommunication,
+            apiConfig = llmApiParameters,
+            agentParameters = llmAgentParameters,
+            toolParameters = toolParameters,
+            sessionParameters = sessionParameters,
+            stateDatabase = stateDatabase
+        };
+
+        var llmApi = CreateLlmApi(factoryParameters);
+        var agent = new LlmAgent(llmAgentParameters, llmApi, agentCommunication, loggerFactory);
+
+        var session = await CreateSession(factoryParameters);
+        await agent.SessionCapability.Load(session, CancellationToken.None);
+
+        var tools = await CreateTools(agent, factoryParameters);
+        agent.ToolCallCapability.AddTool(tools);
+
+        return agent;
+    }
+
+    private static LlmApiOpenAi CreateLlmApi(FactoryParameters factoryParameters)
+    {
+        var loggerFactory = factoryParameters.loggerFactory;
+        var llmApiParameters = factoryParameters.apiConfig;
+        return llmApiParameters.Llamacpp != null ? new LlmApiLlamacpp(loggerFactory, llmApiParameters) : new LlmApiOpenAi(loggerFactory, llmApiParameters);
+    }
+
+    private static async Task<Session> CreateSession(FactoryParameters factoryParameters)
+    {
+        var llmAgentParameters = factoryParameters.agentParameters;
+        var sessionParameters = factoryParameters.sessionParameters;
+        var stateDatabase = factoryParameters.stateDatabase;
+
+        var sessionDatabase = new SessionDatabase(stateDatabase);
+
         Session? session = null;
         if (!string.IsNullOrEmpty(sessionParameters.SessionId))
         {
-            session = stateDatabase.GetSession(sessionParameters.SessionId);
-            if (session == null)
-            {
-                session = Session.New(sessionParameters.SessionId);
-                stateDatabase.CreateSession(session);
-            }
+            session = sessionDatabase.GetSession(sessionParameters.SessionId);
         }
-        else
+        else if (llmAgentParameters.Persistent)
         {
-            if (llmAgentParameters.Persistent)
-            {
-                session = stateDatabase.GetLatestSession();
-            }
+            session = sessionDatabase.GetLatestSession();
+        }
 
-            if (session == null)
-            {
-                session = Session.New();
-                stateDatabase.CreateSession(session);
-            }
+        if (session == null)
+        {
+            session = new Session(sessionParameters.SessionId ?? Guid.NewGuid().ToString(), sessionDatabase);
+            sessionDatabase.CreateSession(session);
         }
 
         session.PersistentMessagesPath = llmAgentParameters.StorageDirectory;
 
         if (llmAgentParameters.Persistent)
         {
-            session.Load();
+            await session.Load();
         }
         else if (!string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
         {
             var textContent = new ChatCompletionMessageParamSystem
             {
-                Content = new ChatCompletionMessageParamContentString { Content = File.ReadAllText(sessionParameters.SystemPromptFile) },
+                Content = new ChatCompletionMessageParamContentString { Content = File.ReadAllText(sessionParameters.SystemPromptFile) }
             };
+
             session.AddMessages([textContent]);
         }
 
-        agent.LoadSession(session, stateDatabase);
+        return session;
+    }
+
+    private static async Task<Tool[]> CreateTools(LlmAgent agent, FactoryParameters factoryParameters)
+    {
+        var loggerFactory = factoryParameters.loggerFactory;
+        var llmAgentParameters = factoryParameters.agentParameters;
+        var sessionParameters = factoryParameters.sessionParameters;
+        var toolParameters = factoryParameters.toolParameters;
+        var agentCommunication = factoryParameters.agentCommunication;
+        var stateDatabase = factoryParameters.stateDatabase;
 
         List<Tool> tools = [];
 
@@ -103,7 +141,7 @@ public static class LlmAgentFactory
                         }
                     }
 
-                    httpClient.DefaultRequestHeaders.Add("X-Session-Id", session.SessionId);
+                    httpClient.DefaultRequestHeaders.Add("X-Session-Id", agent.SessionCapability.Session.SessionId);
                     httpClient.DefaultRequestHeaders.Add("X-Agent-Id", agent.Id);
 
                     var clientTransport = new SseClientTransport(
@@ -119,7 +157,7 @@ public static class LlmAgentFactory
                     var stdioTransport = new StdioClientTransport(new StdioClientTransportOptions
                     {
                         Command = stdioMcpServer.Command,
-                        Arguments = stdioMcpServer.Args 
+                        Arguments = stdioMcpServer.Args
                     });
 
                     var toolFactory = new ToolFactory(loggerFactory);
@@ -138,24 +176,19 @@ public static class LlmAgentFactory
             toolFactory.Register<IToolEventBus>(toolEventBus);
             toolFactory.Register(stateDatabase);
 
-            toolFactory.AddParameter("basePath", sessionParameters.WorkingDirectory);
+            toolFactory.AddParameter("basePath", sessionParameters.WorkingDirectory ?? Environment.CurrentDirectory);
             toolFactory.AddParameter("storageDirectory", llmAgentParameters.StorageDirectory);
 
             var toolsFile = JsonSerializer.Deserialize<ToolsConfig>(File.ReadAllText(toolParameters.ToolsConfig));
             if (toolsFile != null)
             {
-                tools.AddRange(toolFactory.Load(toolsFile, session, stateDatabase));
+                tools.AddRange(await toolFactory.Load(toolsFile, agent.SessionCapability.Session));
             }
 
-            agent.ToolEventBus = toolEventBus;
+            agent.ToolCallCapability.ToolEventBus = toolEventBus;
         }
 
-        if (tools.Count > 0)
-        {
-            agent.AddTool(tools.ToArray());
-        }
-
-        return agent;
+        return tools.ToArray();
     }
 
     private static async Task<IEnumerable<Tool>> CreateMcpTools(IClientTransport clientTransport, ToolFactory toolFactory)
@@ -163,5 +196,16 @@ public static class LlmAgentFactory
         var client = await McpClientFactory.CreateAsync(clientTransport);
         var tools = await client.ListToolsAsync();
         return tools.Select(tool => new McpTool(tool, client, toolFactory));
+    }
+
+    private class FactoryParameters
+    {
+        public required ILoggerFactory loggerFactory;
+        public required IAgentCommunication agentCommunication;
+        public required LlmApiConfig apiConfig;
+        public required LlmAgentParameters agentParameters;
+        public required ToolParameters toolParameters;
+        public required SessionParameters sessionParameters;
+        public required StateDatabase stateDatabase;
     }
 }

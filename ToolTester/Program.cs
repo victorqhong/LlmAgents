@@ -47,14 +47,14 @@ static async Task RootCommandHandler(ParseResult parseResult, CancellationToken 
         return;
     }
 
-    var tools = toolFactory.Load(toolsFile);
+    var tools = await toolFactory.Load(toolsFile);
     if (tools == null || tools.Length == 0)
     {
         Console.Error.WriteLine("Tools could not be created");
         return;
     }
 
-    var session = Session.New();
+    var session = Session.Ephemeral(loggerFactory);
 
     while (!cancellationToken.IsCancellationRequested)
     {

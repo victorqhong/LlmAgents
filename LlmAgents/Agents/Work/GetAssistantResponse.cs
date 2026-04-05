@@ -33,9 +33,9 @@ public class GetAssistantResponseWork : LlmAgentWork
 
     public async override Task Run(CancellationToken cancellationToken)
     {
-        Tools ??= agent.GetToolDefinitions();
+        Tools ??= agent.ToolCallCapability.GetToolDefinitions();
 
-        var conversation = agent.RenderConversation();
+        var conversation = agent.SessionCapability.RenderConversation();
 
         agent.PreGetResponse?.Invoke();
         var parser = await agent.llmApi.GetStreamingCompletion(conversation, Tools, ToolChoice, OutputReasoning, cancellationToken);

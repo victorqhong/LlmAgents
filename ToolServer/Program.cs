@@ -62,12 +62,13 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
     var toolFactory = new ToolFactory(loggerFactory);
 
     var stateDatabase = new StateDatabase(loggerFactory, ":memory:");
+    var sessionDatabase = new SessionDatabase(stateDatabase);
     var toolEventBus = new ToolEventBus();
 
     toolFactory.Register(agentCommunication);
     toolFactory.Register(loggerFactory);
-    toolFactory.Register(stateDatabase);
-    toolFactory.Register<IToolEventBus>(toolEventBus);
+    toolFactory.Register(sessionDatabase);
+    toolFactory.Register< IToolEventBus>(toolEventBus);
 
     toolFactory.AddParameter("basePath", workingDirectory);
 
@@ -77,6 +78,7 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
         .UseUrls($"http://{listenAddress}:{listenPort}");
 
     // Add services
+    builder.Services.AddSingleton(loggerFactory);
     builder.Services.AddSingleton(stateDatabase);
     builder.Services.AddHttpContextAccessor();
 
@@ -87,7 +89,7 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
         return;
     }
 
-    var tools = toolFactory.Load(toolsFile) ?? [];
+    var tools = await toolFactory.Load(toolsFile) ?? [];
     var mcpTools = tools.Select(tool => new McpToolAdapter(tool) { Debug = debug });
 
     var mcpBuilder = builder.Services

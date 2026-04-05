@@ -26,7 +26,13 @@ public abstract class Tool
 
     public abstract Task<JsonNode> Function(Session session, JsonDocument parameters);
 
-    public virtual void Save(Session session, StateDatabase stateDatabase) { }
+    public virtual Task Save(Session session)
+    {
+        return Task.CompletedTask;
+    }
 
-    public virtual void Load(Session session, StateDatabase stateDatabase) { }
+    public virtual Task Load(Session session)
+    {
+        return Task.CompletedTask;
+    }
 }

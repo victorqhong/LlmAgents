@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
     public DbSet<UserEntity> Users { get; set; } = null!;
     public DbSet<UserRoleEntity> UserRoles { get; set; } = null!;
     public DbSet<RefreshTokenEntity> RefreshTokens { get; set; } = null!;
+    public DbSet<SessionStateEntity> SessionStates { get; set; } = null!;
 
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
@@ -48,6 +49,19 @@ public class AppDbContext : DbContext
             entity.HasOne(e => e.User)
                 .WithMany(u => u.RefreshTokens)
                 .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SessionStateEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.SessionId, e.Key }).IsUnique();
+            entity.Property(e => e.Key).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.Value).IsRequired();
+
+            entity.HasOne(e => e.Session)
+                .WithMany()
+                .HasForeignKey(e => e.SessionId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

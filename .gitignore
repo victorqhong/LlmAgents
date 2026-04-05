@@ -11,3 +11,4 @@ tools.json
 nupkg/
 
 AgentManager/agents.db*
+AgentManager/appsettings.Development.json

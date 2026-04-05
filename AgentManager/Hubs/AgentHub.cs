@@ -12,7 +12,8 @@ public record RegisterSessionDto(Guid SessionId, string AgentName, bool Persiste
 public record RegisterConnection(Guid SessionId, string ConnectionId, string? IpAddress);
 public record UpdateStatusDto(Guid SessionId, string Status);
 public record LogOperationDto(Guid SessionId, string Category, string Message, string Level);
-public record AddMessageDto(Guid SessionId, ICollection<AgentMessage> Messages);
+public record AddMessagesDto(Guid SessionId, ICollection<AgentMessage> Messages);
+public record SaveMessagesDto(Guid SessionId, ICollection<AgentMessage> Messages);
 
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AgentHub : Hub<IAgentClient>
@@ -20,12 +21,14 @@ public class AgentHub : Hub<IAgentClient>
     private readonly AgentSessionService agentSessionService;
     private readonly AgentLogService agentLogService;
     private readonly AgentMessageService agentMessageService;
+    private readonly AgentStateService agentStateService;
 
-    public AgentHub(AgentSessionService agentSessionService, AgentLogService agentLogService, AgentMessageService agentMessageService)
+    public AgentHub(AgentSessionService agentSessionService, AgentLogService agentLogService, AgentMessageService agentMessageService, AgentStateService agentStateService)
     {
         this.agentSessionService = agentSessionService;
         this.agentLogService = agentLogService;
         this.agentMessageService = agentMessageService;
+        this.agentStateService = agentStateService;
     }
 
     public async Task Register(string agentName, string sessionId, bool persistent)
@@ -88,7 +91,33 @@ public class AgentHub : Hub<IAgentClient>
             messages.Add(AgentMessage.Parse(element, session));
         }
 
-        await agentMessageService.AddMessages(new AddMessageDto(id, messages));
+        await agentMessageService.AddMessages(new AddMessagesDto(id, messages));
+        await agentSessionService.UpdateTimestampAsync(id);
+    }
+
+    public async Task SaveMessages(string sessionId, string messageJson)
+    {
+        if (!Guid.TryParse(sessionId, out Guid id))
+        {
+            throw new ArgumentException("sessionId is not a GUID", nameof(sessionId));
+        }
+
+        var session = await agentSessionService.GetSessionById(id);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        var messages = new List<AgentMessage>();
+
+        using var doc = JsonDocument.Parse(messageJson);
+        foreach (var element in doc.RootElement.EnumerateArray())
+        {
+            messages.Add(AgentMessage.Parse(element, session));
+        }
+
+        await agentMessageService.SaveMessages(new SaveMessagesDto(id, messages));
+        await agentSessionService.UpdateTimestampAsync(id);
     }
 
     public async Task<string> GetMessages(string sessionId)
@@ -114,6 +143,70 @@ public class AgentHub : Hub<IAgentClient>
         }
 
         return jsonArray.ToString();
+    }
+
+    public async Task<string> GetLastUpdated(string sessionId)
+    {
+        if (!Guid.TryParse(sessionId, out Guid id))
+        {
+            throw new ArgumentException("sessionId is not a GUID", nameof(sessionId));
+        }
+
+        var session = await agentSessionService.GetSessionById(id);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        return session.UpdatedAt?.ToString() ?? DateTime.UnixEpoch.ToString();
+    }
+
+    public async Task<string?> GetState(string sessionId, string key)
+    {
+        if (!Guid.TryParse(sessionId, out Guid id))
+        {
+            throw new ArgumentException(nameof(sessionId));
+        }
+
+        var session = await agentSessionService.GetSessionById(id);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        return await agentStateService.GetState(id, key);
+    }
+
+    public async Task SetState(string sessionId, string key, string value)
+    {
+        if (!Guid.TryParse(sessionId, out Guid id))
+        {
+            throw new ArgumentException(nameof(sessionId));
+        }
+
+        var session = await agentSessionService.GetSessionById(id);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        await agentStateService.SetState(id, key, value);
+    }
+
+    public async Task<Dictionary<string, string>> GetAllState(string sessionId)
+    {
+        if (!Guid.TryParse(sessionId, out Guid id))
+        {
+            throw new ArgumentException(nameof(sessionId));
+        }
+
+        var session = await agentSessionService.GetSessionById(id);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        return await agentStateService.GetAllState(id);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
