@@ -92,6 +92,7 @@ public class AgentHub : Hub<IAgentClient>
         }
 
         await agentMessageService.AddMessages(new AddMessagesDto(id, messages));
+        await agentSessionService.UpdateTimestampAsync(id);
     }
 
     public async Task SaveMessages(string sessionId, string messageJson)
@@ -116,6 +117,7 @@ public class AgentHub : Hub<IAgentClient>
         }
 
         await agentMessageService.SaveMessages(new SaveMessagesDto(id, messages));
+        await agentSessionService.UpdateTimestampAsync(id);
     }
 
     public async Task<string> GetMessages(string sessionId)
@@ -157,6 +159,22 @@ public class AgentHub : Hub<IAgentClient>
         }
 
         return session.UpdatedAt?.ToString() ?? DateTime.UnixEpoch.ToString();
+    }
+
+    public async Task<string?> GetState(string sessionId, string key)
+    {
+        if (!Guid.TryParse(sessionId, out Guid id))
+        {
+            throw new ArgumentException(nameof(sessionId));
+        }
+
+        var session = await agentSessionService.GetSessionById(id);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        return await agentStateService.GetState(id, key);
     }
 
     public async Task SetState(string sessionId, string key, string value)

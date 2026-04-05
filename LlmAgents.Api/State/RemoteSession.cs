@@ -15,6 +15,31 @@ public class RemoteSession : Session
 
     public HubConnection HubConnection { get; set; }
 
+    public async override Task<string?> GetState(string key)
+    {
+        try
+        {
+            return await HubConnection.InvokeAsync<string?>("GetState", SessionId, key);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to get state from manager: {ex.Message}");
+            return null;
+        }
+    }
+
+    public async override Task SetState(string key, string value)
+    {
+        try
+        {
+            await HubConnection.InvokeAsync("SetState", SessionId, key, value);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to set state to manager: {ex.Message}");
+        }
+    }
+
     protected override async Task LoadMessages()
     {
         List<ChatCompletionMessageParam>? remoteMessages = null;

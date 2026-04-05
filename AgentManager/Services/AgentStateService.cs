@@ -15,6 +15,11 @@ public class AgentStateService
         persistence = new Persistence(dbFactory);
     }
 
+    public async Task<string?> GetState(Guid sessionId, string key)
+    {
+        return await persistence.GetState(sessionId, key);
+    }
+
     public async Task SetState(Guid sessionId, string key, string value)
     {
         await persistence.SetState(sessionId, key, value);
@@ -28,6 +33,15 @@ public class AgentStateService
     private class Persistence(IDbContextFactory<AppDbContext> dbContextFactory)
     {
         private readonly IDbContextFactory<AppDbContext> _dbFactory = dbContextFactory;
+
+        public async Task<string?> GetState(Guid sessionId, string key)
+        {
+            using var db = await _dbFactory.CreateDbContextAsync();
+            var stateEntity = await db.SessionStates
+                .FirstOrDefaultAsync(s => s.SessionId == sessionId && s.Key == key);
+
+            return stateEntity?.Value;
+        }
 
         public async Task SetState(Guid sessionId, string key, string value)
         {

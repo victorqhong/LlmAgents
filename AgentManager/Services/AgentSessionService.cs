@@ -122,6 +122,20 @@ public class AgentSessionService
         OnChange?.Invoke(session);
     }
 
+    public async Task UpdateTimestampAsync(Guid sessionId)
+    {
+        var session = await persistence.GetByIdAsync(sessionId);
+        if (session == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        session.UpdatedAt = DateTime.Now;
+        await persistence.UpdateAsync(session);
+
+        OnChange?.Invoke(session);
+    }
+
     private class Persistence(IDbContextFactory<AppDbContext> dbContextFactory)
     {
         public readonly IDbContextFactory<AppDbContext> _dbFactory = dbContextFactory;
