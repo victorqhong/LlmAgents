@@ -24,13 +24,13 @@ public class TestShell
         var shell = new Shell(toolFactory);
 
         var stuck = JsonDocument.Parse($$"""{ "command": "{{GetStuckCommand()}}" }""");
-        var stuckResult = (JsonObject)await shell.Function(Session.New(), stuck);
+        var stuckResult = (JsonObject)await shell.Function(Session.Ephemeral(loggerFactory), stuck);
 
         Assert.IsTrue(stuckResult.ContainsKey("warning"));
 
         // next command should succeed due to automatic shell restart
         var recovery = JsonDocument.Parse($$"""{ "command": "{{GetRecoveryCommand()}}" }""");
-        var recoveryResult = (JsonObject)await shell.Function(Session.New(), recovery);
+        var recoveryResult = (JsonObject)await shell.Function(Session.Ephemeral(loggerFactory), recovery);
         var stdout = recoveryResult["stdout"]?.GetValue<string>() ?? string.Empty;
 
         Assert.IsFalse(recoveryResult.ContainsKey("warning"));
@@ -52,15 +52,15 @@ public class TestShell
         var directoryChange = new DirectoryChange(toolFactory);
 
         var targetDirectory = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, ".."));
-        await PostDirectoryChange(bus, directoryChange, Session.New(), targetDirectory);
+        await PostDirectoryChange(bus, directoryChange, Session.Ephemeral(loggerFactory), targetDirectory);
 
         // trigger timeout and restart
         var stuck = JsonDocument.Parse($$"""{ "command": "{{GetStuckCommand()}}" }""");
-        _ = await shell.Function(Session.New(), stuck);
+        _ = await shell.Function(Session.Ephemeral(loggerFactory), stuck);
 
         // verify cwd preserved after restart
         var pwd = JsonDocument.Parse($$"""{ "command": "{{GetPwdCommand()}}" }""");
-        var pwdResult = (JsonObject)await shell.Function(Session.New(), pwd);
+        var pwdResult = (JsonObject)await shell.Function(Session.Ephemeral(loggerFactory), pwd);
         var stdout = pwdResult["stdout"]?.GetValue<string>() ?? string.Empty;
 
         var comparison = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
