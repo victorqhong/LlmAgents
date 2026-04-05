@@ -4,7 +4,12 @@
         "LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "..\\..\\LlmAgents\\LlmAgents.Tools\\bin\\Debug\\net9.0\\LlmAgents.Tools.dll"
     },
     "types": [
-        "LlmAgents.Tools.Shell, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+        "LlmAgents.Tools.ShellExec, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.ShellRead, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.ShellWrite, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.ShellStatus, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.ShellInterrupt, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.ShellStop, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
     ],
     "parameters": {
         "restrictToBasePath": "true",

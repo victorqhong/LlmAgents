@@ -1,9 +1,11 @@
 using System;
 using System.IO;
-using System.Threading.Tasks;
+using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
@@ -15,26 +17,25 @@ namespace LlmAgents.Tests.Tools;
 public class TestShell
 {
     [TestMethod]
-    public async Task Timeout_RestartsShell_AndNextCommandSucceeds()
+    public async Task ExecTimeout_RestartsShell_AndNextCommandSucceeds()
     {
         var loggerFactory = LoggerFactory.Create(builder => { });
         var toolFactory = new ToolFactory(loggerFactory);
         toolFactory.Register<ILoggerFactory>(loggerFactory);
         toolFactory.AddParameter("Shell.waitTimeMs", "1000");
-        var shell = new Shell(toolFactory);
 
-        var stuck = JsonDocument.Parse($$"""{ "command": "{{GetStuckCommand()}}" }""");
-        var stuckResult = (JsonObject)await shell.Function(Session.Ephemeral(loggerFactory), stuck);
+        var exec = new ShellExec(toolFactory);
+        var read = new ShellRead(toolFactory);
+        var session = Session.Ephemeral(loggerFactory);
 
-        Assert.IsTrue(stuckResult.ContainsKey("warning"));
+        var stuckResult = (JsonObject)await exec.Function(session, CreateExecParameters(GetStuckCommand(), waitForExit: true, timeoutMs: 1000));
+        Assert.AreEqual("timeout", stuckResult["status"]?.GetValue<string>());
 
-        // next command should succeed due to automatic shell restart
-        var recovery = JsonDocument.Parse($$"""{ "command": "{{GetRecoveryCommand()}}" }""");
-        var recoveryResult = (JsonObject)await shell.Function(Session.Ephemeral(loggerFactory), recovery);
-        var stdout = recoveryResult["stdout"]?.GetValue<string>() ?? string.Empty;
+        var recoveryResult = (JsonObject)await exec.Function(session, CreateExecParameters(GetRecoveryCommand(), waitForExit: true));
+        Assert.AreEqual("completed", recoveryResult["status"]?.GetValue<string>());
 
-        Assert.IsFalse(recoveryResult.ContainsKey("warning"));
-        Assert.IsTrue(stdout.Contains("ok", StringComparison.OrdinalIgnoreCase));
+        var output = await ReadAllOutput(read, session);
+        Assert.IsTrue(output.Contains("ok", StringComparison.OrdinalIgnoreCase), "expected recovery output to contain 'ok'");
     }
 
     [TestMethod]
@@ -48,25 +49,128 @@ public class TestShell
         var bus = new ToolEventBus();
         toolFactory.Register<IToolEventBus>(bus);
 
-        var shell = new Shell(toolFactory);
+        var exec = new ShellExec(toolFactory);
+        var read = new ShellRead(toolFactory);
         var directoryChange = new DirectoryChange(toolFactory);
+        var session = Session.Ephemeral(loggerFactory);
 
         var targetDirectory = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, ".."));
-        await PostDirectoryChange(bus, directoryChange, Session.Ephemeral(loggerFactory), targetDirectory);
+        await PostDirectoryChange(bus, directoryChange, session, targetDirectory);
 
-        // trigger timeout and restart
-        var stuck = JsonDocument.Parse($$"""{ "command": "{{GetStuckCommand()}}" }""");
-        _ = await shell.Function(Session.Ephemeral(loggerFactory), stuck);
+        _ = await exec.Function(session, CreateExecParameters(GetStuckCommand(), waitForExit: true, timeoutMs: 1000));
+        _ = await exec.Function(session, CreateExecParameters(GetPwdCommand(), waitForExit: true));
 
-        // verify cwd preserved after restart
-        var pwd = JsonDocument.Parse($$"""{ "command": "{{GetPwdCommand()}}" }""");
-        var pwdResult = (JsonObject)await shell.Function(Session.Ephemeral(loggerFactory), pwd);
-        var stdout = pwdResult["stdout"]?.GetValue<string>() ?? string.Empty;
-
+        var output = await ReadAllOutput(read, session);
         var comparison = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
-        Assert.IsTrue(stdout.Contains(targetDirectory, comparison));
+        Assert.IsTrue(output.Contains(targetDirectory, comparison));
+    }
+
+    [TestMethod]
+    public async Task Read_UsesCursorForChunkedOutput()
+    {
+        var loggerFactory = LoggerFactory.Create(builder => { });
+        var toolFactory = new ToolFactory(loggerFactory);
+        toolFactory.Register<ILoggerFactory>(loggerFactory);
+
+        var exec = new ShellExec(toolFactory);
+        var read = new ShellRead(toolFactory);
+        var session = Session.Ephemeral(loggerFactory);
+
+        var command = GetEchoLinesCommand("alpha", "beta", "gamma");
+        _ = await exec.Function(session, CreateExecParameters(command, waitForExit: true));
+
+        var firstRead = (JsonObject)await read.Function(session, JsonDocument.Parse("""{ "cursor": 0, "max_chars": 8 }"""));
+        var firstChunk = firstRead["output"]?.GetValue<string>() ?? string.Empty;
+        var nextCursor = firstRead["next_cursor"]?.GetValue<long>() ?? 0;
+
+        var secondRead = (JsonObject)await read.Function(session, JsonDocument.Parse($$"""{ "cursor": {{nextCursor}}, "max_chars": 1024 }"""));
+        var secondChunk = secondRead["output"]?.GetValue<string>() ?? string.Empty;
+
+        var output = firstChunk + secondChunk;
+        Assert.IsTrue(output.Contains("alpha", StringComparison.OrdinalIgnoreCase));
+        Assert.IsTrue(output.Contains("beta", StringComparison.OrdinalIgnoreCase));
+        Assert.IsTrue(output.Contains("gamma", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public async Task Write_SendsInputToInteractiveCommand()
+    {
+        var loggerFactory = LoggerFactory.Create(builder => { });
+        var toolFactory = new ToolFactory(loggerFactory);
+        toolFactory.Register<ILoggerFactory>(loggerFactory);
+        toolFactory.AddParameter("Shell.waitTimeMs", "5000");
+
+        var exec = new ShellExec(toolFactory);
+        var write = new ShellWrite(toolFactory);
+        var read = new ShellRead(toolFactory);
+        var session = Session.Ephemeral(loggerFactory);
+
+        _ = await exec.Function(session, CreateExecParameters(GetInteractiveInputCommand(), waitForExit: false));
+        _ = await write.Function(session, JsonDocument.Parse("""{ "input": "Vic", "append_newline": true }"""));
+        _ = await exec.Function(session, CreateExecParameters(GetRecoveryCommand(), waitForExit: true));
+
+        var output = await ReadAllOutput(read, session);
+        Assert.IsTrue(output.Contains("Hello Vic", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public async Task Interrupt_AllowsSubsequentCommands()
+    {
+        var loggerFactory = LoggerFactory.Create(builder => { });
+        var toolFactory = new ToolFactory(loggerFactory);
+        toolFactory.Register<ILoggerFactory>(loggerFactory);
+        toolFactory.AddParameter("Shell.waitTimeMs", "5000");
+
+        var exec = new ShellExec(toolFactory);
+        var interrupt = new ShellInterrupt(toolFactory);
+        var read = new ShellRead(toolFactory);
+        var session = Session.Ephemeral(loggerFactory);
+
+        _ = await exec.Function(session, CreateExecParameters(GetStuckCommand(), waitForExit: false));
+        var interruptResult = (JsonObject)await interrupt.Function(session, JsonDocument.Parse("""{ "timeout_ms": 3000 }"""));
+        Assert.AreEqual("interrupted", interruptResult["status"]?.GetValue<string>());
+
+        _ = await exec.Function(session, CreateExecParameters(GetRecoveryCommand(), waitForExit: true));
+        var output = await ReadAllOutput(read, session);
+        Assert.IsTrue(output.Contains("ok", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static async Task<string> ReadAllOutput(ShellRead read, Session session)
+    {
+        long cursor = 0;
+        var output = new StringBuilder();
+        while (true)
+        {
+            var result = (JsonObject)await read.Function(session, JsonDocument.Parse($$"""{ "cursor": {{cursor}}, "max_chars": 4096 }"""));
+            var chunk = result["output"]?.GetValue<string>() ?? string.Empty;
+            output.Append(chunk);
+            cursor = result["next_cursor"]?.GetValue<long>() ?? cursor;
+            var hasMore = result["has_more"]?.GetValue<bool>() ?? false;
+            if (!hasMore)
+            {
+                break;
+            }
+        }
+
+        return output.ToString();
+    }
+
+    private static JsonDocument CreateExecParameters(string command, bool waitForExit, int? timeoutMs = null)
+    {
+        var json = new JsonObject
+        {
+            ["command"] = command,
+            ["wait_for_exit"] = waitForExit
+        };
+
+        if (timeoutMs.HasValue)
+        {
+            json["timeout_ms"] = timeoutMs.Value;
+        }
+
+        return JsonDocument.Parse(json.ToJsonString());
     }
 
     private static async Task PostDirectoryChange(ToolEventBus bus, DirectoryChange directoryChange, Session session, string directory)
@@ -100,6 +204,26 @@ public class TestShell
         }
 
         return "echo ok";
+    }
+
+    private static string GetInteractiveInputCommand()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return "$name = Read-Host 'Name'; Write-Output \"Hello $name\"";
+        }
+
+        return "read name; echo \"Hello $name\"";
+    }
+
+    private static string GetEchoLinesCommand(params string[] lines)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return string.Join("; ", lines.Select(line => $"Write-Output '{line}'"));
+        }
+
+        return string.Join("; ", lines.Select(line => $"echo '{line}'"));
     }
 
     private static string GetPwdCommand()

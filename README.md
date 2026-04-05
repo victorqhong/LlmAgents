@@ -49,7 +49,12 @@ All configuration is done via JSON files in the `Agent` directory:
         "LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "..\\..\\LlmAgents\\LlmAgents.Tools\\bin\\Debug\\net9.0\\LlmAgents.Tools.dll"
     },
     "types": [
-        "LlmAgents.Tools.Shell, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+        "LlmAgents.Tools.ShellExec, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.ShellRead, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.ShellWrite, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.ShellStatus, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.ShellInterrupt, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.ShellStop, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
     ],
     "parameters": {
         "restrictToBasePath": "true",
@@ -58,7 +63,7 @@ All configuration is done via JSON files in the `Agent` directory:
 }
 ```
 
-> This config loads the built-in `Shell` tool. You can extend it with additional tools by referencing more assemblies and types.
+> This config loads the split shell tools (`shell_exec`, `shell_read`, `shell_write`, `shell_status`, `shell_interrupt`, `shell_stop`).
 
 ### XMPP Configuration (`Agent/xmpp.json`)
 
@@ -103,4 +108,3 @@ Contributions are welcome! Please open an issue or submit a pull request.
 ## License
 
 This project is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0). 
-
