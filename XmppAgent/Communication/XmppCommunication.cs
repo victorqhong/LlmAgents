@@ -27,6 +27,20 @@ public class XmppCommunication : IAgentCommunication
 
     public bool Debug { get; set; } = false;
 
+    /// <summary>
+    /// Controls message batching behavior.
+    /// - Negative values: Send entire message in one batch (no batching)
+    /// - Zero: Don't send the message at all
+    /// - Positive values: Split message into chunks of this size
+    /// </summary>
+    public int MessageBatchSize { get; set; } = -1;
+
+    /// <summary>
+    /// Delay in milliseconds between each batch when MessageBatchSize is positive.
+    /// Default is 0 (no delay).
+    /// </summary>
+    public int MessageBatchDelayMs { get; set; } = 0;
+
     private readonly IncomingMessageStateMachine incomingMessageStateMachine;
 
     private readonly FileTransferStateMachine fileTransferStateMachine;
@@ -160,7 +174,42 @@ public class XmppCommunication : IAgentCommunication
             return;
         }
 
-        await XmppClient.SendChatMessageAsync(new Jid(TargetJid), message);
+        // newLine parameter is part of the interface but not applicable to XMPP
+        // (each message is sent as a separate chat message)
+
+        if (MessageBatchSize == 0)
+        {
+            return;
+        }
+
+        if (MessageBatchSize < 0)
+        {
+            await XmppClient.SendChatMessageAsync(new Jid(TargetJid), message);
+            return;
+        }
+
+        int batch = 0;
+        int remaining = message.Length;
+        while (remaining > 0)
+        {
+            if (remaining >= MessageBatchSize)
+            {
+                await XmppClient.SendChatMessageAsync(new Jid(TargetJid), message.Substring(batch * MessageBatchSize, MessageBatchSize));
+                remaining -= MessageBatchSize;
+                batch++;
+            }
+            else
+            {
+                await XmppClient.SendChatMessageAsync(new Jid(TargetJid), message.Substring(batch * MessageBatchSize, remaining));
+                remaining -= remaining;
+            }
+
+            // Apply delay between batches (not after the last batch)
+            if (remaining > 0 && MessageBatchDelayMs > 0)
+            {
+                await Task.Delay(MessageBatchDelayMs);
+            }
+        }
     }
 
     public async Task SendComposing()
