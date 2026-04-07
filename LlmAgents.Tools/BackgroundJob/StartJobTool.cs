@@ -24,7 +24,7 @@ public class StartJobTool : Tool
                     Properties = new()
                     {
                         { "command", new() { Type = "string", Description = "Executable to run (full path or on PATH)." } },
-                        { "args", new() { Type = "array", Description = "Arguments to pass to the command.", Items = new() { { "type", "string" } } } },
+                        { "args", new() { Type = "array", Description = "Arguments to pass to the command.", Items = new() { Type = "string" } } },
                     },
                     Required = ["command"]
                 }
