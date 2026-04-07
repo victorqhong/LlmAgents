@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using LlmAgents.LlmApi.Llamacpp;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -280,5 +281,15 @@ public class TestSerialization
         Assert.AreEqual(0, deserialized.SlotId);
         Assert.AreEqual(3, deserialized.Messages.Count);
         Assert.AreEqual("test", deserialized.Model);
+    }
+
+    [TestMethod]
+    public void McpTool()
+    {
+        var json = """{"type":"object","properties":{"operations":{"type":"array","items":{"type":"object","properties":{"operation":{"type":"string","enum":["add","edit"]},"entityType":{"type":"string","enum":["block","page","tag","property"]},"id":{"type":["string","number","null"]},"data":{"type":"object","properties":{},"additionalProperties":true}},"required":["operation","entityType","data"],"additionalProperties":false}},"dry-run":{"type":"boolean","description":"Pretend to do batch update. Does everything except actually commit change to db e.g. validation."}},"required":["operations"],"additionalProperties":false,"$schema":"http://json-schema.org/draft-07/schema#"}""";
+        var doc = JsonDocument.Parse(json);
+        var el = doc.RootElement;
+        var functionParameters = el.Deserialize<ChatCompletionFunctionParameters>();
+        Assert.IsNotNull(functionParameters);
     }
 }
