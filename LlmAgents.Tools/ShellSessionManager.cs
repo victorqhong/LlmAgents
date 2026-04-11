@@ -1,13 +1,13 @@
-namespace LlmAgents.Tools;
-
+using System;
 using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json.Nodes;
 using LlmAgents.State;
 using Microsoft.Extensions.Logging;
+using LlmAgents.Tools.Events;
+
+namespace LlmAgents.Tools;
 
 public sealed class ShellSessionManager
 {
@@ -24,8 +24,8 @@ public sealed class ShellSessionManager
     public ShellSessionManager(ToolFactory toolFactory, ILogger logger)
     {
         log = logger;
-        waitTimeMs = int.TryParse(toolFactory.GetParameter("Shell.waitTimeMs"), out waitTimeMs) ? waitTimeMs : 180000;
-        maxBufferedChars = int.TryParse(toolFactory.GetParameter("Shell.maxBufferedChars"), out maxBufferedChars) ? maxBufferedChars : 250000;
+        waitTimeMs = int.TryParse(toolFactory.GetParameter("Shell.waitTimeMs"), out var parsedWait) ? parsedWait : 10_000;
+        maxBufferedChars = int.TryParse(toolFactory.GetParameter("Shell.maxBufferedChars"), out var parsedMax) ? parsedMax : 250000;
         baseCurrentDirectory = Path.GetFullPath(toolFactory.GetParameter("basePath") ?? Environment.CurrentDirectory);
 
         var toolEventBus = toolFactory.ResolveWithDefault<IToolEventBus>();
@@ -39,12 +39,31 @@ public sealed class ShellSessionManager
         {
             return new JsonObject
             {
-                { "session_id", sessionId },
-                { "status", "not_started" }
+                ["session_id"] = sessionId,
+                ["status"] = "not_started"
             };
         }
 
-        return BuildStatus(state, state.Process?.HasExited == false ? "running" : "exited");
+        string status;
+        if (state.StartError != null)
+        {
+            status = "failed_to_start";
+        }
+        else if (state.PtyMasterFd.HasValue)
+        {
+            status = "running";
+        }
+        else
+        {
+            status = "exited";
+        }
+
+        var res = BuildStatus(state, status);
+        if (state.StartError != null)
+        {
+            ((JsonObject)res)["error"] = state.StartError;
+        }
+        return res;
     }
 
     public async Task<JsonNode> StopAsync(Session? session)
@@ -54,22 +73,21 @@ public sealed class ShellSessionManager
         {
             return new JsonObject
             {
-                { "session_id", sessionId },
-                { "status", "not_started" }
+                ["session_id"] = sessionId,
+                ["status"] = "not_started"
             };
         }
 
         await state.OperationLock.WaitAsync();
         try
         {
-            DisposeProcess(state.Process);
-            state.PendingSentinelTcs?.TrySetCanceled();
-            state.PendingSentinel = null;
-            state.PendingSentinelTcs = null;
+            DisposePty(state);
+            ClearPendingSentinel(state);
+            state.StartError = null;
             return new JsonObject
             {
-                { "session_id", sessionId },
-                { "status", "stopped" }
+                ["session_id"] = sessionId,
+                ["status"] = "stopped"
             };
         }
         finally
@@ -84,17 +102,26 @@ public sealed class ShellSessionManager
         await state.OperationLock.WaitAsync();
         try
         {
+            if (state.StartError != null)
+            {
+                return ErrorJson(state, state.StartError);
+            }
             EnsureProcessStarted(state);
-            WriteLine(state, command);
+            if (state.StartError != null)
+            {
+                return ErrorJson(state, state.StartError);
+            }
+            WriteLinePty(state, command);
 
-            if (!waitForExit)
+            // if (!waitForExit)
+            if (true)
             {
                 return new JsonObject
                 {
-                    { "session_id", state.SessionId },
-                    { "status", "started" },
-                    { "waited", false },
-                    { "pid", state.Process.Id }
+                    ["session_id"] = state.SessionId,
+                    ["status"] = "started",
+                    ["waited"] = false,
+                    ["pid"] = state.ChildPid
                 };
             }
 
@@ -102,27 +129,28 @@ public sealed class ShellSessionManager
             var sentinel = $"__llmagents_eoc_{Guid.NewGuid():N}__";
             var sentinelTask = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             SetPendingSentinel(state, sentinel, sentinelTask);
-            WriteLine(state, EchoCommand(sentinel));
+            WriteLinePty(state, EchoCommand(sentinel));
 
             var completed = await Task.WhenAny(sentinelTask.Task, Task.Delay(timeout));
             if (completed != sentinelTask.Task)
             {
-                log.LogWarning("shell command did not exit after {waitTimeMs} milliseconds", timeout);
+                log.LogWarning("shell command did not exit after {Timeout} milliseconds", timeout);
+                log.LogInformation("{Output}", state.Output.ToString());
                 RestartProcess(state);
                 return new JsonObject
                 {
-                    { "session_id", state.SessionId },
-                    { "status", "timeout" },
-                    { "waited", true },
-                    { "warning", $"shell command did not exit after {timeout} milliseconds; shell process restarted" }
+                    ["session_id"] = state.SessionId,
+                    ["status"] = "timeout",
+                    ["waited"] = true,
+                    ["warning"] = $"shell command did not exit after {timeout} milliseconds; shell process restarted"
                 };
             }
 
             return new JsonObject
             {
-                { "session_id", state.SessionId },
-                { "status", "completed" },
-                { "waited", true }
+                ["session_id"] = state.SessionId,
+                ["status"] = "completed",
+                ["waited"] = true
             };
         }
         finally
@@ -139,8 +167,17 @@ public sealed class ShellSessionManager
         {
             return new JsonObject
             {
-                { "error", "shell session not started" },
-                { "session_id", sessionId }
+                ["error"] = "shell session not started",
+                ["session_id"] = sessionId
+            };
+        }
+
+        if (state.StartError != null)
+        {
+            return new JsonObject
+            {
+                ["error"] = state.StartError,
+                ["session_id"] = sessionId
             };
         }
 
@@ -148,7 +185,7 @@ public sealed class ShellSessionManager
         {
             var start = state.BufferStartPosition;
             var end = start + state.Output.Length;
-            long resolvedCursor = cursor.HasValue ? cursor.Value : start;
+            long resolvedCursor = cursor ?? start;
 
             var truncated = false;
             if (resolvedCursor < start)
@@ -161,27 +198,22 @@ public sealed class ShellSessionManager
                 resolvedCursor = end;
             }
 
-            var chunkSize = maxChars.GetValueOrDefault(defaultReadMaxChars);
-            if (chunkSize <= 0)
-            {
-                chunkSize = defaultReadMaxChars;
-            }
-
+            var chunkSize = Math.Max(maxChars ?? defaultReadMaxChars, 0);
             var offset = (int)(resolvedCursor - start);
             var available = Math.Max(0, state.Output.Length - offset);
-            var take = Math.Min(chunkSize, available);
+            var take = Math.Min((int)Math.Min(chunkSize, int.MaxValue), available);
             var output = take > 0 ? state.Output.ToString(offset, take) : string.Empty;
             var nextCursor = resolvedCursor + take;
 
             return new JsonObject
             {
-                { "session_id", state.SessionId },
-                { "output", output },
-                { "next_cursor", nextCursor },
-                { "has_more", nextCursor < end },
-                { "buffer_start_cursor", start },
-                { "buffer_end_cursor", end },
-                { "truncated", truncated }
+                ["session_id"] = state.SessionId,
+                ["output"] = output,
+                ["next_cursor"] = nextCursor,
+                ["has_more"] = nextCursor < end,
+                ["buffer_start_cursor"] = start,
+                ["buffer_end_cursor"] = end,
+                ["truncated"] = truncated
             };
         }
     }
@@ -192,23 +224,35 @@ public sealed class ShellSessionManager
         await state.OperationLock.WaitAsync();
         try
         {
+            if (state.StartError != null)
+            {
+                return ErrorJson(state, state.StartError);
+            }
             EnsureProcessStarted(state);
+            if (state.StartError != null)
+            {
+                return ErrorJson(state, state.StartError);
+            }
             if (appendNewline)
             {
-                state.Process.StandardInput.WriteLine(input);
+                WriteLinePty(state, input);
+                return new JsonObject
+                {
+                    ["session_id"] = state.SessionId,
+                    ["status"] = "written",
+                    ["written_chars"] = input.Length + Environment.NewLine.Length
+                };
             }
             else
             {
-                state.Process.StandardInput.Write(input);
+                WritePty(state, input);
+                return new JsonObject
+                {
+                    ["session_id"] = state.SessionId,
+                    ["status"] = "written",
+                    ["written_chars"] = input.Length
+                };
             }
-
-            state.Process.StandardInput.Flush();
-            return new JsonObject
-            {
-                { "session_id", state.SessionId },
-                { "status", "written" },
-                { "written_chars", input.Length + (appendNewline ? Environment.NewLine.Length : 0) }
-            };
         }
         finally
         {
@@ -222,30 +266,35 @@ public sealed class ShellSessionManager
         await state.OperationLock.WaitAsync();
         try
         {
-            EnsureProcessStarted(state);
-
-            state.Process.StandardInput.Write("\u0003");
-            state.Process.StandardInput.Flush();
-
-            var timeout = timeoutMs.GetValueOrDefault(Math.Min(waitTimeMs, 3000));
-            var sentinel = $"__llmagents_interrupt_probe_{Guid.NewGuid():N}__";
-            var sentinelTask = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            SetPendingSentinel(state, sentinel, sentinelTask);
-            WriteLine(state, EchoCommand(sentinel));
-
-            var completed = await Task.WhenAny(sentinelTask.Task, Task.Delay(timeout));
-            var responsive = completed == sentinelTask.Task;
-            if (!responsive)
+            if (state.StartError != null)
             {
-                RestartProcess(state);
+                return ErrorJson(state, state.StartError);
             }
+            EnsureProcessStarted(state);
+            if (state.StartError != null)
+            {
+                return ErrorJson(state, state.StartError);
+            }
+
+            WritePty(state, "\x03");
+
+            // var timeout = timeoutMs.GetValueOrDefault(Math.Min(waitTimeMs, 3000));
+            // var sentinel = $"__llmagents_interrupt_probe_{Guid.NewGuid():N}__";
+            // var sentinelTask = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // SetPendingSentinel(state, sentinel, sentinelTask);
+            // WriteLinePty(state, EchoCommand(sentinel));
+            //
+            // var completed = await Task.WhenAny(sentinelTask.Task, Task.Delay(timeout));
+            // var responsive = completed == sentinelTask.Task;
+            // if (!responsive)
+            // {
+            //     RestartProcess(state);
+            // }
 
             return new JsonObject
             {
-                { "session_id", state.SessionId },
-                { "status", "interrupted" },
-                { "responsive", responsive },
-                { "restarted", !responsive }
+                ["session_id"] = state.SessionId,
+                ["status"] = "interrupted",
             };
         }
         finally
@@ -255,13 +304,22 @@ public sealed class ShellSessionManager
         }
     }
 
+    private static JsonNode ErrorJson(ShellSessionState state, string error)
+    {
+        return new JsonObject
+        {
+            ["session_id"] = state.SessionId,
+            ["status"] = "error",
+            ["error"] = error
+        };
+    }
+
     private static string GetSessionId(Session? session)
     {
         if (session == null || string.IsNullOrWhiteSpace(session.SessionId))
         {
             return defaultSessionId;
         }
-
         return session.SessionId;
     }
 
@@ -276,20 +334,23 @@ public sealed class ShellSessionManager
 
     private async Task OnChangeDirectory(ToolEvent e)
     {
-        if (e is ToolCallEvent tce &&
+        string? newDir = null;
+        if (e is ChangeDirectoryEvent cde)
+        {
+            newDir = cde.Directory;
+        }
+        else if (e is ToolCallEvent tce &&
             tce.Result.AsObject() is JsonObject jsonObject &&
             jsonObject.TryGetPropertyValue("currentDirectory", out var property))
         {
-            baseCurrentDirectory = Path.GetFullPath(property?.GetValue<string>() ?? baseCurrentDirectory);
+            newDir = property?.GetValue<string>();
         }
-        else if (e is Events.ChangeDirectoryEvent cde)
-        {
-            baseCurrentDirectory = Path.GetFullPath(cde.Directory);
-        }
-        else
+        if (newDir == null)
         {
             return;
         }
+
+        baseCurrentDirectory = Path.GetFullPath(newDir ?? baseCurrentDirectory);
 
         var copy = sessions.Values.ToArray();
         foreach (var state in copy)
@@ -299,7 +360,10 @@ public sealed class ShellSessionManager
             {
                 state.CurrentDirectory = baseCurrentDirectory;
                 EnsureProcessStarted(state);
-                WriteLine(state, ChangeDirectoryCommand(state.CurrentDirectory));
+                if (state.StartError == null)
+                {
+                    WriteLinePty(state, ChangeDirectoryCommand(state.CurrentDirectory));
+                }
             }
             finally
             {
@@ -310,115 +374,181 @@ public sealed class ShellSessionManager
 
     private void EnsureProcessStarted(ShellSessionState state)
     {
-        if (state.Process != null && !state.Process.HasExited)
-        {
-            return;
-        }
+        if (state.PtyMasterFd.HasValue && state.ReaderCts != null) return;
+        if (state.StartError != null) return;
 
-        StartProcess(state);
-        WriteLine(state, ChangeDirectoryCommand(state.CurrentDirectory));
+        try
+        {
+            StartProcess(state);
+            WriteLinePty(state, ChangeDirectoryCommand(state.CurrentDirectory));
+        }
+        catch (Exception ex)
+        {
+            state.StartError = ex.Message;
+            log.LogError(ex, "Failed to start PTY shell for session {SessionId}", state.SessionId);
+        }
     }
 
-    private void StartProcess(ShellSessionState state)
+    private unsafe void StartProcess(ShellSessionState state)
     {
-        var process = new Process();
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            process.StartInfo.FileName = "pwsh";
-            process.StartInfo.ArgumentList.Add("-NoLogo");
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            process.StartInfo.FileName = "bash";
-        }
-        else
-        {
-            throw new NotImplementedException(RuntimeInformation.RuntimeIdentifier);
+            throw new PlatformNotSupportedException("PTY-based shell tools are only supported on Linux.");
         }
 
-        process.StartInfo.WorkingDirectory = Path.GetFullPath(state.CurrentDirectory);
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.RedirectStandardInput = true;
-        process.EnableRaisingEvents = true;
-
-        process.OutputDataReceived += (_, e) => OnOutputLine(state, e.Data, isError: false);
-        process.ErrorDataReceived += (_, e) => OnOutputLine(state, e.Data, isError: true);
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
-        state.Process = process;
-        state.StartedUtc = DateTime.UtcNow;
-        state.ExitCode = null;
-        process.Exited += (_, _) => state.ExitCode = process.ExitCode;
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        // Use sh -c "exec bash -i" for better NixOS compatibility
+        // This lets sh find bash in PATH while giving us a proper interactive shell
+        string shellCommand = "export GIT_PAGER= ; export TERM=dumb; exec bash -i || exec sh -i";
+        
+        byte[] cmdBytes = Encoding.UTF8.GetBytes(shellCommand + "\0");
+        
+        fixed (byte* pCmd = cmdBytes)
         {
-            WriteLine(state, "$PSStyle.OutputRendering='Plain'");
+            var result = NativeMethods.forkpty_sh(pCmd);
+            
+            if (result.child_pid < 0)
+            {
+                throw new IOException($"forkpty_sh failed: errno={result.error_code}");
+            }
+            
+            // Quick non-blocking check if child exited immediately (exec failure)
+            int status;
+            int waitResult = NativeMethods.waitpid(result.child_pid, out status, NativeMethods.WNOHANG);
+            if (waitResult > 0)
+            {
+                int exitCode = (status >> 8) & 0xFF;
+                int signal = status & 0x7F;
+                throw new IOException($"Child process exited immediately: exitCode={exitCode}, signal={signal}");
+            }
+            
+            state.PtyMasterFd = result.master_fd;
+            state.ChildPid = result.child_pid;
+            state.StartedUtc = DateTime.UtcNow;
+            state.ReaderCts = new CancellationTokenSource();
+            StartPtyReader(state);
+            
+            log.LogInformation("PTY shell started for {SessionId}: pid={ChildPid}, fd={PtyMasterFd}", 
+                state.SessionId, result.child_pid, result.master_fd);
         }
+    }
+
+    private unsafe void StartPtyReader(ShellSessionState state)
+    {
+        var cts = state.ReaderCts!;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                while (state.PtyMasterFd.HasValue && !cts.Token.IsCancellationRequested)
+                {
+                    byte[] buffer = new byte[4096];
+                    fixed (byte* ptr = buffer)
+                    {
+                        int bytesRead = NativeMethods.pty_read(state.PtyMasterFd.Value, ptr, buffer.Length);
+                        if (bytesRead <= 0)
+                        {
+                            if (bytesRead < 0)
+                            {
+                                int errno = Marshal.GetLastPInvokeError();
+                                // EIO (5) during dispose is expected - only warn if not during cleanup
+                                if (errno != 5 || !state.Exited.GetValueOrDefault())
+                                {
+                                    log.LogWarning("PTY read failed errno={Errno} for {SessionId}", errno, state.SessionId);
+                                }
+                            }
+                            break;
+                        }
+                        string text = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                        AppendOutput(state, text);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "PTY reader crashed for {SessionId}", state.SessionId);
+            }
+            finally
+            {
+                if (state.ChildPid.HasValue)
+                {
+                    int status;
+                    NativeMethods.waitpid(state.ChildPid.Value, out status, 0);
+                    state.ExitCode = (status >> 8) & 0xFF;
+                    state.ChildPid = null;
+                }
+                if (state.PtyMasterFd.HasValue)
+                {
+                    NativeMethods.pty_close_master(state.PtyMasterFd.Value);
+                    state.PtyMasterFd = null;
+                }
+                state.Exited = true;
+            }
+        }, cts.Token);
     }
 
     private void RestartProcess(ShellSessionState state)
     {
-        DisposeProcess(state.Process);
-        state.PendingSentinelTcs?.TrySetCanceled();
-        state.PendingSentinelTcs = null;
-        state.PendingSentinel = null;
+        ClearPendingSentinel(state);
+        DisposePty(state);
+        state.StartError = null;
+        state.Exited = false;
+        state.ExitCode = null;
         StartProcess(state);
-        WriteLine(state, ChangeDirectoryCommand(state.CurrentDirectory));
-    }
-
-    private void OnOutputLine(ShellSessionState state, string? line, bool isError)
-    {
-        if (string.IsNullOrEmpty(line))
-        {
-            return;
-        }
-
-        var isSentinel = false;
-        lock (state.SyncRoot)
-        {
-            if (!string.IsNullOrEmpty(state.PendingSentinel) &&
-                string.Equals(line.Trim(), state.PendingSentinel, StringComparison.Ordinal))
-            {
-                state.PendingSentinelTcs?.TrySetResult(true);
-                state.PendingSentinel = null;
-                state.PendingSentinelTcs = null;
-                isSentinel = true;
-            }
-        }
-
-        if (isSentinel)
-        {
-            return;
-        }
-
-        AppendOutput(state, line + Environment.NewLine);
-        log.LogInformation("{stream}: {line}", isError ? "stderr" : "stdout", line);
+        WriteLinePty(state, ChangeDirectoryCommand(state.CurrentDirectory));
     }
 
     private void AppendOutput(ShellSessionState state, string text)
     {
+        if (string.IsNullOrWhiteSpace(text)) return;
+
         lock (state.SyncRoot)
         {
-            state.Output.Append(text);
-            if (state.Output.Length <= maxBufferedChars)
+            if (!string.IsNullOrEmpty(state.PendingSentinel))
             {
-                return;
+                if (text.Trim().Equals(state.PendingSentinel))
+                {
+                    state.PendingSentinelTcs?.TrySetResult(true);
+                    state.PendingSentinel = null;
+                    state.PendingSentinelTcs = null;
+                }
+                else if (!text.Contains(state.PendingSentinel))
+                {
+                    state.Output.Append(text);
+                }
+            }
+            else
+            {
+                state.Output.Append(text);
             }
 
-            var remove = state.Output.Length - maxBufferedChars;
-            state.Output.Remove(0, remove);
-            state.BufferStartPosition += remove;
+            while (state.Output.Length > maxBufferedChars)
+            {
+                var remove = state.Output.Length - maxBufferedChars;
+                state.Output.Remove(0, remove);
+                state.BufferStartPosition += remove;
+            }
+        }
+
+        log.LogDebug("Shell {SessionId}: {Preview}", state.SessionId, text.TrimEnd().Take(100));
+    }
+
+    private unsafe void WritePty(ShellSessionState state, string input)
+    {
+        if (!state.PtyMasterFd.HasValue) return;
+
+        byte[] bytes = Encoding.UTF8.GetBytes(input);
+        fixed (byte* ptr = bytes)
+        {
+            NativeMethods.pty_write(state.PtyMasterFd.Value, ptr, bytes.Length);
         }
     }
 
-    private static void WriteLine(ShellSessionState state, string line)
+    private void WriteLinePty(ShellSessionState state, string line)
     {
-        state.Process.StandardInput.WriteLine(line);
-        state.Process.StandardInput.Flush();
+        WritePty(state, line + "\n");
     }
 
     private static void SetPendingSentinel(ShellSessionState state, string sentinel, TaskCompletionSource<bool> tcs)
@@ -434,75 +564,121 @@ public sealed class ShellSessionManager
     {
         lock (state.SyncRoot)
         {
+            state.PendingSentinelTcs?.TrySetCanceled();
             state.PendingSentinel = null;
             state.PendingSentinelTcs = null;
         }
     }
 
-    private static JsonObject BuildStatus(ShellSessionState state, string status)
+    private JsonObject BuildStatus(ShellSessionState state, string status)
     {
         lock (state.SyncRoot)
         {
             var end = state.BufferStartPosition + state.Output.Length;
             return new JsonObject
             {
-                { "session_id", state.SessionId },
-                { "status", status },
-                { "pid", state.Process?.HasExited == false ? state.Process.Id : null },
-                { "currentDirectory", state.CurrentDirectory },
-                { "started", state.StartedUtc },
-                { "exit_code", state.ExitCode },
-                { "buffer_start_cursor", state.BufferStartPosition },
-                { "buffer_end_cursor", end }
+                ["session_id"] = state.SessionId,
+                ["status"] = status,
+                ["pid"] = state.ChildPid,
+                ["currentDirectory"] = state.CurrentDirectory,
+                ["started"] = state.StartedUtc,
+                ["exit_code"] = state.ExitCode,
+                ["buffer_start_cursor"] = state.BufferStartPosition,
+                ["buffer_end_cursor"] = end
             };
         }
     }
 
-    private static string EchoCommand(string value)
+    private static string EchoCommand(string value) => $"echo '{EscapeBash(value)}'";
+
+    private static string ChangeDirectoryCommand(string directory) => $"cd '{EscapeBash(directory)}'";
+
+    private static string EscapeBash(string value) => value.Replace("'", "'\\''", StringComparison.Ordinal);
+
+    private void DisposePty(ShellSessionState state)
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        state.Exited = true;  // Signal reader to suppress EIO warnings
+        
+        if (state.ReaderCts != null)
         {
-            return $"Write-Output '{EscapePwsh(value)}'";
+            state.ReaderCts.Cancel();
+            state.ReaderCts.Dispose();
+            state.ReaderCts = null;
         }
 
-        return $"echo '{EscapeBash(value)}'";
+        if (state.PtyMasterFd.HasValue)
+        {
+            NativeMethods.pty_close_master(state.PtyMasterFd.Value);
+            state.PtyMasterFd = null;
+        }
+
+        if (state.ChildPid.HasValue)
+        {
+            NativeMethods.kill(-state.ChildPid.Value, NativeMethods.SIGKILL);
+            int status;
+            NativeMethods.waitpid(state.ChildPid.Value, out status, 0);
+            state.ExitCode = (status >> 8) & 0xFF;
+            state.ChildPid = null;
+        }
     }
 
-    private static string ChangeDirectoryCommand(string directory)
+    private static unsafe class NativeMethods
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        public const string PATH_LIBPTYHELPER = "/home/victor/Code/LlmAgents/forkpty/libptyhelper.so";
+
+        // Load the helper library on first use
+        static NativeMethods()
         {
-            return $"Set-Location -LiteralPath '{EscapePwsh(directory)}'";
-        }
-
-        return $"cd '{EscapeBash(directory)}'";
-    }
-
-    private static string EscapePwsh(string value) => value.Replace("'", "''", StringComparison.Ordinal);
-
-    private static string EscapeBash(string value) => value.Replace("'", "'\"'\"'", StringComparison.Ordinal);
-
-    private static void DisposeProcess(Process? process)
-    {
-        if (process == null)
-        {
-            return;
-        }
-
-        try
-        {
-            if (!process.HasExited)
+            try
             {
-                process.Kill(entireProcessTree: true);
-                process.WaitForExit(2000);
+                // Try to load from same directory as assembly first
+                var assemblyDir = Path.GetDirectoryName(typeof(NativeMethods).Assembly.Location);
+                var libPath = Path.Combine(assemblyDir ?? ".", "libptyhelper.so");
+                
+                if (!File.Exists(libPath))
+                {
+                    // Fallback to relative path
+                    libPath = PATH_LIBPTYHELPER;
+                }
+                
+                NativeLibrary.Load(libPath);
+            }
+            catch (Exception ex)
+            {
+                // If library loading fails, will get P/Invoke errors later
+                System.Diagnostics.Debug.WriteLine($"Failed to load libptyhelper.so: {ex.Message}");
             }
         }
-        catch
+
+        [DllImport(PATH_LIBPTYHELPER, EntryPoint = "forkpty_sh", SetLastError = true)]
+        public static extern forkpty_result forkpty_sh(byte* shell_command);
+
+        [DllImport(PATH_LIBPTYHELPER, EntryPoint = "pty_close_master", SetLastError = true)]
+        public static extern int pty_close_master(int master_fd);
+
+        [DllImport(PATH_LIBPTYHELPER, EntryPoint = "pty_write", SetLastError = true)]
+        public static extern int pty_write(int master_fd, byte* buf, int count);
+
+        [DllImport(PATH_LIBPTYHELPER, EntryPoint = "pty_read", SetLastError = true)]
+        public static extern int pty_read(int master_fd, byte* buf, int count);
+
+        // Standard libc functions
+        [DllImport("libc", SetLastError = true)]
+        public static extern int kill(int pid, int sig);
+
+        [DllImport("libc", SetLastError = true)]
+        public static extern int waitpid(int pid, out int status, int options);
+
+        public const int WNOHANG = 1;
+        public const int SIGINT = 2;
+        public const int SIGKILL = 9;
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct forkpty_result
         {
-        }
-        finally
-        {
-            process.Dispose();
+            public int master_fd;
+            public int child_pid;
+            public int error_code;
         }
     }
 
@@ -510,9 +686,13 @@ public sealed class ShellSessionManager
     {
         public required string SessionId { get; init; }
         public required string CurrentDirectory { get; set; }
-        public Process Process { get; set; } = null!;
         public DateTime StartedUtc { get; set; }
         public int? ExitCode { get; set; }
+        public bool? Exited { get; set; }
+        public string? StartError { get; set; }
+        public int? PtyMasterFd { get; set; }
+        public int? ChildPid { get; set; }
+        public CancellationTokenSource? ReaderCts { get; set; }
         public object SyncRoot { get; } = new();
         public SemaphoreSlim OperationLock { get; } = new(1, 1);
         public StringBuilder Output { get; } = new();
