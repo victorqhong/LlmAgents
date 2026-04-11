@@ -45,11 +45,11 @@ public sealed class ShellSessionManager
         }
 
         string status;
-        if (state.StartError != null)
+        if (state.Session.StartError != null)
         {
             status = "failed_to_start";
         }
-        else if (state.PtyMasterFd.HasValue)
+        else if (!state.Session.Exited)
         {
             status = "running";
         }
@@ -59,9 +59,9 @@ public sealed class ShellSessionManager
         }
 
         var res = BuildStatus(state, status);
-        if (state.StartError != null)
+        if (state.Session.StartError != null)
         {
-            ((JsonObject)res)["error"] = state.StartError;
+            ((JsonObject)res)["error"] = state.Session.StartError;
         }
         return res;
     }
@@ -81,9 +81,8 @@ public sealed class ShellSessionManager
         await state.OperationLock.WaitAsync();
         try
         {
-            DisposePty(state);
+            await state.Session.StopAsync();
             ClearPendingSentinel(state);
-            state.StartError = null;
             return new JsonObject
             {
                 ["session_id"] = sessionId,
@@ -102,16 +101,16 @@ public sealed class ShellSessionManager
         await state.OperationLock.WaitAsync();
         try
         {
-            if (state.StartError != null)
+            if (state.Session.StartError != null)
             {
-                return ErrorJson(state, state.StartError);
+                return ErrorJson(state, state.Session.StartError);
             }
-            EnsureProcessStarted(state);
-            if (state.StartError != null)
+            await EnsureProcessStarted(state);
+            if (state.Session.StartError != null)
             {
-                return ErrorJson(state, state.StartError);
+                return ErrorJson(state, state.Session.StartError);
             }
-            WriteLinePty(state, command);
+            await state.Session.WriteLineAsync(command);
 
             // if (!waitForExit)
             if (true)
@@ -121,7 +120,7 @@ public sealed class ShellSessionManager
                     ["session_id"] = state.SessionId,
                     ["status"] = "started",
                     ["waited"] = false,
-                    ["pid"] = state.ChildPid
+                    ["pid"] = state.Session.Pid
                 };
             }
 
@@ -129,14 +128,14 @@ public sealed class ShellSessionManager
             var sentinel = $"__llmagents_eoc_{Guid.NewGuid():N}__";
             var sentinelTask = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             SetPendingSentinel(state, sentinel, sentinelTask);
-            WriteLinePty(state, EchoCommand(sentinel));
+            await state.Session.WriteLineAsync(EchoCommand(sentinel));
 
             var completed = await Task.WhenAny(sentinelTask.Task, Task.Delay(timeout));
             if (completed != sentinelTask.Task)
             {
                 log.LogWarning("shell command did not exit after {Timeout} milliseconds", timeout);
                 log.LogInformation("{Output}", state.Output.ToString());
-                RestartProcess(state);
+                await RestartProcess(state);
                 return new JsonObject
                 {
                     ["session_id"] = state.SessionId,
@@ -172,11 +171,11 @@ public sealed class ShellSessionManager
             };
         }
 
-        if (state.StartError != null)
+        if (state.Session.StartError != null)
         {
             return new JsonObject
             {
-                ["error"] = state.StartError,
+                ["error"] = state.Session.StartError,
                 ["session_id"] = sessionId
             };
         }
@@ -224,18 +223,18 @@ public sealed class ShellSessionManager
         await state.OperationLock.WaitAsync();
         try
         {
-            if (state.StartError != null)
+            if (state.Session.StartError != null)
             {
-                return ErrorJson(state, state.StartError);
+                return ErrorJson(state, state.Session.StartError);
             }
-            EnsureProcessStarted(state);
-            if (state.StartError != null)
+            await EnsureProcessStarted(state);
+            if (state.Session.StartError != null)
             {
-                return ErrorJson(state, state.StartError);
+                return ErrorJson(state, state.Session.StartError);
             }
             if (appendNewline)
             {
-                WriteLinePty(state, input);
+                await state.Session.WriteLineAsync(input);
                 return new JsonObject
                 {
                     ["session_id"] = state.SessionId,
@@ -245,7 +244,7 @@ public sealed class ShellSessionManager
             }
             else
             {
-                WritePty(state, input);
+                await state.Session.WriteAsync(input);
                 return new JsonObject
                 {
                     ["session_id"] = state.SessionId,
@@ -266,30 +265,17 @@ public sealed class ShellSessionManager
         await state.OperationLock.WaitAsync();
         try
         {
-            if (state.StartError != null)
+            if (state.Session.StartError != null)
             {
-                return ErrorJson(state, state.StartError);
+                return ErrorJson(state, state.Session.StartError);
             }
-            EnsureProcessStarted(state);
-            if (state.StartError != null)
+            await EnsureProcessStarted(state);
+            if (state.Session.StartError != null)
             {
-                return ErrorJson(state, state.StartError);
+                return ErrorJson(state, state.Session.StartError);
             }
 
-            WritePty(state, "\x03");
-
-            // var timeout = timeoutMs.GetValueOrDefault(Math.Min(waitTimeMs, 3000));
-            // var sentinel = $"__llmagents_interrupt_probe_{Guid.NewGuid():N}__";
-            // var sentinelTask = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            // SetPendingSentinel(state, sentinel, sentinelTask);
-            // WriteLinePty(state, EchoCommand(sentinel));
-            //
-            // var completed = await Task.WhenAny(sentinelTask.Task, Task.Delay(timeout));
-            // var responsive = completed == sentinelTask.Task;
-            // if (!responsive)
-            // {
-            //     RestartProcess(state);
-            // }
+            await state.Session.InterruptAsync();
 
             return new JsonObject
             {
@@ -325,11 +311,26 @@ public sealed class ShellSessionManager
 
     private ShellSessionState GetOrCreateState(string sessionId)
     {
-        return sessions.GetOrAdd(sessionId, _ => new ShellSessionState
+        return sessions.GetOrAdd(sessionId, _ => 
         {
-            SessionId = sessionId,
-            CurrentDirectory = baseCurrentDirectory
+            var state = new ShellSessionState
+            {
+                SessionId = sessionId,
+                CurrentDirectory = baseCurrentDirectory
+            };
+            state.Session = CreateSession(state);
+            return state;
         });
+    }
+
+    private IShellSession CreateSession(ShellSessionState state)
+    {
+        IShellSession session = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) 
+            ? new PtyShellSession(state.SessionId, log) 
+            : new ProcessShellSession(state.SessionId, log);
+        
+        session.OutputReceived += (text) => AppendOutput(state, text);
+        return session;
     }
 
     private async Task OnChangeDirectory(ToolEvent e)
@@ -359,10 +360,10 @@ public sealed class ShellSessionManager
             try
             {
                 state.CurrentDirectory = baseCurrentDirectory;
-                EnsureProcessStarted(state);
-                if (state.StartError == null)
+                await EnsureProcessStarted(state);
+                if (state.Session.StartError == null)
                 {
-                    WriteLinePty(state, ChangeDirectoryCommand(state.CurrentDirectory));
+                    await state.Session.WriteLineAsync(ChangeDirectoryCommand(state.CurrentDirectory));
                 }
             }
             finally
@@ -372,137 +373,37 @@ public sealed class ShellSessionManager
         }
     }
 
-    private void EnsureProcessStarted(ShellSessionState state)
+    private async Task EnsureProcessStarted(ShellSessionState state)
     {
-        if (state.PtyMasterFd.HasValue && state.ReaderCts != null) return;
-        if (state.StartError != null) return;
+        if (!state.Session.Exited && state.Session.StartError == null) return;
+        if (state.Session.StartError != null && state.Session.Exited) return;
 
         try
         {
-            StartProcess(state);
-            WriteLinePty(state, ChangeDirectoryCommand(state.CurrentDirectory));
+            await state.Session.StartAsync(state.CurrentDirectory);
+            await state.Session.WriteLineAsync(ChangeDirectoryCommand(state.CurrentDirectory));
         }
         catch (Exception ex)
         {
-            state.StartError = ex.Message;
-            log.LogError(ex, "Failed to start PTY shell for session {SessionId}", state.SessionId);
+            log.LogError(ex, "Failed to start shell for session {SessionId}", state.SessionId);
         }
     }
 
-    private unsafe void StartProcess(ShellSessionState state)
-    {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            throw new PlatformNotSupportedException("PTY-based shell tools are only supported on Linux.");
-        }
-
-        // Use sh -c "exec bash -i" for better NixOS compatibility
-        // This lets sh find bash in PATH while giving us a proper interactive shell
-        string shellCommand = "export GIT_PAGER= ; export TERM=dumb; exec bash -i || exec sh -i";
-        
-        byte[] cmdBytes = Encoding.UTF8.GetBytes(shellCommand + "\0");
-        
-        fixed (byte* pCmd = cmdBytes)
-        {
-            var result = NativeMethods.forkpty_sh(pCmd);
-            
-            if (result.child_pid < 0)
-            {
-                throw new IOException($"forkpty_sh failed: errno={result.error_code}");
-            }
-            
-            // Quick non-blocking check if child exited immediately (exec failure)
-            int status;
-            int waitResult = NativeMethods.waitpid(result.child_pid, out status, NativeMethods.WNOHANG);
-            if (waitResult > 0)
-            {
-                int exitCode = (status >> 8) & 0xFF;
-                int signal = status & 0x7F;
-                throw new IOException($"Child process exited immediately: exitCode={exitCode}, signal={signal}");
-            }
-            
-            state.PtyMasterFd = result.master_fd;
-            state.ChildPid = result.child_pid;
-            state.StartedUtc = DateTime.UtcNow;
-            state.ReaderCts = new CancellationTokenSource();
-            StartPtyReader(state);
-            
-            log.LogInformation("PTY shell started for {SessionId}: pid={ChildPid}, fd={PtyMasterFd}", 
-                state.SessionId, result.child_pid, result.master_fd);
-        }
-    }
-
-    private unsafe void StartPtyReader(ShellSessionState state)
-    {
-        var cts = state.ReaderCts!;
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                while (state.PtyMasterFd.HasValue && !cts.Token.IsCancellationRequested)
-                {
-                    byte[] buffer = new byte[4096];
-                    fixed (byte* ptr = buffer)
-                    {
-                        int bytesRead = NativeMethods.pty_read(state.PtyMasterFd.Value, ptr, buffer.Length);
-                        if (bytesRead <= 0)
-                        {
-                            if (bytesRead < 0)
-                            {
-                                int errno = Marshal.GetLastPInvokeError();
-                                // EIO (5) during dispose is expected - only warn if not during cleanup
-                                if (errno != 5 || !state.Exited.GetValueOrDefault())
-                                {
-                                    log.LogWarning("PTY read failed errno={Errno} for {SessionId}", errno, state.SessionId);
-                                }
-                            }
-                            break;
-                        }
-                        string text = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                        AppendOutput(state, text);
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (Exception ex)
-            {
-                log.LogError(ex, "PTY reader crashed for {SessionId}", state.SessionId);
-            }
-            finally
-            {
-                if (state.ChildPid.HasValue)
-                {
-                    int status;
-                    NativeMethods.waitpid(state.ChildPid.Value, out status, 0);
-                    state.ExitCode = (status >> 8) & 0xFF;
-                    state.ChildPid = null;
-                }
-                if (state.PtyMasterFd.HasValue)
-                {
-                    NativeMethods.pty_close_master(state.PtyMasterFd.Value);
-                    state.PtyMasterFd = null;
-                }
-                state.Exited = true;
-            }
-        }, cts.Token);
-    }
-
-    private void RestartProcess(ShellSessionState state)
+    private async Task RestartProcess(ShellSessionState state)
     {
         ClearPendingSentinel(state);
-        DisposePty(state);
-        state.StartError = null;
-        state.Exited = false;
-        state.ExitCode = null;
-        StartProcess(state);
-        WriteLinePty(state, ChangeDirectoryCommand(state.CurrentDirectory));
+        await state.Session.StopAsync();
+        
+        // Create a new session instance to replace the old one
+        var newSession = CreateSession(state);
+        state.Session = newSession;
+        
+        await EnsureProcessStarted(state);
     }
 
-    private void AppendOutput(ShellSessionState state, string text)
+    private void AppendOutput(ShellSessionState? state, string text)
     {
-        if (string.IsNullOrWhiteSpace(text)) return;
+        if (state == null || string.IsNullOrWhiteSpace(text)) return;
 
         lock (state.SyncRoot)
         {
@@ -535,22 +436,6 @@ public sealed class ShellSessionManager
         log.LogDebug("Shell {SessionId}: {Preview}", state.SessionId, text.TrimEnd().Take(100));
     }
 
-    private unsafe void WritePty(ShellSessionState state, string input)
-    {
-        if (!state.PtyMasterFd.HasValue) return;
-
-        byte[] bytes = Encoding.UTF8.GetBytes(input);
-        fixed (byte* ptr = bytes)
-        {
-            NativeMethods.pty_write(state.PtyMasterFd.Value, ptr, bytes.Length);
-        }
-    }
-
-    private void WriteLinePty(ShellSessionState state, string line)
-    {
-        WritePty(state, line + "\n");
-    }
-
     private static void SetPendingSentinel(ShellSessionState state, string sentinel, TaskCompletionSource<bool> tcs)
     {
         lock (state.SyncRoot)
@@ -579,10 +464,10 @@ public sealed class ShellSessionManager
             {
                 ["session_id"] = state.SessionId,
                 ["status"] = status,
-                ["pid"] = state.ChildPid,
+                ["pid"] = state.Session.Pid,
                 ["currentDirectory"] = state.CurrentDirectory,
-                ["started"] = state.StartedUtc,
-                ["exit_code"] = state.ExitCode,
+                ["started"] = state.Session.StartedUtc,
+                ["exit_code"] = state.Session.ExitCode,
                 ["buffer_start_cursor"] = state.BufferStartPosition,
                 ["buffer_end_cursor"] = end
             };
@@ -595,104 +480,11 @@ public sealed class ShellSessionManager
 
     private static string EscapeBash(string value) => value.Replace("'", "'\\''", StringComparison.Ordinal);
 
-    private void DisposePty(ShellSessionState state)
-    {
-        state.Exited = true;  // Signal reader to suppress EIO warnings
-        
-        if (state.ReaderCts != null)
-        {
-            state.ReaderCts.Cancel();
-            state.ReaderCts.Dispose();
-            state.ReaderCts = null;
-        }
-
-        if (state.PtyMasterFd.HasValue)
-        {
-            NativeMethods.pty_close_master(state.PtyMasterFd.Value);
-            state.PtyMasterFd = null;
-        }
-
-        if (state.ChildPid.HasValue)
-        {
-            NativeMethods.kill(-state.ChildPid.Value, NativeMethods.SIGKILL);
-            int status;
-            NativeMethods.waitpid(state.ChildPid.Value, out status, 0);
-            state.ExitCode = (status >> 8) & 0xFF;
-            state.ChildPid = null;
-        }
-    }
-
-    private static unsafe class NativeMethods
-    {
-        public const string PATH_LIBPTYHELPER = "/home/victor/Code/LlmAgents/forkpty/libptyhelper.so";
-
-        // Load the helper library on first use
-        static NativeMethods()
-        {
-            try
-            {
-                // Try to load from same directory as assembly first
-                var assemblyDir = Path.GetDirectoryName(typeof(NativeMethods).Assembly.Location);
-                var libPath = Path.Combine(assemblyDir ?? ".", "libptyhelper.so");
-                
-                if (!File.Exists(libPath))
-                {
-                    // Fallback to relative path
-                    libPath = PATH_LIBPTYHELPER;
-                }
-                
-                NativeLibrary.Load(libPath);
-            }
-            catch (Exception ex)
-            {
-                // If library loading fails, will get P/Invoke errors later
-                System.Diagnostics.Debug.WriteLine($"Failed to load libptyhelper.so: {ex.Message}");
-            }
-        }
-
-        [DllImport(PATH_LIBPTYHELPER, EntryPoint = "forkpty_sh", SetLastError = true)]
-        public static extern forkpty_result forkpty_sh(byte* shell_command);
-
-        [DllImport(PATH_LIBPTYHELPER, EntryPoint = "pty_close_master", SetLastError = true)]
-        public static extern int pty_close_master(int master_fd);
-
-        [DllImport(PATH_LIBPTYHELPER, EntryPoint = "pty_write", SetLastError = true)]
-        public static extern int pty_write(int master_fd, byte* buf, int count);
-
-        [DllImport(PATH_LIBPTYHELPER, EntryPoint = "pty_read", SetLastError = true)]
-        public static extern int pty_read(int master_fd, byte* buf, int count);
-
-        // Standard libc functions
-        [DllImport("libc", SetLastError = true)]
-        public static extern int kill(int pid, int sig);
-
-        [DllImport("libc", SetLastError = true)]
-        public static extern int waitpid(int pid, out int status, int options);
-
-        public const int WNOHANG = 1;
-        public const int SIGINT = 2;
-        public const int SIGKILL = 9;
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct forkpty_result
-        {
-            public int master_fd;
-            public int child_pid;
-            public int error_code;
-        }
-    }
-
     private sealed class ShellSessionState
     {
         public required string SessionId { get; init; }
         public required string CurrentDirectory { get; set; }
-        public DateTime StartedUtc { get; set; }
-        public int? ExitCode { get; set; }
-        public bool? Exited { get; set; }
-        public string? StartError { get; set; }
-        public int? PtyMasterFd { get; set; }
-        public int? ChildPid { get; set; }
-        public CancellationTokenSource? ReaderCts { get; set; }
+        public IShellSession Session { get; set; } = null!;
         public object SyncRoot { get; } = new();
         public SemaphoreSlim OperationLock { get; } = new(1, 1);
         public StringBuilder Output { get; } = new();
