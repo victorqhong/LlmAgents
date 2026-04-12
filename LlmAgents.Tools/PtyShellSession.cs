@@ -78,7 +78,7 @@ public sealed class PtyShellSession : IShellSession
         await Task.CompletedTask;
     }
 
-    private void StartPtyReader()
+    private unsafe void StartPtyReader()
     {
         var cts = _readerCts!;
         _ = Task.Run(() =>
@@ -120,7 +120,7 @@ public sealed class PtyShellSession : IShellSession
         }, cts.Token);
     }
 
-    public Task WriteAsync(string input)
+    public unsafe Task WriteAsync(string input)
     {
         if (!_ptyMasterFd.HasValue) return Task.CompletedTask;
 
@@ -134,8 +134,7 @@ public sealed class PtyShellSession : IShellSession
 
     public Task WriteLineAsync(string input)
     {
-        return WriteAsync(input + "
-");
+        return WriteAsync(input + "\n");
     }
 
     public Task InterruptAsync()

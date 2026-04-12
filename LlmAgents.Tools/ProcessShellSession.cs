@@ -104,7 +104,7 @@ public sealed class ProcessShellSession : IShellSession
         char[] buffer = new char[4096];
         while (!token.IsCancellationRequested && !reader.EndOfStream)
         {
-            int read = await reader.ReadAsync(buffer, 0, buffer.Length, token);
+            int read = await reader.ReadAsync(buffer.AsMemory(), token);
             if (read > 0)
             {
                 string text = new string(buffer, 0, read);
