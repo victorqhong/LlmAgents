@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -61,7 +60,7 @@ public sealed class ShellSessionManager
         var res = BuildStatus(state, status);
         if (state.Session.StartError != null)
         {
-            ((JsonObject)res)["error"] = state.Session.StartError;
+            res["error"] = state.Session.StartError;
         }
         return res;
     }
@@ -112,8 +111,7 @@ public sealed class ShellSessionManager
             }
             await state.Session.WriteLineAsync(command);
 
-            // if (!waitForExit)
-            if (true)
+            if (!waitForExit)
             {
                 return new JsonObject
                 {
@@ -200,7 +198,7 @@ public sealed class ShellSessionManager
             var chunkSize = Math.Max(maxChars ?? defaultReadMaxChars, 0);
             var offset = (int)(resolvedCursor - start);
             var available = Math.Max(0, state.Output.Length - offset);
-            var take = Math.Min((int)Math.Min(chunkSize, int.MaxValue), available);
+            var take = Math.Min(Math.Min(chunkSize, int.MaxValue), available);
             var output = take > 0 ? state.Output.ToString(offset, take) : string.Empty;
             var nextCursor = resolvedCursor + take;
 
@@ -290,7 +288,7 @@ public sealed class ShellSessionManager
         }
     }
 
-    private static JsonNode ErrorJson(ShellSessionState state, string error)
+    private static JsonObject ErrorJson(ShellSessionState state, string error)
     {
         return new JsonObject
         {
@@ -375,7 +373,7 @@ public sealed class ShellSessionManager
 
     private async Task EnsureProcessStarted(ShellSessionState state)
     {
-        if (!state.Session.Exited && state.Session.StartError == null) return;
+        if (!state.Session.Exited && state.Session.StartError == null && state.Session.Pid != null) return;
         if (state.Session.StartError != null && state.Session.Exited) return;
 
         try
