@@ -1,8 +1,6 @@
-using LlmAgents;
 using LlmAgents.Agents;
 using LlmAgents.Agents.Work;
 using LlmAgents.Api.Extensions;
-using LlmAgents.CommandLineParser;
 using LlmAgents.Communication;
 using Microsoft.Extensions.Logging;
 using System.CommandLine;
@@ -26,13 +24,12 @@ internal class DefaultCommand : RootCommand
         Options.Add(LlmAgentsOptions.ApiKey);
         Options.Add(LlmAgentsOptions.ApiModel);
         Options.Add(LlmAgentsOptions.ContextSize);
-        Options.Add(LlmAgentsOptions.MaxCompletionTokens);
         Options.Add(LlmAgentsOptions.ApiConfig);
         Options.Add(LlmAgentsOptions.Persistent);
         Options.Add(LlmAgentsOptions.SystemPromptFile);
         Options.Add(LlmAgentsOptions.WorkingDirectory);
         Options.Add(LlmAgentsOptions.StorageDirectory);
-        Options.Add(LlmAgentsOptions.SessionId);
+        Options.Add(LlmAgentsOptions.Session);
         Options.Add(LlmAgentsOptions.StreamOutput);
         Options.Add(LlmAgentsOptions.ToolsConfig);
         Options.Add(LlmAgentsOptions.McpConfigPath);
@@ -44,7 +41,7 @@ internal class DefaultCommand : RootCommand
     {
         var logger = loggerFactory.CreateLogger(nameof(ConsoleAgent));
 
-        var apiParameters = Parser.ParseApiParameters(parseResult) ?? Config.InteractiveApiConfigSetup();
+        var apiParameters = Parser.ParseApiParameters(parseResult);
         if (apiParameters == null)
         {
             Console.Error.WriteLine("apiEndpoint, apiKey, and/or apiModel is null or empty.");
@@ -57,12 +54,6 @@ internal class DefaultCommand : RootCommand
             apiParameters.ContextSize = 8192;
         }
 
-        if (apiParameters.MaxCompletionTokens < 1)
-        {
-            logger.LogWarning("Maximum completion tokens must be greater than zero. Setting to default 8192");
-            apiParameters.MaxCompletionTokens = 8192;
-        }
-
         var agentParameters = Parser.ParseAgentParameters(parseResult);
         if (agentParameters == null)
         {
@@ -71,23 +62,12 @@ internal class DefaultCommand : RootCommand
         }
 
         var toolParameters = Parser.ParseToolParameters(parseResult);
-        if (string.IsNullOrEmpty(toolParameters.ToolsConfig) || !File.Exists(toolParameters.ToolsConfig))
-        {
-            toolParameters.ToolsConfig = Config.InteractiveToolsConfigSetup();
-        }
-
         var sessionParameters = Parser.ParseSessionParameters(parseResult);
-
-        string systemPrompt = Prompts.DefaultSystemPrompt;
-        if (!string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
-        {
-            systemPrompt = File.ReadAllText(sessionParameters.SystemPromptFile);
-        }
+        sessionParameters.OutputMessagesOnLoad = true;
 
         var consoleCommunication = new ConsoleCommunication();
 
         var agent = await LlmAgentFactory.CreateAgent(loggerFactory, consoleCommunication, apiParameters, agentParameters, toolParameters, sessionParameters);
-        agent.SessionCapability.OutputMessagesOnLoad = true;
         agent.PreWaitForContent += async () =>
         {
             await consoleCommunication.SendMessage("User: ", false);
@@ -111,7 +91,7 @@ internal class DefaultCommand : RootCommand
 
         if (agentParameters.AgentManagerUrl != null)
         {
-            await agent.ConfigureAgentHub(agentParameters.AgentManagerUrl, consoleCommunication, loggerFactory.CreateLogger<LlmAgent>());
+            await agent.ConfigureAgentHub(agentParameters.AgentManagerUrl, consoleCommunication, logger);
         }
 
         await agent.Run(cancellationToken);

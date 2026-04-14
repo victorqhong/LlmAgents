@@ -22,7 +22,6 @@ internal class AgentCommand : Command
         Options.Add(LlmAgentsOptions.ApiKey);
         Options.Add(LlmAgentsOptions.ApiModel);
         Options.Add(LlmAgentsOptions.ContextSize);
-        Options.Add(LlmAgentsOptions.MaxCompletionTokens);
         Options.Add(LlmAgentsOptions.ApiConfig);
         Options.Add(LlmAgentsOptions.Persistent);
         Options.Add(LlmAgentsOptions.SystemPromptFile);

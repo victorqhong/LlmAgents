@@ -1,6 +1,4 @@
-﻿using LlmAgents.Configuration;
-using LlmAgents.Tools;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace LlmAgents.CommandLineParser;
 
@@ -43,82 +41,5 @@ public static class Config
         {
             Directory.CreateDirectory(configDir);
         }
-    }
-
-    public static LlmApiConfig? InteractiveApiConfigSetup()
-    {
-        Console.WriteLine("Interactive API setup. Leave blank to cancel.");
-
-        Console.Write("API endpoint (e.g. https://api.openai.com/v1/chat/completions): ");
-        string? endpoint = Console.ReadLine();
-        if (string.IsNullOrEmpty(endpoint))
-        {
-            return null;
-        }
-
-        Console.Write("API key: ");
-        string? apiKey = Console.ReadLine();
-        if (string.IsNullOrEmpty(apiKey))
-        {
-            return null;
-        }
-
-        Console.Write("Model name (e.g. gpt-3.5-turbo): ");
-        string? model = Console.ReadLine();
-        if (string.IsNullOrEmpty(model))
-        {
-            return null;
-        }
-
-        Console.Write("Context size: ");
-        string? contextSizeInput = Console.ReadLine();
-        if (string.IsNullOrEmpty(contextSizeInput) || int.TryParse(contextSizeInput, out var contextSize))
-        {
-            return null;
-        }
-
-        var apiConfig = new LlmApiConfig
-        {
-            ApiEndpoint = endpoint,
-            ApiKey = apiKey,
-            ApiModel = model,
-            ContextSize = contextSize,
-        };
-
-        EnsureConfigDirectoryExists();
-
-        string configPath = GetProfileConfig("api.json");
-        File.WriteAllText(configPath, apiConfig.ToString());
-        Console.WriteLine($"Saved API config to: {configPath}");
-
-        return apiConfig;
-    }
-
-    public static string? InteractiveToolsConfigSetup()
-    {
-        Console.WriteLine("Interactive tools config setup. Leave blank to cancel.");
-
-        Console.Write("Path to tools assembly: ");
-        var toolsAssembly = Console.ReadLine();
-        if (string.IsNullOrEmpty(toolsAssembly))
-        {
-            return null;
-        }
-
-        var toolsConfig = ToolsConfigGenerator.GenerateToolConfig(toolsAssembly);
-        if (toolsConfig == null)
-        {
-            return null;
-        }
-
-        EnsureConfigDirectoryExists();
-
-        string configPath = GetProfileConfig("tools.json");
-        File.WriteAllText(configPath, toolsConfig.ToString());
-        Console.WriteLine($"Saved tools config to: {configPath}");
-
-        Console.WriteLine("NOTE: Remember to add any necessary parameters to the generated config file.");
-
-        return configPath;
     }
 }

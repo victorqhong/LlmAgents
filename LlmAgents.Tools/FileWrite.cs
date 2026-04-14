@@ -90,7 +90,7 @@ public class FileWrite : Tool
                 return Task.FromResult<JsonNode>(result);
             }
 
-            File.WriteAllText(path, contents.Replace(@"\r\n", Environment.NewLine).Replace(@"\n", Environment.NewLine));
+            File.WriteAllText(path, contents);
             result.Add("result", "success");
         }
         catch (Exception e)
