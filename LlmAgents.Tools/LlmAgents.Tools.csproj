@@ -4,6 +4,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -15,6 +16,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LlmAgents\LlmAgents.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="ForkPTY/libptyhelper.so">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

@@ -1,5 +1,6 @@
 namespace LlmAgents.Tools;
 
+using LlmAgents.Tools.Shell;
 using Microsoft.Extensions.Logging;
 
 public abstract class ShellToolBase : Tool
