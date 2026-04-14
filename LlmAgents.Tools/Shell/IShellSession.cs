@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace LlmAgents.Tools;
+namespace LlmAgents.Tools.Shell;
 
 public interface IShellSession : IDisposable
 {

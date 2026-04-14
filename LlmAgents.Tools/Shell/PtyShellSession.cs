@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
 
-namespace LlmAgents.Tools;
+namespace LlmAgents.Tools.Shell;
 
 public sealed class PtyShellSession : IShellSession
 {

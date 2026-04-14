@@ -6,7 +6,7 @@ using LlmAgents.State;
 using Microsoft.Extensions.Logging;
 using LlmAgents.Tools.Events;
 
-namespace LlmAgents.Tools;
+namespace LlmAgents.Tools.Shell;
 
 public sealed class ShellSessionManager
 {

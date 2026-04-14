@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace LlmAgents.Tools;
+namespace LlmAgents.Tools.Shell;
 
 public sealed class ProcessShellSession : IShellSession
 {
