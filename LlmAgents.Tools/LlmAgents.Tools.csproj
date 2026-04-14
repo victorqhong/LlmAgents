@@ -18,4 +18,10 @@
     <ProjectReference Include="..\LlmAgents\LlmAgents.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="ForkPTY/libptyhelper.so">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

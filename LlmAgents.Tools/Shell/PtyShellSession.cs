@@ -37,7 +37,7 @@ public sealed class PtyShellSession : IShellSession
             throw new PlatformNotSupportedException("PTY-based shell tools are only supported on Linux.");
         }
 
-        // Use sh -c "exec bash -i" for better NixOS compatibility
+        // Use sh -c "exec bash -i" for better compatibility
         string shellCommand = "export GIT_PAGER= ; export TERM=dumb; exec bash -i || exec sh -i";
         byte[] cmdBytes = Encoding.UTF8.GetBytes(shellCommand + "\0");
 
@@ -71,7 +71,6 @@ public sealed class PtyShellSession : IShellSession
                     sessionId, _childPid, _ptyMasterFd);
             }
         }
-        await Task.CompletedTask;
     }
 
     private unsafe void StartPtyReader()
@@ -178,7 +177,7 @@ public sealed class PtyShellSession : IShellSession
 
     private static unsafe class NativeMethods
     {
-        public const string PATH_LIBPTYHELPER = "/home/victor/Code/LlmAgents/forkpty/libptyhelper.so";
+        public const string PATH_LIBPTYHELPER = "ForkPTY/libptyhelper.so";
 
         static NativeMethods()
         {

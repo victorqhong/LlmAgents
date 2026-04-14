@@ -1,1 +1,1 @@
-gcc -shared -fPIC -o libptyhelper.so ptyhelper.c
+cc -shared -fPIC -o libptyhelper.so ptyhelper.c
