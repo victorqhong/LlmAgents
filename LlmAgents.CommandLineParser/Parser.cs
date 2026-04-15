@@ -14,7 +14,6 @@ public static class Parser
         string? apiEndpoint = null;
         string? apiKey = null;
         int contextSize = 0;
-        int? maxCompletionTokens = null;
         string? apiModel = null;
 
         var apiConfigValue = parseResult.GetValue(Options.ApiConfig);
@@ -32,7 +31,6 @@ public static class Parser
             apiKey = parseResult.GetValue(Options.ApiKey);
             apiModel = parseResult.GetValue(Options.ApiModel);
             contextSize = parseResult.GetValue(Options.ContextSize);
-            maxCompletionTokens = parseResult.GetValue(Options.MaxCompletionTokens);
         }
 
         if (string.IsNullOrEmpty(apiEndpoint) || string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(apiModel))
@@ -46,13 +44,12 @@ public static class Parser
             ApiKey = apiKey,
             ApiModel = apiModel,
             ContextSize = contextSize,
-            MaxCompletionTokens = maxCompletionTokens,
         };
     }
 
     public static LlmAgentParameters? ParseAgentParameters(ParseResult parseResult)
     {
-        string? agentId = parseResult.GetValue(Options.AgentId) ?? Environment.MachineName;
+        string? agentId = parseResult.GetValue(Options.AgentId);
         bool persistent = parseResult.GetValue(Options.Persistent);
         string? storageDirectory = parseResult.GetValue(Options.StorageDirectory);
         bool streamOutput = parseResult.GetValue(Options.StreamOutput);
@@ -89,13 +86,13 @@ public static class Parser
 
     public static SessionParameters ParseSessionParameters(ParseResult parseResult)
     {
-        string? sessionId = parseResult.GetValue(Options.SessionId);
+        string? session = parseResult.GetValue(Options.Session);
         string? workingDirectoryValue = parseResult.GetValue(Options.WorkingDirectory);
         string? systemPromptFileValue = parseResult.GetValue(Options.SystemPromptFile);
 
         return new SessionParameters
         {
-            SessionId = sessionId,
+            Session = session,
             WorkingDirectory = workingDirectoryValue,
             SystemPromptFile = systemPromptFileValue,
         };

@@ -80,7 +80,9 @@ public class Session
         }
         else
         {
-            SessionDatabase.CreateSession(this);
+            StartTime = DateTime.Now;
+            LastActive = DateTime.Now;
+            Metadata = string.Empty;
         }
     }
 

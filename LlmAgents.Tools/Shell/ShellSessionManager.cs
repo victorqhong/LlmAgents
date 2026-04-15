@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using LlmAgents.State;
 using Microsoft.Extensions.Logging;
 using LlmAgents.Tools.Events;
@@ -125,8 +126,9 @@ public sealed class ShellSessionManager
             var timeout = timeoutMs.GetValueOrDefault(waitTimeMs);
             var sentinel = $"__llmagents_eoc_{Guid.NewGuid():N}__";
             var sentinelTask = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            SetPendingSentinel(state, sentinel, sentinelTask);
-            await state.Session.WriteLineAsync(EchoCommand(sentinel));
+            var echoCommand = EchoCommand(sentinel);
+            SetPendingSentinel(state, sentinel, sentinelTask, echoCommand);
+            await state.Session.WriteLineAsync(echoCommand);
 
             var completed = await Task.WhenAny(sentinelTask.Task, Task.Delay(timeout));
             if (completed != sentinelTask.Task)
@@ -403,25 +405,29 @@ public sealed class ShellSessionManager
     {
         if (state == null || string.IsNullOrWhiteSpace(text)) return;
 
+        text = StripAnsiCodes(text);
+        text = text.Replace("\r\n", "\n").Replace("\r", "\n");
+
         lock (state.SyncRoot)
         {
-            if (!string.IsNullOrEmpty(state.PendingSentinel))
+            if (!string.IsNullOrEmpty(state.PendingSentinel) && text.Contains(state.PendingSentinel))
             {
-                if (text.Trim().Equals(state.PendingSentinel))
+                if (!string.IsNullOrEmpty(state.SentinelEchoCommand))
                 {
+                    text = text.Replace(state.SentinelEchoCommand, string.Empty);
+                }
+
+                if (text.Contains(state.PendingSentinel))
+                {
+                    text = text.Replace(state.PendingSentinel, string.Empty);
+
                     state.PendingSentinelTcs?.TrySetResult(true);
                     state.PendingSentinel = null;
                     state.PendingSentinelTcs = null;
                 }
-                else if (!text.Contains(state.PendingSentinel))
-                {
-                    state.Output.Append(text);
-                }
             }
-            else
-            {
-                state.Output.Append(text);
-            }
+
+            state.Output.Append(text);
 
             while (state.Output.Length > maxBufferedChars)
             {
@@ -434,12 +440,18 @@ public sealed class ShellSessionManager
         log.LogDebug("Shell {SessionId}: {Preview}", state.SessionId, text.TrimEnd().Take(100));
     }
 
-    private static void SetPendingSentinel(ShellSessionState state, string sentinel, TaskCompletionSource<bool> tcs)
+    private static string StripAnsiCodes(string input)
+    {
+        return Regex.Replace(input, @"\x1B\[[0-?]*[ -~/]*[@-~]", string.Empty);
+    }
+
+    private static void SetPendingSentinel(ShellSessionState state, string sentinel, TaskCompletionSource<bool> tcs, string echoCommand)
     {
         lock (state.SyncRoot)
         {
             state.PendingSentinel = sentinel;
             state.PendingSentinelTcs = tcs;
+            state.SentinelEchoCommand = echoCommand;
         }
     }
 
@@ -489,5 +501,6 @@ public sealed class ShellSessionManager
         public long BufferStartPosition { get; set; }
         public string? PendingSentinel { get; set; }
         public TaskCompletionSource<bool>? PendingSentinelTcs { get; set; }
+        public string? SentinelEchoCommand { get; set; }
     }
 }

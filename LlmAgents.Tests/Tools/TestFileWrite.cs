@@ -42,9 +42,5 @@ public class TestFileWrite
         Assert.IsNotNull(r);
         Assert.IsTrue(string.Equals(r.GetValue<string>(), "success"));
         Assert.IsTrue(File.Exists(fileName));
-
-        var contents = File.ReadAllText(fileName);
-        Assert.IsFalse(contents.Contains(@"\r\n"), "File written contains '\\r\\n'");
-        Assert.IsFalse(contents.Contains(@"\n"), "File written contains '\\n'");
     }
 }

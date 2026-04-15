@@ -51,12 +51,28 @@ public class SessionDatabase
 
         return session;
     }
+
+    public void DeleteSession(Session session)
+    {
+        DeleteSession(session.SessionId);
+    }
+
+    public void DeleteSession(string sessionId)
+    {
+        stateDatabase.Write(command =>
+        {
+            command.CommandText = "DELETE FROM sessions WHERE session_id = $sessionId";
+            command.Parameters.AddWithValue("$sessionId", sessionId);
+            command.ExecuteNonQuery();
+        });
+    }
+
     public List<Session> GetSessions()
     {
         var sessions = new List<Session>();
         stateDatabase.Read(command =>
         {
-            command.CommandText = "SELECT session_id, start_time, last_active, metadata FROM sessions";
+            command.CommandText = "SELECT session_id, start_time, last_active, metadata FROM sessions ORDER BY last_active DESC";
 
             using var reader = command.ExecuteReader();
             if (!reader.Read())

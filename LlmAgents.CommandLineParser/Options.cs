@@ -6,7 +6,8 @@ public static class Options
 {
     public readonly static Option<string> AgentId = new("--agentId")
     {
-        Description = "Value used to identify the agent"
+        Description = "Value used to identify the agent",
+        DefaultValueFactory = result => Environment.MachineName
     };
 
     public readonly static Option<string> ApiEndpoint = new("--apiEndpoint")
@@ -30,12 +31,6 @@ public static class Options
         DefaultValueFactory = result => 8192,
     };
 
-    public readonly static Option<int> MaxCompletionTokens = new("--maxCompletionTokens")
-    {
-        Description = "Maximum number of tokens in a completion",
-        DefaultValueFactory = result => 8192,
-    };
-
     public readonly static Option<string?> ApiConfig = new("--apiConfig")
     {
         Description = "Path to a JSON file with configuration for api values",
@@ -44,7 +39,7 @@ public static class Options
 
     public readonly static Option<bool> Persistent = new("--persistent")
     {
-        Description = "Whether messages are saved",
+        Description = "Include option to save messages and state",
         DefaultValueFactory = result => false
     };
 
@@ -66,9 +61,9 @@ public static class Options
         DefaultValueFactory = result => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LlmAgents")
     };
 
-    public readonly static Option<string?> SessionId = new("--sessionId") 
+    public readonly static Option<string?> Session = new("--session")
     {
-        Description = "Session id used to load state",
+        Description = "Can be \"new\", \"choose\", \"latest\", or a session id used to load and save state",
         DefaultValueFactory = result => Config.GetConfigOptionDefaultValue(".llmagents-session", "LLMAGENTS_SESSION")
     };
 

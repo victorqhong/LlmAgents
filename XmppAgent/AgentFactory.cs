@@ -29,6 +29,12 @@ internal static class AgentFactory
 
             var agent = await LlmAgentFactory.CreateAgent(loggerFactory, xmppCommunication, apiConfig, agentParameters, toolParameters, sessionParameters);
 
+            var logger = loggerFactory.CreateLogger<LlmAgent>();
+            agent.PostParseUsage += (usage) =>
+            {
+                logger.LogInformation("PromptTokens: {PromptTokens}, CompletionTokens: {CompletionTokens}, TotalTokens: {TotalTokens}, Context Used: {ContextUsed}", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, ((double)usage.TotalTokens / agent.llmApi.ApiConfig.ContextSize).ToString("P"));
+            };
+
             agent.PreGetResponse = () => Task.Run(() => xmppCommunication.SendComposing());
             agent.PostSendMessage = () => Task.Run(() => xmppCommunication.SendActive());
 
