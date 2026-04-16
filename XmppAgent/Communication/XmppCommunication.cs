@@ -88,10 +88,11 @@ public class XmppCommunication : IAgentCommunication
         }
 
         XmppClient.StateChanged
-            .Subscribe(state =>
+            .Subscribe(async state =>
             {
                 if (state == SessionState.Binded)
                 {
+                    await XmppClient.SendPresenceAsync(Show.Chat);
                     Connected = true;
                 }
                 else if (state == SessionState.Disconnected)
@@ -104,7 +105,6 @@ public class XmppCommunication : IAgentCommunication
         HandlePresenceSubscribe();
 
         await XmppClient.ConnectAsync();
-        await XmppClient.SendPresenceAsync(Show.Chat);
     }
 
     public async Task SendPresence(Show show)
