@@ -18,6 +18,8 @@ public static class LlmAgentFactory
     public static Func<FactoryParameters, Task<Session>> CreateSession { get; set; } = Defaults.CreateSession;
     public static Func<LlmAgent, FactoryParameters, Task<Tool[]>> CreateTools { get; set; } = Defaults.CreateTools;
 
+    private static ILogger Log;
+
     public static async Task<LlmAgent> CreateAgent(
         ILoggerFactory loggerFactory,
         IAgentCommunication agentCommunication,
@@ -26,6 +28,8 @@ public static class LlmAgentFactory
         ToolParameters toolParameters,
         SessionParameters sessionParameters)
     {
+        Log ??= loggerFactory.CreateLogger("LlmAgentFactory");
+
         if (string.IsNullOrEmpty(sessionParameters.WorkingDirectory))
         {
             sessionParameters.WorkingDirectory = Environment.CurrentDirectory;
@@ -240,9 +244,18 @@ public static class LlmAgentFactory
 
         private static async Task<IEnumerable<Tool>> CreateMcpTools(IClientTransport clientTransport, ToolFactory toolFactory)
         {
-            var client = await McpClientFactory.CreateAsync(clientTransport);
-            var tools = await client.ListToolsAsync();
-            return tools.Select(tool => new McpTool(tool, client, toolFactory));
+            try
+            {
+                var client = await McpClientFactory.CreateAsync(clientTransport);
+                var tools = await client.ListToolsAsync();
+                return tools.Select(tool => new McpTool(tool, client, toolFactory));
+            }
+            catch (Exception e)
+            {
+                Log.LogError(e, "Could not create McpTools");
+            }
+
+            return [];
         }
     }
 
