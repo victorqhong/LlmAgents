@@ -18,7 +18,8 @@ internal static class AgentFactory
             var xmppCommunication = new XmppCommunication(
                 xmppParameters.XmppUsername, xmppParameters.XmppDomain, xmppParameters.XmppPassword, trustHost: xmppParameters.XmppTrustHost)
             {
-                TargetJid = xmppParameters.XmppTargetJid
+                TargetJid = xmppParameters.XmppTargetJid,
+                MessageBatchSize = 4000
             };
 #if DEBUG
             xmppCommunication.Debug = true;
