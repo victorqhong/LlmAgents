@@ -5,6 +5,7 @@ using LlmAgents.LlmApi.Content;
 using LlmAgents.LlmApi.Llamacpp;
 using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.Skills;
 using LlmAgents.State;
 using LlmAgents.Tools;
 using Microsoft.Extensions.Logging;
@@ -15,8 +16,9 @@ namespace LlmAgents.Agents;
 public static class LlmAgentFactory
 {
     public static Func<FactoryParameters, Task<LlmApiOpenAi>> CreateLlmApi { get; set; } = Defaults.CreateLlmApi;
-    public static Func<FactoryParameters, Task<Session>> CreateSession { get; set; } = Defaults.CreateSession;
+    public static Func<FactoryParameters, SkillInventory, Task<Session>> CreateSession { get; set; } = Defaults.CreateSession;
     public static Func<LlmAgent, FactoryParameters, Task<Tool[]>> CreateTools { get; set; } = Defaults.CreateTools;
+    public static Func<FactoryParameters, Task<SkillInventory>> CreateSkillInventory { get; set; } = Defaults.CreateSkillInventory;
 
     private static ILogger Log;
 
@@ -60,8 +62,9 @@ public static class LlmAgentFactory
         var llmApi = await CreateLlmApi(factoryParameters);
         var agent = new LlmAgent(llmAgentParameters, llmApi, agentCommunication, loggerFactory);
 
-        var session = await CreateSession(factoryParameters);
-         agent.SessionCapability.OutputMessagesOnLoad = sessionParameters.OutputMessagesOnLoad;
+        var skillInventory = await CreateSkillInventory(factoryParameters);
+        var session = await CreateSession(factoryParameters, skillInventory);
+        agent.SessionCapability.OutputMessagesOnLoad = sessionParameters.OutputMessagesOnLoad;
         await agent.SessionCapability.Load(session, CancellationToken.None);
 
         var tools = await CreateTools(agent, factoryParameters);
@@ -80,7 +83,28 @@ public static class LlmAgentFactory
             return Task.FromResult(llmApi);
         }
 
-        public static async Task<Session> CreateSession(FactoryParameters factoryParameters)
+        public static Task<SkillInventory> CreateSkillInventory(FactoryParameters factoryParameters)
+        {
+            var loggerFactory = factoryParameters.loggerFactory;
+            var toolParameters = factoryParameters.toolParameters;
+            var sessionParameters = factoryParameters.sessionParameters;
+
+            var inventory = new SkillInventory(loggerFactory);
+
+            // Priority: toolParameters.SkillsDirectory > sessionParameters.WorkingDirectory/skills
+            var skillsDir = toolParameters.SkillsDirectory;
+            if (string.IsNullOrEmpty(skillsDir))
+            {
+                skillsDir = Path.Combine(sessionParameters.WorkingDirectory ?? Environment.CurrentDirectory, "skills");
+            }
+
+            inventory.SetSkillsDirectory(skillsDir);
+            inventory.Load();
+
+            return Task.FromResult(inventory);
+        }
+
+        public static async Task<Session> CreateSession(FactoryParameters factoryParameters, SkillInventory skillInventory)
         {
             var llmAgentParameters = factoryParameters.agentParameters;
             var sessionParameters = factoryParameters.sessionParameters;
@@ -147,11 +171,34 @@ public static class LlmAgentFactory
 
             await session.Load();
 
-            if (newSession && !string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
+            if (newSession)
             {
+                var systemPrompt = Prompts.DefaultSystemPrompt;
+
+                // Handle system prompt file (takes precedence if provided)
+                if (!string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
+                {
+                    systemPrompt = File.ReadAllText(sessionParameters.SystemPromptFile);
+                }
+
+                // Generate skill catalog and inject into system prompt
+                if (skillInventory.Count > 0)
+                {
+                    if (systemPrompt.Contains("{{SKILL_CATALOG}}"))
+                    {
+                        var catalogGenerator = new SkillCatalogGenerator();
+                        var skillCatalog = catalogGenerator.Generate(skillInventory);
+                        systemPrompt = systemPrompt.Replace("{{SKILL_CATALOG}}", skillCatalog);
+                    }
+                    else
+                    {
+                        Log.LogWarning("Skills defined but '{{SKILL_CATALOG}}' placeholder not in system prompt. Skills will not be used");
+                    }
+                }
+
                 var textContent = new ChatCompletionMessageParamSystem
                 {
-                    Content = new ChatCompletionMessageParamContentString { Content = File.ReadAllText(sessionParameters.SystemPromptFile) }
+                    Content = new ChatCompletionMessageParamContentString { Content = systemPrompt }
                 };
 
                 session.AddMessages([textContent]);

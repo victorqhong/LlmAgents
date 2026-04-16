@@ -34,6 +34,7 @@ internal class DefaultCommand : RootCommand
         Options.Add(LlmAgentsOptions.StreamOutput);
         Options.Add(LlmAgentsOptions.ToolsConfig);
         Options.Add(LlmAgentsOptions.McpConfigPath);
+        Options.Add(LlmAgentsOptions.SkillsDirectory);
         Options.Add(LlmAgentsOptions.AgentManagerUrl);
         Options.Add(LlmAgentsOptions.Debug);
     }

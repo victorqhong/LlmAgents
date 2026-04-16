@@ -1,4 +1,4 @@
-﻿using System.CommandLine;
+using System.CommandLine;
 
 namespace LlmAgents.CommandLineParser;
 
@@ -43,7 +43,7 @@ public static class Options
         DefaultValueFactory = result => false
     };
 
-    public readonly static Option<string> SystemPromptFile = new("--systemPromptFile")
+    public readonly static Option<string?> SystemPromptFile = new("--systemPromptFile")
     {
         Description = "The path to a file containing the system prompt text. Option has no effect if messages are loaded from a previous persistent session.",
         DefaultValueFactory = result => Config.GetConfigFile("system_prompt.md", "LLMAGENTS_SYSTEM_PROMPT_FILE")
@@ -77,6 +77,12 @@ public static class Options
     {
         Description = "Path to the MCP config JSON",
         DefaultValueFactory = result => Config.GetConfigFile("mcp.json", "LLMAGENTS_MCP_CONFIG")
+    };
+
+    public readonly static Option<string?> SkillsDirectory = new("--skillsDirectory")
+    {
+        Description = "Path to directory containing skill files (.md with YAML frontmatter). Defaults to <workingDirectory>/skills",
+        DefaultValueFactory = result => null
     };
 
     public readonly static Option<bool> StreamOutput = new("--streamOutput")

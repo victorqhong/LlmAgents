@@ -4,4 +4,5 @@ public class ToolParameters
 {
     public string? ToolsConfig;
     public string? McpConfigPath;
+    public string? SkillsDirectory;
 }

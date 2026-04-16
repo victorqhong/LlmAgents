@@ -68,12 +68,6 @@ internal class AgentCommand : Command
         var toolParameters = Parser.ParseToolParameters(parseResult);
         var sessionParameters = Parser.ParseSessionParameters(parseResult);
 
-        string? systemPrompt = Prompts.DefaultSystemPrompt;
-        if (!string.IsNullOrEmpty(sessionParameters.SystemPromptFile) && File.Exists(sessionParameters.SystemPromptFile))
-        {
-            systemPrompt = File.ReadAllText(sessionParameters.SystemPromptFile);
-        }
-
         var xmppParameters = XmppParameterParser.ParseXmppParameters(parseResult);
         if (xmppParameters == null)
         {

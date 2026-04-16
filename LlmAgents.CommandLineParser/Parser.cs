@@ -1,4 +1,4 @@
-﻿using System.CommandLine;
+using System.CommandLine;
 using System.Text.Json;
 using LlmAgents.Agents;
 using LlmAgents.Configuration;
@@ -76,11 +76,13 @@ public static class Parser
     {
         var toolsConfigValue = parseResult.GetValue(Options.ToolsConfig);
         var mcpConfigPathValue = parseResult.GetValue(Options.McpConfigPath);
+        var skillsDirectoryValue = parseResult.GetValue(Options.SkillsDirectory);
 
         return new ToolParameters
         {
             ToolsConfig = toolsConfigValue,
-            McpConfigPath = mcpConfigPathValue
+            McpConfigPath = mcpConfigPathValue,
+            SkillsDirectory = skillsDirectoryValue
         };
     }
 
