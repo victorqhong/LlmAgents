@@ -2,7 +2,7 @@
   "profiles": {
     "ConsoleAgent": {
       "commandName": "Project",
-      "commandLineArgs": "--apiConfig api.json --toolsConfig tools.json --workingDirectory work",
+      "commandLineArgs": "--workingDirectory work",
       "workingDirectory": "..\\Agent"
     }
   }

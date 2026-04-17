@@ -1,9 +1,12 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using LlmAgents.Agents;
 using LlmAgents.Agents.Work;
 using LlmAgents.Configuration;
+using LlmAgents.Communication;
+using LlmAgents.LlmApi.Content;
 using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.Tests.Communication;
@@ -95,5 +98,59 @@ public sealed class TestLlmAgent
         Assert.AreEqual(2, messages.Count);
         Assert.IsNotNull(assistantResponse.Parser);
         Assert.AreEqual(ChatCompletionChoiceFinishReason.ToolCalls, assistantResponse.Parser.FinishReason);
+    }
+
+    [TestMethod]
+    public async Task TestAgent_Run_StopsWhenCancelledWaitingForInput()
+    {
+        var parameters = new LlmAgentParameters
+        {
+            StreamOutput = false,
+            AgentId = "unit_test",
+            Persistent = false,
+            StorageDirectory = Environment.CurrentDirectory,
+            AgentManagerUrl = null
+        };
+
+        var loggerFactory = new LoggerFactory();
+        var llmApiParameters = new LlmApiConfig
+        {
+            ContextSize = 8192,
+            MaxCompletionTokens = 8192,
+            ApiModel = "test-model",
+            ApiKey = "test-key",
+            ApiEndpoint = "http://localhost"
+        };
+
+        var communication = new BlockingCommunication();
+        var agent = new LlmAgent(parameters, new LlmApiOpenAi(loggerFactory, llmApiParameters), communication, loggerFactory);
+
+        using var cts = new CancellationTokenSource();
+        var runTask = agent.Run(cts.Token);
+        cts.CancelAfter(100);
+
+        await runTask.WaitAsync(TimeSpan.FromSeconds(1));
+    }
+
+    private sealed class BlockingCommunication : IAgentCommunication
+    {
+        public async Task<IEnumerable<IMessageContent>?> WaitForContent(CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return null;
+            }
+
+            return null;
+        }
+
+        public Task SendMessage(string message, bool newLine)
+        {
+            return Task.CompletedTask;
+        }
     }
 }
