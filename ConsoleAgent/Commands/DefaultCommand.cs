@@ -2,6 +2,7 @@ using LlmAgents.Agents;
 using LlmAgents.Agents.Work;
 using LlmAgents.Api.Extensions;
 using LlmAgents.Communication;
+using LlmAgents.State;
 using Microsoft.Extensions.Logging;
 using System.CommandLine;
 using LlmAgentsOptions = LlmAgents.CommandLineParser.Options;
@@ -94,6 +95,42 @@ internal class DefaultCommand : RootCommand
             await agent.ConfigureAgentHub(agentParameters.AgentManagerUrl, consoleCommunication, logger);
         }
 
-        await agent.Run(cancellationToken);
+        try
+        {
+            await agent.Run(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+
+        if (!agentParameters.Persistent)
+        {
+            await PromptToSaveSession(agent.SessionCapability.Session, consoleCommunication);
+        }
+    }
+
+    private static async Task PromptToSaveSession(Session session, ConsoleCommunication consoleCommunication)
+    {
+        if (session.GetMessages().Count == 0)
+        {
+            return;
+        }
+
+        await consoleCommunication.SendMessage("\nSave this session to resume later? (y/n): ", false);
+
+        var content = await consoleCommunication.WaitForContent(CancellationToken.None);
+        var response = content?.OfType<LlmAgents.LlmApi.Content.MessageContentText>().FirstOrDefault()?.Text;
+        if (!string.Equals(response, "y", StringComparison.OrdinalIgnoreCase) && !string.Equals(response, "yes", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (session.SessionDatabase.GetSession(session.SessionId) == null)
+        {
+            session.SessionDatabase.CreateSession(session);
+        }
+
+        await session.Save();
+        await consoleCommunication.SendMessage($"Saved session: {session.SessionId}", true);
     }
 }

@@ -74,22 +74,22 @@ public class LlmAgent
 
     public async Task Run(CancellationToken cancellationToken)
     {
-        _ = Task.Run(async () =>
+        while (!cancellationToken.IsCancellationRequested)
         {
-            while (!cancellationToken.IsCancellationRequested)
+            var userInputWork = await RunWork(CreateUserInputWork(this), null, cancellationToken);
+            if (userInputWork.Messages == null || cancellationToken.IsCancellationRequested)
             {
-                var userInputWork = await RunWork(CreateUserInputWork(this), null, cancellationToken);
-                var assistantWork = await RunWork(CreateAssistantResponseWork(this), userInputWork, cancellationToken);
-
-                while (assistantWork.Parser?.FinishReason == ChatCompletionChoiceFinishReason.ToolCalls)
-                {
-                    var toolCallsWork = await RunWork(CreateToolCallsWork(this), assistantWork, cancellationToken);
-                    assistantWork = await RunWork(CreateAssistantResponseWork(this), toolCallsWork, cancellationToken);
-                }
+                break;
             }
-        }, cancellationToken);
 
-        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            var assistantWork = await RunWork(CreateAssistantResponseWork(this), userInputWork, cancellationToken);
+
+            while (assistantWork.Parser?.FinishReason == ChatCompletionChoiceFinishReason.ToolCalls)
+            {
+                var toolCallsWork = await RunWork(CreateToolCallsWork(this), assistantWork, cancellationToken);
+                assistantWork = await RunWork(CreateAssistantResponseWork(this), toolCallsWork, cancellationToken);
+            }
+        }
     }
 }
 
