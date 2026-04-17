@@ -74,7 +74,7 @@ public class LlmAgent
 
     public async Task Run(CancellationToken cancellationToken)
     {
-        var _ = Task.Run(async () =>
+        try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -92,9 +92,8 @@ public class LlmAgent
                     assistantWork = await RunWork(CreateAssistantResponseWork(this), toolCallsWork, cancellationToken);
                 }
             }
-        }, cancellationToken);
-
-        await Task.Delay(Timeout.Infinite, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
     }
 }
 
