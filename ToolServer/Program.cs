@@ -22,11 +22,25 @@ var listenPortOption = new Option<int>(name: "--port")
     DefaultValueFactory = result => 5000
 };
 
+var noStdioTransportOption = new Option<bool>(name: "--no-stdio")
+{
+    Description = "Disable stdio transport",
+    DefaultValueFactory = result => false
+};
+
+var noHttpTransportOption = new Option<bool>(name: "--no-http")
+{
+    Description = "Disable http transport",
+    DefaultValueFactory = result => false
+};
+
 var rootCommand = new RootCommand("ToolServer");
 rootCommand.Options.Add(listenAddressOption);
 rootCommand.Options.Add(listenPortOption);
 rootCommand.Options.Add(Options.ToolsConfig);
 rootCommand.Options.Add(Options.WorkingDirectory);
+rootCommand.Options.Add(noStdioTransportOption);
+rootCommand.Options.Add(noHttpTransportOption);
 rootCommand.Options.Add(Options.Debug);
 rootCommand.SetAction(RootCommandHandler);
 
@@ -36,17 +50,19 @@ async Task RootCommandHandler(ParseResult parseResult, CancellationToken cancell
     var listenPort = parseResult.GetValue(listenPortOption);
     var toolsConfigValue = parseResult.GetValue(Options.ToolsConfig);
     var workingDirectoryValue = parseResult.GetValue(Options.WorkingDirectory);
+    var noStdioTransportValue = parseResult.GetValue(noStdioTransportOption);
+    var noHttpTransportValue = parseResult.GetValue(noHttpTransportOption);
     var debug = parseResult.GetValue(Options.Debug);
 
     ArgumentException.ThrowIfNullOrEmpty(listenAddress);
     ArgumentException.ThrowIfNullOrEmpty(toolsConfigValue);
 
-    await RunServer(listenAddress, listenPort, toolsConfigValue, workingDirectoryValue, new ConsoleCommunication(), debug, cancellationToken);
+    await RunServer(listenAddress, listenPort, toolsConfigValue, workingDirectoryValue, new ConsoleCommunication(), noStdioTransportValue, noHttpTransportValue, debug, cancellationToken);
 }
 
 return await rootCommand.Parse(args).InvokeAsync();
 
-async Task RunServer(string listenAddress, int listenPort, string toolsConfigPath, string? workingDirectory, IAgentCommunication agentCommunication, bool debug, CancellationToken cancellationToken = default)
+async Task RunServer(string listenAddress, int listenPort, string toolsConfigPath, string? workingDirectory, IAgentCommunication agentCommunication, bool noStdioTransport, bool noHttpTransport, bool debug, CancellationToken cancellationToken = default)
 {
     if (string.IsNullOrEmpty(workingDirectory))
     {
@@ -94,9 +110,17 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
 
     var mcpBuilder = builder.Services
         .AddMcpServer()
-        .WithHttpTransport()
-        .WithStdioServerTransport()
         .WithTools(mcpTools);
+
+    if (noStdioTransport == false)
+    {
+        mcpBuilder.WithStdioServerTransport();
+    }
+
+    if (noHttpTransport == false)
+    {
+        mcpBuilder.WithHttpTransport();
+    }
 
     var app = builder.Build();
 
