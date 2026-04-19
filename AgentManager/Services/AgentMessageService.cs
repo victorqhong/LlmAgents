@@ -58,7 +58,7 @@ public class AgentMessageService
         return messages;
     }
 
-    public async Task<List<AgentMessage>> GetSessionMessages(Guid sessionId)
+    public async Task<List<AgentMessage>> GetSessionMessages(string sessionId)
     {
         var session = await agentSessionService.GetSessionById(sessionId);
         if (session == null)
@@ -73,7 +73,7 @@ public class AgentMessageService
     {
         private readonly IDbContextFactory<AppDbContext> _dbFactory = dbContextFactory;
 
-        public async Task ReplaceAsync(Guid sessionId, ICollection<AgentMessage> messages)
+        public async Task ReplaceAsync(string sessionId, ICollection<AgentMessage> messages)
         {
             using var db = await _dbFactory.CreateDbContextAsync();
             var sessionEntity = db.Sessions.Find(sessionId);
@@ -99,7 +99,7 @@ public class AgentMessageService
             await db.SaveChangesAsync();
         }
 
-        public async Task InsertAsync(Guid sessionId, ICollection<AgentMessage> messages)
+        public async Task InsertAsync(string sessionId, ICollection<AgentMessage> messages)
         {
             using var db = await _dbFactory.CreateDbContextAsync();
             var sessionEntity = db.Sessions.Find(sessionId);

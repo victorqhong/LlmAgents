@@ -15,17 +15,17 @@ public class AgentStateService
         persistence = new Persistence(dbFactory);
     }
 
-    public async Task<string?> GetState(Guid sessionId, string key)
+    public async Task<string?> GetState(string sessionId, string key)
     {
         return await persistence.GetState(sessionId, key);
     }
 
-    public async Task SetState(Guid sessionId, string key, string value)
+    public async Task SetState(string sessionId, string key, string value)
     {
         await persistence.SetState(sessionId, key, value);
     }
 
-    public async Task<Dictionary<string, string>> GetAllState(Guid sessionId)
+    public async Task<Dictionary<string, string>> GetAllState(string sessionId)
     {
         return await persistence.GetAllState(sessionId);
     }
@@ -34,7 +34,7 @@ public class AgentStateService
     {
         private readonly IDbContextFactory<AppDbContext> _dbFactory = dbContextFactory;
 
-        public async Task<string?> GetState(Guid sessionId, string key)
+        public async Task<string?> GetState(string sessionId, string key)
         {
             using var db = await _dbFactory.CreateDbContextAsync();
             var stateEntity = await db.SessionStates
@@ -43,7 +43,7 @@ public class AgentStateService
             return stateEntity?.Value;
         }
 
-        public async Task SetState(Guid sessionId, string key, string value)
+        public async Task SetState(string sessionId, string key, string value)
         {
             using var db = await _dbFactory.CreateDbContextAsync();
             var sessionEntity = db.Sessions.Find(sessionId);
@@ -77,7 +77,7 @@ public class AgentStateService
             await db.SaveChangesAsync();
         }
 
-        public async Task<Dictionary<string, string>> GetAllState(Guid sessionId)
+        public async Task<Dictionary<string, string>> GetAllState(string sessionId)
         {
             using var db = await _dbFactory.CreateDbContextAsync();
             var states = await db.SessionStates

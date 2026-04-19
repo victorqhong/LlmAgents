@@ -41,7 +41,7 @@ public class AgentLogService
         OnLog?.Invoke(log);
     }
 
-    public async Task<List<AgentLog>> GetLogs(Guid sessionId)
+    public async Task<List<AgentLog>> GetLogs(string sessionId)
     {
        var session = await agentSessionService.GetSessionById(sessionId);
        if (session == null)
@@ -73,7 +73,7 @@ public class AgentLogService
             var sessions = await agentSessionService.GetAllAsync();
             return logs.Select(log =>
             {
-                var session = sessions.Where(s => Equals(s.Id, log.Session.Id));
+                var session = sessions.Where(s => string.Equals(s.Id, log.Session.Id));
                 return new AgentLog
                 {
                     Category = log.Category,
@@ -85,7 +85,7 @@ public class AgentLogService
             }).ToList();
         }
 
-        public async Task<List<AgentLog>> GetLogs(Guid sessionId, AgentSession session)
+        public async Task<List<AgentLog>> GetLogs(string sessionId, AgentSession session)
         {
            using var db = await _dbFactory.CreateDbContextAsync();
            return await db.Logs

@@ -12,7 +12,7 @@ public class AgentSessionService
 {
     private readonly Persistence persistence;
 
-    private readonly ConcurrentDictionary<Guid, AgentConnection> connections = new();
+    private readonly ConcurrentDictionary<string, AgentConnection> connections = new();
 
     public event Action<AgentSession>? OnChange;
 
@@ -26,12 +26,17 @@ public class AgentSessionService
         return await persistence.GetAllAsync();
     }
 
-    public async Task<AgentSession?> GetSessionById(Guid sessionId)
+    public async Task<Dictionary<string, (int MessageCount, string? LastMessagePreview)>> GetSessionStatsAsync()
+    {
+        return await persistence.GetSessionStatsAsync();
+    }
+
+    public async Task<AgentSession?> GetSessionById(string sessionId)
     {
         return await persistence.GetByIdAsync(sessionId);
     }
 
-    public async Task RemoveSessionAsync(Guid sessionId)
+    public async Task RemoveSessionAsync(string sessionId)
     {
         var session = await persistence.GetByIdAsync(sessionId);
         if (session == null)
@@ -77,7 +82,7 @@ public class AgentSessionService
         OnChange?.Invoke(session);
     }
 
-    public async Task Unregister(Guid sessionId)
+    public async Task Unregister(string sessionId)
     {
         var session = await persistence.GetByIdAsync(sessionId);
         if (session == null)
@@ -96,12 +101,12 @@ public class AgentSessionService
         OnChange?.Invoke(session);
     }
 
-    public async Task Unregister(string connectionId)
+    public async Task UnregisterByConnectionId(string connectionId)
     {
         var connection = connections.FirstOrDefault(x => string.Equals(x.Value.ConnectionId, connectionId));
         var key = connection.Key;
 
-        if (key != default)
+        if (key != null)
         {
             await Unregister(key);
         }
@@ -122,7 +127,7 @@ public class AgentSessionService
         OnChange?.Invoke(session);
     }
 
-    public async Task UpdateTimestampAsync(Guid sessionId)
+    public async Task UpdateTimestampAsync(string sessionId)
     {
         var session = await persistence.GetByIdAsync(sessionId);
         if (session == null)
@@ -149,7 +154,67 @@ public class AgentSessionService
             return sessions.Select(MapAgentSession).ToList();
         }
 
-        public async Task<AgentSession?> GetByIdAsync(Guid sessionId)
+        public async Task<Dictionary<string, (int MessageCount, string? LastMessagePreview)>> GetSessionStatsAsync()
+        {
+            using var db = await _dbFactory.CreateDbContextAsync();
+            var stats = new Dictionary<string, (int MessageCount, string? LastMessagePreview)>();
+
+            var sessions = await db.Sessions
+                .AsNoTracking()
+                .Select(s => s.Id)
+                .ToListAsync();
+
+            foreach (var sessionId in sessions)
+            {
+                var messages = await db.Messages
+                    .Where(m => m.Session.Id == sessionId)
+                    .OrderByDescending(m => m.Id)
+                    .AsNoTracking()
+                    .Select(m => m.Json)
+                    .ToListAsync();
+
+                var messageCount = messages.Count;
+                string? lastPreview = null;
+
+                if (messages.Count > 0)
+                {
+                    try
+                    {
+                        var lastJson = messages[0];
+                        var doc = System.Text.Json.JsonDocument.Parse(lastJson);
+                        var content = doc.RootElement.GetProperty("content");
+
+                        if (content.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            lastPreview = content.GetString();
+                        }
+                        else if (content.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var e in content.EnumerateArray())
+                            {
+                                if (e.TryGetProperty("type", out var type) &&
+                                    string.Equals(type.GetString(), "text") &&
+                                    e.TryGetProperty("text", out var text))
+                                {
+                                    lastPreview = text.GetString();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // If parsing fails, leave lastPreview as null
+                    }
+                }
+
+                stats[sessionId] = (messageCount, lastPreview);
+            }
+
+            return stats;
+        }
+
+        public async Task<AgentSession?> GetByIdAsync(string sessionId)
         {
             using var db = await _dbFactory.CreateDbContextAsync();
             var sessionEntity = await db.Sessions.FindAsync(sessionId);
@@ -194,7 +259,7 @@ public class AgentSessionService
             await db.SaveChangesAsync();
         }
 
-        public async Task DeleteAsync(Guid sessionId)
+        public async Task DeleteAsync(string sessionId)
         {
             using var db = await _dbFactory.CreateDbContextAsync();
             var session = await db.Sessions.FindAsync(sessionId);

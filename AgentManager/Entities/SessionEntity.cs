@@ -1,9 +1,8 @@
-
 namespace AgentManager.Entities;
 
 public class SessionEntity
 {
-    public required Guid Id { get; set; }
+    public required string Id { get; set; }
     public string? SessionName { get; set; }
     public required string AgentName { get; set; }
     public required string Status { get; set; }

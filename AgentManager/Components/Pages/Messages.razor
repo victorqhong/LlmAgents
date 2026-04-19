@@ -22,7 +22,7 @@
         <MudSelect T="string" ValueChanged="OnSelect">
             @foreach (var session in sessions)
             {
-                <MudSelectItem Value="@session.Id.ToString()">@session.AgentName (@(@session.SessionName ?? @session.Id.ToString()))</MudSelectItem>
+                <MudSelectItem Value="@session.Id">@session.AgentName (@(session.SessionName ?? session.Id))</MudSelectItem>
             }
         </MudSelect>
 
@@ -45,7 +45,7 @@
     private ObservableCollection<AgentSession> sessions = new();
     private ObservableCollection<AgentMessage> messages = new();
 
-    private Guid? sessionId;
+    private string? sessionId;
     private AgentSession? session;
 
     protected override async Task OnInitializedAsync()
@@ -71,17 +71,17 @@
     private async Task OnSelect(string value)
     {
         sessionId = null;
-        if (!Guid.TryParse(value, out var id))
+        if (string.IsNullOrEmpty(value))
         {
             return;
         }
 
-        sessionId = id;
-        session = await AgentSessionService.GetSessionById(id);
+        sessionId = value;
+        session = await AgentSessionService.GetSessionById(value);
 
         this.messages.Clear();
 
-        var messages = await AgentMessageService.GetSessionMessages(id);
+        var messages = await AgentMessageService.GetSessionMessages(value);
         foreach (var message in messages)
         {
             this.messages.Add(message);
@@ -97,7 +97,7 @@
 
         foreach (var message in messages)
         {
-            if (!Guid.Equals(message.Session.Id, sessionId))
+            if (!string.Equals(message.Session.Id, sessionId))
             {
                 return;
             }

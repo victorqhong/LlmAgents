@@ -26,11 +26,61 @@
     }
     else
     {
-        <MudDataGrid Items="@sessions" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@loading">
+        <MudDataGrid Items="@sessions" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@loading"
+                     Sortable="true" Filterable="true">
             <Columns>
+                <PropertyColumn Property="x => x.SessionName" Title="Name" />
                 <PropertyColumn Property="x => x.AgentName" Title="Agent" />
-                <PropertyColumn Property="x => x.Id" Title="Id" />
-                <PropertyColumn Property="x => x.Status" Title="Status" />
+                <PropertyColumn Property="x => x.Status" Title="Status">
+                    <CellTemplate>
+                        <MudChip T="string"
+                                 Color="@GetStatusColor(context.Item.Status)"
+                                 Size="Size.Small"
+                                 Variant="Variant.Filled">
+                            @context.Item.Status
+                        </MudChip>
+                    </CellTemplate>
+                </PropertyColumn>
+                <PropertyColumn Property="x => x.Persistent" Title="Persistent" Sortable="true">
+                    <CellTemplate>
+                        @if (context.Item.Persistent)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Color="Color.Default" />
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Default">—</MudText>
+                        }
+                    </CellTemplate>
+                </PropertyColumn>
+                <TemplateColumn Title="Last Active" Sortable="true" SortBy="x => x.UpdatedAt ?? x.CreatedAt">
+                    <CellTemplate>
+                        <MudText Typo="Typo.body2">
+                            @GetRelativeTime(context.Item.UpdatedAt ?? context.Item.CreatedAt)
+                        </MudText>
+                    </CellTemplate>
+                </TemplateColumn>
+                <PropertyColumn Property="x => x.CreatedAt" Title="Created" Sortable="true">
+                    <CellTemplate>
+                        <MudText Typo="Typo.body2">
+                            @context.Item.CreatedAt.ToLocalTime().ToString("MMM d, yyyy HH:mm")
+                        </MudText>
+                    </CellTemplate>
+                </PropertyColumn>
+                <TemplateColumn Title="Messages" Sortable="true" SortBy="x => GetMessageCount(x.Id)">
+                    <CellTemplate>
+                        <MudText Typo="Typo.body2">
+                            @GetMessageCount(context.Item.Id)
+                        </MudText>
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Last Message">
+                    <CellTemplate>
+                        <MudText Typo="Typo.body2" Style="max-width: 200px;" Class="truncate-text">
+                            @(GetLastMessagePreview(context.Item.Id) ?? "—")
+                        </MudText>
+                    </CellTemplate>
+                </TemplateColumn>
                 <AuthorizeView Roles="Admin">
                     <Authorized>
                         <TemplateColumn Title="Actions" CellClass="d-flex justify-center">
@@ -49,8 +99,17 @@
     }
 </MudContainer>
 
+<style>
+    .truncate-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+</style>
+
 @code {
     private ObservableCollection<AgentSession> sessions = new();
+    private Dictionary<string, (int MessageCount, string? LastPreview)> sessionStats = new();
     private bool loading = false;
     private bool subscribedToChanges = false;
 
@@ -76,12 +135,73 @@
     private async Task LoadSessionsAsync()
     {
         sessions.Clear();
+        sessionStats.Clear();
         loading = true;
-        foreach (var s in await AgentSessionService.GetAllAsync())
+
+        var allSessions = await AgentSessionService.GetAllAsync();
+        foreach (var s in allSessions)
         {
             sessions.Add(s);
         }
+
+        var stats = await AgentSessionService.GetSessionStatsAsync();
+        foreach (var stat in stats)
+        {
+            sessionStats[stat.Key] = stat.Value;
+        }
+
         loading = false;
+    }
+
+    private int GetMessageCount(string sessionId)
+    {
+        return sessionStats.TryGetValue(sessionId, out var stats) ? stats.MessageCount : 0;
+    }
+
+    private string? GetLastMessagePreview(string sessionId)
+    {
+        if (sessionStats.TryGetValue(sessionId, out var stats) && !string.IsNullOrEmpty(stats.LastPreview))
+        {
+            var preview = stats.LastPreview;
+            if (preview.Length > 50)
+            {
+                preview = preview.Substring(0, 50) + "...";
+            }
+            return preview;
+        }
+        return null;
+    }
+
+    private string GetRelativeTime(DateTime dateTime)
+    {
+        var localTime = dateTime.ToLocalTime();
+        var now = DateTime.Now;
+        var diff = now - localTime;
+
+        if (diff.TotalSeconds < 60)
+            return "just now";
+        if (diff.TotalMinutes < 60)
+            return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24)
+            return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7)
+            return $"{(int)diff.TotalDays}d ago";
+
+        return localTime.ToString("MMM d");
+    }
+
+    private Color GetStatusColor(string status)
+    {
+        return status.ToUpperInvariant() switch
+        {
+            "NEW" => Color.Info,
+            "CONNECTED" => Color.Success,
+            "ACTIVE" => Color.Success,
+            "IDLE" => Color.Warning,
+            "DISCONNECTED" => Color.Default,
+            "ERROR" => Color.Error,
+            _ => Color.Default
+        };
     }
 
     private async Task RemoveSessionAsync(AgentSession session)
