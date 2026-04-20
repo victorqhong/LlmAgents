@@ -226,6 +226,7 @@ public static class LlmAgentFactory
                 toolFactory.Register(loggerFactory);
                 toolFactory.Register<IToolEventBus>(toolEventBus);
                 toolFactory.Register(stateDatabase);
+                toolFactory.Register(agent);
 
                 toolFactory.AddParameter("basePath", sessionParameters.WorkingDirectory ?? Environment.CurrentDirectory);
                 toolFactory.AddParameter("storageDirectory", llmAgentParameters.StorageDirectory);
