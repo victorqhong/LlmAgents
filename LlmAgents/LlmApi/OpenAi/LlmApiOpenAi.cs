@@ -121,7 +121,7 @@ public class LlmApiOpenAi
             }
             else
             {
-                Log.LogError("Error while geting chat completion: {message}", errorResponse.Error.Message);
+                Log.LogError("Error while getting chat completion: {message}", errorResponse.Error.Message);
             }
         }
         catch (Exception e)
