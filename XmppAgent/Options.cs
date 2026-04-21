@@ -34,7 +34,7 @@ internal static class Options
     public static readonly Option<string?> XmppConfig = new("--xmppConfig")
     {
         Description = "Path to a JSON file with configuration for XMPP values",
-        DefaultValueFactory = result => Config.GetConfigOptionDefaultValue("xmpp.json", "XMPP_CONFIG")
+        DefaultValueFactory = result => Config.GetConfigFile("xmpp.json", "XMPP_CONFIG")
     };
 
     public static readonly Option<string?> AgentsConfig = new("--agentsConfig")
