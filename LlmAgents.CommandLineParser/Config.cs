@@ -10,7 +10,7 @@ public static class Config
         return Path.Combine(home, ".llmagents", file);
     }
 
-    public static string? GetConfigOptionDefaultValue(string fileName, string environmentVariableName)
+    public static string? GetConfigFile(string fileName, string environmentVariableName)
     {
         if (File.Exists(fileName))
         {
@@ -23,8 +23,7 @@ public static class Config
             return profileConfig;
         }
 
-        var environmentVariableTarget = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? EnvironmentVariableTarget.User : EnvironmentVariableTarget.Process;
-        var environmentVariable = Environment.GetEnvironmentVariable(environmentVariableName, environmentVariableTarget);
+        var environmentVariable = GetConfigEnvironmentVariable(environmentVariableName);
         if (File.Exists(environmentVariable))
         {
             return environmentVariable;
@@ -41,5 +40,11 @@ public static class Config
         {
             Directory.CreateDirectory(configDir);
         }
+    }
+
+    public static string? GetConfigEnvironmentVariable(string environmentVariableName)
+    {
+        var environmentVariableTarget = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? EnvironmentVariableTarget.User : EnvironmentVariableTarget.Process;
+        return Environment.GetEnvironmentVariable(environmentVariableName, environmentVariableTarget);
     }
 }

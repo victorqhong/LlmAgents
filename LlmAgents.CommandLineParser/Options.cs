@@ -34,7 +34,7 @@ public static class Options
     public readonly static Option<string?> ApiConfig = new("--apiConfig")
     {
         Description = "Path to a JSON file with configuration for api values",
-        DefaultValueFactory = result => Config.GetConfigOptionDefaultValue("api.json", "LLMAGENTS_API_CONFIG")
+        DefaultValueFactory = result => Config.GetConfigFile("api.json", "LLMAGENTS_API_CONFIG")
     };
 
     public readonly static Option<bool> Persistent = new("--persistent")
@@ -46,7 +46,7 @@ public static class Options
     public readonly static Option<string> SystemPromptFile = new("--systemPromptFile")
     {
         Description = "The path to a file containing the system prompt text. Option has no effect if messages are loaded from a previous persistent session.",
-        DefaultValueFactory = result => ""
+        DefaultValueFactory = result => Config.GetConfigFile("system_prompt.md", "LLMAGENTS_SYSTEM_PROMPT_FILE")
     };
 
     public readonly static Option<string> WorkingDirectory = new("--workingDirectory")
@@ -64,19 +64,19 @@ public static class Options
     public readonly static Option<string?> Session = new("--session")
     {
         Description = "Can be \"new\", \"choose\", \"latest\", or a session id used to load and save state",
-        DefaultValueFactory = result => Config.GetConfigOptionDefaultValue(".llmagents-session", "LLMAGENTS_SESSION")
+        DefaultValueFactory = result => Config.GetConfigFile(".llmagents-session", "LLMAGENTS_SESSION")
     };
 
     public readonly static Option<string?> ToolsConfig = new("--toolsConfig")
     {
         Description = "Path to a JSON file with configuration for tool values",
-        DefaultValueFactory = result => Config.GetConfigOptionDefaultValue("tools.json", "LLMAGENTS_TOOLS_CONFIG")
+        DefaultValueFactory = result => Config.GetConfigFile("tools.json", "LLMAGENTS_TOOLS_CONFIG")
     };
 
     public readonly static Option<string?> McpConfigPath = new("--mcpConfigPath")
     {
         Description = "Path to the MCP config JSON",
-        DefaultValueFactory = result => Config.GetConfigOptionDefaultValue("mcp.json", "LLMAGENTS_MCP_CONFIG")
+        DefaultValueFactory = result => Config.GetConfigFile("mcp.json", "LLMAGENTS_MCP_CONFIG")
     };
 
     public readonly static Option<bool> StreamOutput = new("--streamOutput")
@@ -88,7 +88,7 @@ public static class Options
     public readonly static Option<string?> AgentManagerUrl = new ("--managerUrl")
     {
         Description = "URL of the AgentManager server to connect to",
-        DefaultValueFactory = result => null
+        DefaultValueFactory = result => Config.GetConfigEnvironmentVariable("LLMAGENTS_MANAGER_URL")
     };
 
     public readonly static Option<bool> Debug = new("--debug")
