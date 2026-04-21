@@ -13,7 +13,7 @@ public static class AgentExtensions
 {
     public static async Task<HubConnection?> ConfigureAgentHub(this LlmAgent agent, Uri agentManagerUrl, IAgentCommunication agentCommunication, ILogger logger)
     {
-        var token = await Login.GetHubLoginToken(agentCommunication, agentManagerUrl, CancellationToken.None);
+        var token = await Login.GetHubLoginToken(agentCommunication, agentManagerUrl, logger, CancellationToken.None);
         if (string.IsNullOrEmpty(token))
         {
             await agentCommunication.SendMessage("Could not login to AgentManager", true);
@@ -28,7 +28,7 @@ public static class AgentExtensions
                 {
                     return Task.Run(async () =>
                     {
-                        return await Login.GetHubLoginToken(agentCommunication, agentManagerUrl, CancellationToken.None);
+                        return await Login.GetHubLoginToken(agentCommunication, agentManagerUrl, logger, CancellationToken.None);
                     });
                 };
             })
