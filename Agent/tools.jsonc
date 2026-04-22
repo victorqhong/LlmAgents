@@ -4,15 +4,30 @@
         "LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "..\\..\\LlmAgents\\LlmAgents.Tools\\bin\\Debug\\net9.0\\LlmAgents.Tools.dll"
     },
     "types": [
+        "LlmAgents.Tools.ApplyDiff, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.AskQuestion, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.FileList, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.FileRead, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.FileWrite, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.SessionNew, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
         "LlmAgents.Tools.ShellExec, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-        "LlmAgents.Tools.ShellRead, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-        "LlmAgents.Tools.ShellWrite, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-        "LlmAgents.Tools.ShellStatus, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
         "LlmAgents.Tools.ShellInterrupt, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-        "LlmAgents.Tools.ShellStop, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+        "LlmAgents.Tools.ShellRead, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.ShellStatus, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.ShellStop, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.ShellWrite, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.TodoCreate, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.TodoDelete, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.TodoGroupCreate, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.TodoGroupList, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.TodoGroupRead, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.TodoRead, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.TodoUpdate, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "LlmAgents.Tools.WebSearch, LlmAgents.Tools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
     ],
     "parameters": {
         "restrictToBasePath": "true",
-        "Shell.waitTimeMs": "180000"
+        "Shell.waitTimeMs": "180000",
+        "WebSearch.ApiKey": ""
     }
 }
