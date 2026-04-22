@@ -31,5 +31,5 @@ public class McpServerConfigStdio : IMcpServerConfig
     public List<string>? Args { get; set; }
 
     [JsonPropertyName("env")]
-    public Dictionary<string, string>? Env { get; set; }
+    public Dictionary<string, string?>? Env { get; set; }
 }

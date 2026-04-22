@@ -75,9 +75,29 @@ public class McpTool : Tool
         {
             return toolCallResult.StructuredContent;
         }
+        else if (toolCallResult.Content.Count > 0)
+        {
+            var sb = new StringBuilder();
+            foreach (var content in toolCallResult.Content)
+            {
+                if (string.Equals(content.Type, "text") && content is TextContentBlock textContent)
+                {
+                    sb.AppendLine(textContent.Text);
+                }
+                else
+                {
+                    throw new NotImplementedException($"Tool call result content type not supported: {content.Type}");
+                }
+            }
+
+            return new JsonObject
+            {
+                ["content"] = sb.ToString()
+            };
+        }
         else
         {
-            throw new NotImplementedException();
+            throw new NotImplementedException("Tool call result unhandled");
         }
     }
 }
