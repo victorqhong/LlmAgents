@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using LlmAgents.State;
 using Microsoft.Extensions.Logging;
 using LlmAgents.Tools.Events;
@@ -405,7 +404,6 @@ public sealed class ShellSessionManager
     {
         if (state == null || string.IsNullOrWhiteSpace(text)) return;
 
-        text = StripAnsiCodes(text);
         text = text.Replace("\r\n", "\n").Replace("\r", "\n");
 
         lock (state.SyncRoot)
@@ -438,11 +436,6 @@ public sealed class ShellSessionManager
         }
 
         log.LogDebug("Shell {SessionId}: {Preview}", state.SessionId, text.TrimEnd().Take(100));
-    }
-
-    private static string StripAnsiCodes(string input)
-    {
-        return Regex.Replace(input, @"\x1B\[[0-?]*[ -~/]*[@-~]", string.Empty);
     }
 
     private static void SetPendingSentinel(ShellSessionState state, string sentinel, TaskCompletionSource<bool> tcs, string echoCommand)
