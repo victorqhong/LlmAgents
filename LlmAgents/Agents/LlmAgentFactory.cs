@@ -208,7 +208,8 @@ public static class LlmAgentFactory
                         var stdioTransport = new StdioClientTransport(new StdioClientTransportOptions
                         {
                             Command = stdioMcpServer.Command,
-                            Arguments = stdioMcpServer.Args
+                            Arguments = stdioMcpServer.Args,
+                            EnvironmentVariables = stdioMcpServer.Env
                         });
 
                         var toolFactory = new ToolFactory(loggerFactory);
