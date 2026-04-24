@@ -111,7 +111,7 @@ internal class SessionsCommand : Command
             {
                 if (userMessage.Content is ChatCompletionMessageParamContentString contentString)
                 {
-                    Console.WriteLine(FormatOutput($"User: {contentString.Content}", previewChars));
+                    Console.WriteLine(FormatOutput("User: ", contentString.Content, previewChars));
                 }
                 else if (userMessage.Content is ChatCompletionMessageParamContentParts contentParts)
                 {
@@ -122,23 +122,23 @@ internal class SessionsCommand : Command
                             continue;
                         }
 
-                        Console.WriteLine(FormatOutput($"User: {textPart.Text}", previewChars));
+                        Console.WriteLine(FormatOutput($"User: ", textPart.Text, previewChars));
                     }
                 }
             }
-            else if (message is ChatCompletionMessageParamAssistant assistantMessage && assistantMessage.Content is ChatCompletionMessageParamContentString stringContent && !string.IsNullOrEmpty(stringContent.Content))
+            else if (message is ChatCompletionMessageParamAssistant assistantMessage && assistantMessage.Content is ChatCompletionMessageParamContentString stringContent && !string.IsNullOrWhiteSpace(stringContent.Content))
             {
-                Console.WriteLine(FormatOutput($"Assistant: {stringContent.Content}", previewChars));
+                Console.WriteLine(FormatOutput("Assistant: ", stringContent.Content, previewChars));
             }
         }
     }
 
-    private static string FormatOutput(string s, int count)
+    private static string FormatOutput(string prefix, string s, int count)
     {
-        var lines = s.Split('\n');
+        var lines = s.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         var firstLine = lines[0];
         var lineLength = firstLine.Length;
-        return firstLine.Substring(0, Math.Min(lineLength, count)) + (lineLength > count ? "...": "");
+        return prefix + firstLine.Substring(0, Math.Min(lineLength, count)) + (lineLength > count ? "...": "");
     }
 
     private static void DeleteSession(SessionDatabase sessionDatabase, Session session)
@@ -146,5 +146,4 @@ internal class SessionsCommand : Command
         Console.WriteLine($"Deleting session: {session.SessionId}");
         sessionDatabase.DeleteSession(session);
     }
-
 }
