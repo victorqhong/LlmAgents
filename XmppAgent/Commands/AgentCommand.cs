@@ -24,6 +24,7 @@ internal class AgentCommand : Command
         Options.Add(LlmAgentsOptions.ContextSize);
         Options.Add(LlmAgentsOptions.ApiConfig);
         Options.Add(LlmAgentsOptions.Persistent);
+        Options.Add(LlmAgentsOptions.Session);
         Options.Add(LlmAgentsOptions.SystemPromptFile);
         Options.Add(LlmAgentsOptions.ToolsConfig);
         Options.Add(LlmAgentsOptions.McpConfigPath);
@@ -55,12 +56,6 @@ internal class AgentCommand : Command
         {
             logger.LogWarning("Context size must be greater than zero. Setting to default 8192");
             apiParameters.ContextSize = 8192;
-        }
-
-        if (apiParameters.MaxCompletionTokens < 1)
-        {
-            logger.LogWarning("Maximum completion tokens must be greater than zero. Setting to default 8192");
-            apiParameters.MaxCompletionTokens = 8192;
         }
 
         var agentParameters = Parser.ParseAgentParameters(parseResult);
