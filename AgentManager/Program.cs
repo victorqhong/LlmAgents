@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContextFactory<AppDbContext>(options => options.UseSqlite("Data Source=agents.db"));
+builder.Services.AddDbContextFactory<AppDbContext>(options => options.UseSqlite("Data Source=agents.db;Foreign Keys=True"));
 
 var proxyServerIp = builder.Configuration["Proxy:ServerIp"];
 if (!string.IsNullOrEmpty(proxyServerIp) && IPAddress.TryParse(proxyServerIp, out var ipAddress))
@@ -53,4 +53,3 @@ app.ConfigureAuthentication();
 app.MapHub<AgentHub>("/hubs/agent");
 
 app.Run();
-

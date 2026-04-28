@@ -84,16 +84,12 @@ public class AgentMessageService
 
             var sessionMessages = db.Messages.Where(m => m.Session == sessionEntity);
             db.Messages.RemoveRange(sessionMessages);
-            var messageEntities = messages.Select(m =>
+            var messageEntities = messages.Select(m => new MessageEntity
             {
-                var messageEntity = new MessageEntity
-                {
-                    Id = 0,
-                    Session = sessionEntity,
-                    Json = m.Json
-                };
-
-                return messageEntity;
+                Id = 0,
+                SessionId = sessionId,
+                Session = sessionEntity,
+                Json = m.Json
             });
             await db.Messages.AddRangeAsync(messageEntities);
             await db.SaveChangesAsync();
@@ -108,16 +104,12 @@ public class AgentMessageService
                 throw new KeyNotFoundException();
             }
 
-            var messageEntities = messages.Select(m =>
+            var messageEntities = messages.Select(m => new MessageEntity
             {
-                var messageEntity = new MessageEntity
-                {
-                    Id = 0,
-                    Session = sessionEntity,
-                    Json = m.Json
-                };
-
-                return messageEntity;
+                Id = 0,
+                SessionId = sessionId,
+                Session = sessionEntity,
+                Json = m.Json
             });
 
             await db.Messages.AddRangeAsync(messageEntities);

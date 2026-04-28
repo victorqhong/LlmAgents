@@ -81,8 +81,8 @@ public class RemoteSession : Session
         // specific changes and only replicate that
         try
         {
-            var messagesJson = JsonSerializer.Serialize(messages.TakeLast(1));
-            await HubConnection.InvokeAsync("AddMessages", SessionId, messagesJson);
+            var messagesJson = JsonSerializer.Serialize(messages);
+            await HubConnection.InvokeAsync("SaveMessages", SessionId, messagesJson);
         }
         catch (Exception ex)
         {

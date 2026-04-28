@@ -113,6 +113,7 @@ public class AgentLogService
             var logEntity = new LogEntity
             {
                 Id = 0,
+                SessionId = session.Id,
                 Category = log.Category,
                 Level = log.Level,
                 Message = log.Message,

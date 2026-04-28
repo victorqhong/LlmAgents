@@ -161,7 +161,7 @@ public class AgentHub : Hub<IAgentClient>
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        await agentSessionService.Unregister(Context.ConnectionId);
+        await agentSessionService.UnregisterByConnectionId(Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
     }
 }

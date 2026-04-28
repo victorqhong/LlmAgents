@@ -262,6 +262,7 @@ public class AgentSessionService
         public async Task DeleteAsync(string sessionId)
         {
             using var db = await _dbFactory.CreateDbContextAsync();
+
             var session = await db.Sessions.FindAsync(sessionId);
             if (session != null)
             {
@@ -279,7 +280,6 @@ public class AgentSessionService
                 CreatedAt = sessionEntity.CreatedAt,
                 Status = sessionEntity.Status,
                 Persistent = sessionEntity.Persistent,
-                SessionName = sessionEntity.SessionName,
                 UpdatedAt = sessionEntity.UpdatedAt,
             };
 
@@ -292,7 +292,6 @@ public class AgentSessionService
             sessionEntity.AgentName = session.AgentName;
             sessionEntity.CreatedAt = session.CreatedAt;
             sessionEntity.Status = session.Status;
-            sessionEntity.SessionName = session.SessionName;
             sessionEntity.UpdatedAt = session.UpdatedAt;
 
             sessionEntity.Logs = logEntities;

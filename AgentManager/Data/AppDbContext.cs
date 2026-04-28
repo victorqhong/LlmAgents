@@ -64,5 +64,21 @@ public class AppDbContext : DbContext
                 .HasForeignKey(e => e.SessionId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+        modelBuilder.Entity<MessageEntity>(entity =>
+        {
+            entity.HasOne(e => e.Session)
+                .WithMany(s => s.Messages)
+                .HasForeignKey(e => e.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<LogEntity>(entity =>
+        {
+            entity.HasOne(e => e.Session)
+                .WithMany(s => s.Logs)
+                .HasForeignKey(e => e.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }
