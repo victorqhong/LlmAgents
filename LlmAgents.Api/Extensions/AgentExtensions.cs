@@ -105,6 +105,15 @@ public static class AgentExtensions
         await remoteSession.Load();
         await agent.SessionCapability.Load(remoteSession, CancellationToken.None);
 
+        _ = Task.Run(async () =>
+        {
+            var timer = new PeriodicTimer(TimeSpan.FromMinutes(15));
+            while (await timer.WaitForNextTickAsync())
+            {
+                await hub.InvokeAsync("Ping");
+            }
+        });
+
         return hub;
     }
 }
