@@ -159,6 +159,11 @@ public class AgentHub : Hub<IAgentClient>
         return await agentStateService.GetAllState(sessionId);
     }
 
+    public Task Ping()
+    {
+        return Task.CompletedTask;
+    }
+
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         await agentSessionService.UnregisterByConnectionId(Context.ConnectionId);
