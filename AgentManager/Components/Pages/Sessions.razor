@@ -29,7 +29,7 @@
         <MudDataGrid Items="@sessions" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@loading"
                      Sortable="true" Filterable="true">
             <Columns>
-                <PropertyColumn Property="x => x.SessionName" Title="Name" />
+                <PropertyColumn Property="x => x.Id" Title="Id" />
                 <PropertyColumn Property="x => x.AgentName" Title="Agent" />
                 <PropertyColumn Property="x => x.Status" Title="Status">
                     <CellTemplate>
@@ -174,7 +174,7 @@
 
     private string GetRelativeTime(DateTime dateTime)
     {
-        var localTime = dateTime.ToLocalTime();
+        var localTime = dateTime;
         var now = DateTime.Now;
         var diff = now - localTime;
 

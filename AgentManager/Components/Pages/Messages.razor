@@ -22,7 +22,7 @@
         <MudSelect T="string" ValueChanged="OnSelect">
             @foreach (var session in sessions)
             {
-                <MudSelectItem Value="@session.Id">@session.AgentName (@(session.SessionName ?? session.Id))</MudSelectItem>
+                <MudSelectItem Value="@session.Id">@session.AgentName (@(session.Id ?? session.Id))</MudSelectItem>
             }
         </MudSelect>
 
