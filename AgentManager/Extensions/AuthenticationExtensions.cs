@@ -2,7 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using AgentManager.Configuration;
 using AgentManager.Entities;
 using AgentManager.Services;
@@ -221,7 +220,7 @@ public static class AuthenticationExtensions
             var authToken = new HubAuthToken
             {
                 AccessToken = jwt,
-                RefreshToken = refreshToken,
+                RefreshToken = newRefreshToken,
                 ExpiresIn = jwtOptions.ExpirationMinutes,
                 ExpireTime = DateTime.UtcNow.AddMinutes(jwtOptions.ExpirationMinutes)
             };
