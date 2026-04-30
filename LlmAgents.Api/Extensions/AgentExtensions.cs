@@ -39,7 +39,7 @@ public static class AgentExtensions
         hub.Reconnected += async connectionId =>
         {
             logger.LogInformation("Reconnected to hub");
-            await hub.InvokeAsync("Register", agent.Id, agent.SessionCapability.Session.SessionId, agent.SessionCapability.Persistent, CancellationToken.None);
+            await hub.InvokeAsync("UpdateStatus", agent.SessionCapability.Session.SessionId, "RECONNECTED", CancellationToken.None);
         };
 
         hub.Closed += e =>
