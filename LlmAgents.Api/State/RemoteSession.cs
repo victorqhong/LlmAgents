@@ -1,16 +1,20 @@
 namespace LlmAgents.Api.State;
 
 using System.Text.Json;
+using LlmAgents.Agents;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
 using Microsoft.AspNetCore.SignalR.Client;
 
 public class RemoteSession : Session
 {
-    public RemoteSession(string sessionId, HubConnection hubConnection, SessionDatabase sessionDatabase)
+    public readonly LlmAgent LlmAgent;
+
+    public RemoteSession(HubConnection hubConnection, LlmAgent llmAgent, string sessionId, SessionDatabase sessionDatabase)
         : base(sessionId, sessionDatabase)
     {
         HubConnection = hubConnection;
+        LlmAgent = llmAgent;
     }
 
     public HubConnection HubConnection { get; set; }
@@ -38,6 +42,12 @@ public class RemoteSession : Session
         {
             Console.WriteLine($"Failed to set state to manager: {ex.Message}");
         }
+    }
+
+    public async override Task Load()
+    {
+        await HubConnection.InvokeAsync("Register", LlmAgent.Id, SessionId, LlmAgent.SessionCapability.Persistent, CancellationToken.None);
+        await base.Load();
     }
 
     protected override async Task LoadMessages()

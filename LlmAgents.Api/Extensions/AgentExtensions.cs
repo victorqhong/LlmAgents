@@ -99,9 +99,7 @@ public static class AgentExtensions
             await hub.InvokeAsync("UpdateStatus", agent.SessionCapability.Session.SessionId, "WORKING", CancellationToken.None);
         };
 
-        await hub.InvokeAsync("Register", agent.Id, agent.SessionCapability.Session.SessionId, agent.SessionCapability.Persistent, CancellationToken.None);
-
-        var remoteSession = new RemoteSession(agent.SessionCapability.Session.SessionId, hub, agent.SessionCapability.Session.SessionDatabase);
+        var remoteSession = new RemoteSession(hub, agent, agent.SessionCapability.Session.SessionId, agent.SessionCapability.Session.SessionDatabase);
         await remoteSession.Load();
         await agent.SessionCapability.Load(remoteSession, CancellationToken.None);
 

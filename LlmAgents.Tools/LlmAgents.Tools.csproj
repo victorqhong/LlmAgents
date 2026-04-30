@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LlmAgents\LlmAgents.csproj" />
+    <ProjectReference Include="..\LlmAgents.Api\LlmAgents.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>
