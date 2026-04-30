@@ -206,7 +206,7 @@ public static class AuthenticationExtensions
                 return Results.BadRequest();
             }
 
-            if (token.ExpiresAt < DateTime.Now)
+            if (token.ExpiresAt < DateTime.Now || token.RevokedAt < DateTime.Now)
             {
                 return Results.Unauthorized();
             }
