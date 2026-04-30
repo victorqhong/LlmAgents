@@ -1,9 +1,11 @@
 ﻿namespace LlmAgents.Tools;
 
 using LlmAgents.Agents;
+using LlmAgents.Api.State;
 using LlmAgents.Extensions;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
+using Microsoft.AspNetCore.SignalR.Client;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -62,7 +64,16 @@ public class SessionNew : Tool
 
         try
         {
-            var newSession = new Session(id, session.SessionDatabase);
+            Session newSession;
+            if (session is RemoteSession remoteSession)
+            {
+                newSession = new RemoteSession(remoteSession.HubConnection, agent, id, remoteSession.SessionDatabase);
+            }
+            else
+            {
+                newSession = new Session(id, session.SessionDatabase);
+            }
+
             if (!string.Equals(systemPrompt, string.Empty))
             {
                 newSession.AddMessages([new ChatCompletionMessageParamSystem { Content = new ChatCompletionMessageParamContentString { Content = systemPrompt } }]);
