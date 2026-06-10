@@ -11,4 +11,7 @@ public class ChatCompletionMessageParamAssistant : ChatCompletionMessageParam
     [JsonPropertyName("tool_calls")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<ChatCompletionMessageFunctionToolCall>? ToolCalls { get; set; }
+
+    public ChatCompletionMessageParamAssistant() { }
+    public ChatCompletionMessageParamAssistant(string content) { Content = new ChatCompletionMessageParamContentString { Content = content }; }
 }
