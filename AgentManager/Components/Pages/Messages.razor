@@ -88,11 +88,16 @@
         }
     }
 
-    private void HandleNewMessage(ICollection<AgentMessage> messages)
+    private void HandleNewMessage(ICollection<AgentMessage> messages, bool save)
     {
         if (sessionId == null)
         {
             return;
+        }
+
+        if (save)
+        {
+            this.messages.Clear();
         }
 
         foreach (var message in messages)
