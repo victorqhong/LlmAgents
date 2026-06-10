@@ -1,0 +1,22 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Agent/">
+    <File Path="Agent/api.jsonc" />
+    <File Path="Agent/tools.jsonc" />
+    <File Path="Agent/xmpp.jsonc" />
+  </Folder>
+  <Project Path="AgentManager/AgentManager.csproj" />
+  <Project Path="ConsoleAgent/ConsoleAgent.csproj" />
+  <Project Path="LlmAgents.Api/LlmAgents.Api.csproj" />
+  <Project Path="LlmAgents.CommandLineParser/LlmAgents.CommandLineParser.csproj" />
+  <Project Path="LlmAgents.Tests/LlmAgents.Tests.csproj" />
+  <Project Path="LlmAgents.Tools/LlmAgents.Tools.csproj" />
+  <Project Path="LlmAgents/LlmAgents.csproj" />
+  <Project Path="ToolServer/ToolServer.csproj" />
+  <Project Path="ToolTester/ToolTester.csproj" />
+  <Project Path="XmppAgent/XmppAgent.csproj" />
+</Solution>
