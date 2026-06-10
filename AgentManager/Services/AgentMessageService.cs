@@ -11,7 +11,7 @@ public class AgentMessageService
     private readonly AgentSessionService agentSessionService;
     private readonly Persistence persistence;
 
-    public Action<ICollection<AgentMessage>>? OnMessage;
+    public Action<ICollection<AgentMessage>, bool>? OnMessage;
 
     public AgentMessageService(AgentSessionService agentSessionService, IDbContextFactory<AppDbContext> dbFactory)
     {
@@ -30,7 +30,7 @@ public class AgentMessageService
 
         await persistence.InsertAsync(addMessage.SessionId, addMessage.Messages);
 
-        OnMessage?.Invoke(addMessage.Messages);
+        OnMessage?.Invoke(addMessage.Messages, false);
     }
 
     public async Task SaveMessages(SaveMessagesDto saveMessages)
@@ -43,7 +43,7 @@ public class AgentMessageService
 
         await persistence.ReplaceAsync(saveMessages.SessionId, saveMessages.Messages);
 
-        OnMessage?.Invoke(saveMessages.Messages);
+        OnMessage?.Invoke(saveMessages.Messages, true);
     }
 
     public async Task<List<AgentMessage>> GetMessages()
