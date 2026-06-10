@@ -31,6 +31,9 @@ public class ChatCompletionMessageParamContentString : IChatCompletionMessagePar
 {
     [JsonPropertyName("content")]
     public required string Content { get; set; }
+
+    public ChatCompletionMessageParamContentString() { }
+    public ChatCompletionMessageParamContentString(string content) { Content = content; }
 }
 
 public class ChatCompletionMessageParamContentConverter : JsonConverter<IChatCompletionMessageParamContent>
