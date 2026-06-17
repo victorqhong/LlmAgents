@@ -2,6 +2,7 @@ namespace LlmAgents.Agents.Work;
 
 using System.Text.Json;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.State;
 using Microsoft.Extensions.Logging;
 
 public class ToolCalls : LlmAgentWork
@@ -19,9 +20,9 @@ public class ToolCalls : LlmAgentWork
         return Task.FromResult<ICollection<ChatCompletionMessageParam>?>(null);
     }
 
-    public async override Task Run(CancellationToken cancellationToken)
+    public async override Task Run(Session session, CancellationToken cancellationToken)
     {
-        var conversation = agent.SessionCapability.RenderConversation();
+        var conversation = session.GetMessages().ToList();
         if (conversation.Count < 1)
         {
             return;
@@ -32,10 +33,10 @@ public class ToolCalls : LlmAgentWork
             return;
         }
 
-        Messages = await ProcessToolCalls(assistantMessage, cancellationToken);
+        Messages = await ProcessToolCalls(assistantMessage, session, cancellationToken);
     }
 
-    private async Task<ICollection<ChatCompletionMessageParam>?> ProcessToolCalls(ChatCompletionMessageParamAssistant assistantMessage, CancellationToken cancellationToken)
+    private async Task<ICollection<ChatCompletionMessageParam>?> ProcessToolCalls(ChatCompletionMessageParamAssistant assistantMessage, Session session, CancellationToken cancellationToken)
     {
         if (assistantMessage.ToolCalls == null)
         {
@@ -50,7 +51,7 @@ public class ToolCalls : LlmAgentWork
             {
                 logger.LogInformation("Calling tool '{name}' with arguments '{arguments}'", toolCall.Function.Name, toolCall.Function.Arguments);
 
-                var toolResult = await agent.ToolCallCapability.CallTool(toolCall.Function.Name, JsonDocument.Parse(toolCall.Function.Arguments), agent.SessionCapability.Session);
+                var toolResult = await agent.ToolCallCapability.CallTool(session, toolCall.Function.Name, JsonDocument.Parse(toolCall.Function.Arguments));
                 if (toolResult == null)
                 {
                     toolMessages.Add(new ChatCompletionMessageParamTool

@@ -3,7 +3,6 @@ using AgentManager.Entities;
 using AgentManager.Hubs;
 using AgentManager.Models;
 using Microsoft.EntityFrameworkCore;
-using System.Collections.Concurrent;
 using System.Data;
 
 namespace AgentManager.Services;
@@ -11,8 +10,6 @@ namespace AgentManager.Services;
 public class AgentSessionService
 {
     private readonly Persistence persistence;
-
-    private readonly ConcurrentDictionary<string, AgentConnection> connections = new();
 
     public event Action<AgentSession>? OnChange;
 
@@ -44,13 +41,7 @@ public class AgentSessionService
             throw new KeyNotFoundException();
         }
 
-        if (connections.ContainsKey(sessionId))
-        {
-            throw new InvalidOperationException("Cannot remove an active session.");
-        }
-
         await persistence.DeleteAsync(sessionId);
-        connections.TryRemove(sessionId, out _);
 
         OnChange?.Invoke(session);
     }
@@ -72,13 +63,6 @@ public class AgentSessionService
             await persistence.InsertAsync(session);
         }
 
-        connections[registerSession.SessionId] = new AgentConnection
-        {
-            SessionId = registerConnection.SessionId,
-            ConnectionId = registerConnection.ConnectionId,
-            IpAddress = registerConnection.IpAddress
-        };
-
         OnChange?.Invoke(session);
     }
 
@@ -96,25 +80,12 @@ public class AgentSessionService
             await persistence.DeleteAsync(sessionId);
         }
 
-        connections.TryRemove(sessionId, out _);
-
         OnChange?.Invoke(session);
-    }
-
-    public async Task UnregisterByConnectionId(string connectionId)
-    {
-        var connection = connections.FirstOrDefault(x => string.Equals(x.Value.ConnectionId, connectionId));
-        var key = connection.Key;
-
-        if (key != null)
-        {
-            await Unregister(key);
-        }
     }
 
     public async Task UpdateStatusAsync(UpdateStatusDto updateStatus)
     {
-        var session = await persistence.GetByIdAsync(updateStatus.SessionId);
+        var session = await persistence.GetByIdAsync(updateStatus.Id);
         if (session == null)
         {
             throw new KeyNotFoundException();

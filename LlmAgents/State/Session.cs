@@ -68,9 +68,9 @@ public class Session
         return messages.ToArray();
     }
 
-    public async virtual Task Load()
+    public async virtual Task Load(CancellationToken cancellationToken)
     {
-        await LoadMessages();
+        await LoadMessages(cancellationToken);
         var session = SessionDatabase.GetSession(SessionId);
         if (session != null)
         {
@@ -86,13 +86,13 @@ public class Session
         }
     }
 
-    public async virtual Task Save()
+    public async virtual Task Save(CancellationToken cancellationToken)
     {
-        await SaveMessages();
+        await SaveMessages(cancellationToken);
         SessionDatabase.UpdateSessionTime(SessionId, DateTime.UtcNow);
     }
 
-    protected virtual Task LoadMessages()
+    protected virtual Task LoadMessages(CancellationToken cancellationToken)
     {
         var messages = LoadMessagesFromDisk();
         if (messages != null)
@@ -103,7 +103,7 @@ public class Session
         return Task.CompletedTask;
     }
 
-    protected virtual Task SaveMessages()
+    protected virtual Task SaveMessages(CancellationToken cancellationToken)
     {
         SaveMessagesToDisk(messages);
         return Task.CompletedTask;

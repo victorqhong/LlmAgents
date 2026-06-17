@@ -8,13 +8,13 @@ using LlmAgents.LlmApi.Content;
 
 namespace LlmAgents.Tests.Communication;
 
-public class UnitTestCommunication : IAgentCommunication
+public class UnitTestCommunication : SessionCommunication
 {
     public readonly List<string> Output = [];
 
     public readonly List<string> Input = [];
 
-    public Task SendMessage(string message, bool newLine)
+    protected override Task SendMessageImpl(string message, bool newLine)
     {
         Output.Add(message);
         if (newLine)
@@ -24,7 +24,7 @@ public class UnitTestCommunication : IAgentCommunication
         return Task.CompletedTask;
     }
 
-    public Task<IEnumerable<IMessageContent>?> WaitForContent(CancellationToken cancellationToken = default)
+    protected override Task<IEnumerable<IMessageContent>?> WaitForContentImpl(CancellationToken cancellationToken = default)
     {
         if (Input.Count < 1)
         {

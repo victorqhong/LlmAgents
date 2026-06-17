@@ -96,7 +96,7 @@ internal class SessionsCommand : Command
     private static async Task GetSession(SessionDatabase sessionDatabase, Session session, string storageDirectory)
     {
         session.PersistentMessagesPath = storageDirectory;
-        await session.Load();
+        await session.Load(CancellationToken.None);
         var messages = session.GetMessages();
         OutputMessages(messages);
         Console.WriteLine();

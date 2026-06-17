@@ -9,71 +9,47 @@ using XmppDotNet.Xml;
 using XmppDotNet.Xmpp;
 using XmppDotNet.Xmpp.Client;
 
-public class FileTransferStateMachine : XmppStateMachine<IEnumerable<MessageContentImageUrl>>
+public class FileTransferPublisher
 {
-    private IDisposable? jingleContentSubscriber;
+    public Action<XmppMessageMetadata, IMessageContent>? OnMessageContent;
 
-    private IDisposable? jingleChecksumSubscriber;
+    private readonly XmppClient xmppClient;
 
-    private IDisposable? openSubscriber;
+    private readonly IDisposable? jingleContentSubscriber;
 
-    private IDisposable? dataSubscriber;
+    private readonly IDisposable? jingleChecksumSubscriber;
+
+    private readonly IDisposable? openSubscriber;
+
+    private readonly IDisposable? dataSubscriber;
 
     private readonly List<FileTransferSession> transferSessions = new List<FileTransferSession>();
 
-    private readonly List<MessageContentImageUrl> imageURLs = new List<MessageContentImageUrl>();
-
-    public FileTransferStateMachine(XmppClient xmppClient)
-        : base(xmppClient)
+    public FileTransferPublisher(XmppClient xmppClient)
     {
+        this.xmppClient = xmppClient;
+
+        jingleContentSubscriber = xmppClient.XmppXElementReceived
+            .Where(WhereJingleContent)
+            .Subscribe(SubscribeJingleContent);
+
+        openSubscriber = xmppClient.XmppXElementReceived
+            .Where(WhereOpen)
+            .Subscribe(SubscribeOpen);
+
+        dataSubscriber = xmppClient.XmppXElementReceived
+            .Where(WhereData)
+            .Subscribe(SubscribeData);
+
+        jingleChecksumSubscriber = xmppClient.XmppXElementReceived
+            .Where(WhereJingleChecksum)
+            .Subscribe(SubscribeJingleChecksum);
     }
 
-    public override void Begin()
+    private async Task ProcessTransferSession(FileTransferSession transferSession)
     {
-        Result = null;
-
-        if (jingleContentSubscriber == null)
+        while (!transferSession.SessionFinished())
         {
-            jingleContentSubscriber = XmppClient.XmppXElementReceived
-                .Where(WhereJingleContent)
-                .Subscribe(SubscribeJingleContent);
-        }
-    }
-
-    public override void End()
-    {
-        Result = imageURLs.ToArray();
-
-        jingleContentSubscriber?.Dispose();
-        jingleContentSubscriber = null;
-
-        jingleChecksumSubscriber?.Dispose();
-        jingleChecksumSubscriber = null;
-
-        openSubscriber?.Dispose();
-        openSubscriber = null;
-
-        dataSubscriber?.Dispose();
-        dataSubscriber = null;
-
-        for (int i = 0; i < transferSessions.Count; i++)
-        {
-            transferSessions[i].Dispose();
-        }
-
-        transferSessions.Clear();
-        imageURLs.Clear();
-    }
-
-    public override void Run()
-    {
-        foreach (var transferSession in transferSessions)
-        {
-            if (transferSession.SessionFinished())
-            {
-                continue;
-            }
-
             for (int j = 0; j < transferSession.content?.Length; j++)
             {
                 var content = transferSession.content[j];
@@ -111,11 +87,13 @@ public class FileTransferStateMachine : XmppStateMachine<IEnumerable<MessageCont
                 }
 
                 var contentBytes = memoryStream.ToArray();
-                imageURLs.Add(new MessageContentImageUrl
+                var messageContent = new MessageContentImageUrl
                 {
                     DataBase64 = Convert.ToBase64String(contentBytes),
                     MimeType = content.fileMediaType
-                });
+                };
+
+                OnMessageContent?.Invoke(new XmppMessageMetadata(transferSession.From.Bare), messageContent);
 
                 content.Finished = true;
             }
@@ -136,9 +114,16 @@ public class FileTransferStateMachine : XmppStateMachine<IEnumerable<MessageCont
 
                 terminate.Add(terminateJingle);
 
-                Task.Run(async () => await XmppClient.SendAsync(terminate));
+                await Task.Run(async () => await xmppClient.SendAsync(terminate));
+            }
+            else
+            {
+                await Task.Delay(1000);
             }
         }
+
+        transferSession.Dispose();
+        transferSessions.Remove(transferSession);
     }
 
     private bool WhereJingleContent(XmppXElement el)
@@ -270,7 +255,7 @@ public class FileTransferStateMachine : XmppStateMachine<IEnumerable<MessageCont
             contentFiles.Add(contentFile);
         }
 
-        Task.Run(async () => await XmppClient.SendAsync(new Iq(fromJid, toJid, IqType.Result, id)));
+        Task.Run(async () => await xmppClient.SendAsync(new Iq(fromJid, toJid, IqType.Result, id)));
 
         var responseJingle = new XmppXElement(NameRegistry.NameJingle)
             .SetAttribute("sid", jingleSid.Value)
@@ -292,26 +277,21 @@ public class FileTransferStateMachine : XmppStateMachine<IEnumerable<MessageCont
             responseJingle.Add(responseContent);
         }
 
-        transferSessions.Add(new FileTransferSession
+        var fileTransferSession = new FileTransferSession
         {
             sid = jingleSid.Value,
             content = contentFiles.ToArray(),
             From = fromJid,
             To = toJid
-        });
+        };
+        transferSessions.Add(fileTransferSession);
+        Task.Run(() => ProcessTransferSession(fileTransferSession));
 
         var response = new Iq(fromJid, toJid, IqType.Set);
         response.GenerateId();
         response.Add(responseJingle);
 
-        if (openSubscriber == null)
-        {
-            openSubscriber = XmppClient.XmppXElementReceived
-                .Where(WhereOpen)
-                .Subscribe(SubscribeOpen);
-        }
-
-        Task.Run(async () => await XmppClient.SendAsync(response));
+        Task.Run(async () => await xmppClient.SendAsync(response));
     }
 
     private bool WhereOpen(XmppXElement el)
@@ -346,25 +326,11 @@ public class FileTransferStateMachine : XmppStateMachine<IEnumerable<MessageCont
         var sid = open.Attribute("sid");
         var blockSize = open.Attribute("block-size");
 
-        if (dataSubscriber == null)
-        {
-            dataSubscriber = XmppClient.XmppXElementReceived
-                .Where(WhereData)
-                .Subscribe(SubscribeData);
-        }
-
-        if (jingleChecksumSubscriber == null)
-        {
-            jingleChecksumSubscriber = XmppClient.XmppXElementReceived
-                .Where(WhereJingleChecksum)
-                .Subscribe(SubscribeJingleChecksum);
-        }
-
         var toJid = el.GetAttributeJid("to");
         var fromJid = el.GetAttributeJid("from");
         var id = el.GetAttribute("id");
 
-        Task.Run(async () => await XmppClient.SendAsync(new Iq(fromJid, toJid, IqType.Result, id)));
+        Task.Run(async () => await xmppClient.SendAsync(new Iq(fromJid, toJid, IqType.Result, id)));
     }
 
     private bool WhereData(XmppXElement el)
@@ -417,7 +383,7 @@ public class FileTransferStateMachine : XmppStateMachine<IEnumerable<MessageCont
                 break;
             }
         }
-        
+
         if (contentFile == null)
         {
             return;
@@ -429,7 +395,7 @@ public class FileTransferStateMachine : XmppStateMachine<IEnumerable<MessageCont
         var fromJid = el.GetAttributeJid("from");
         var id = el.GetAttribute("id");
 
-        Task.Run(async () => await XmppClient.SendAsync(new Iq(fromJid, toJid, IqType.Result, id)));
+        Task.Run(async () => await xmppClient.SendAsync(new Iq(fromJid, toJid, IqType.Result, id)));
     }
 
     private bool WhereJingleChecksum(XmppXElement el)
@@ -460,7 +426,7 @@ public class FileTransferStateMachine : XmppStateMachine<IEnumerable<MessageCont
         var fromJid = el.GetAttributeJid("from");
         var id = el.GetAttribute("id");
 
-        Task.Run(async () => await XmppClient.SendAsync(new Iq(fromJid, toJid, IqType.Result, id)));
+        Task.Run(async () => await xmppClient.SendAsync(new Iq(fromJid, toJid, IqType.Result, id)));
 
         var jingle = el.Element(NameRegistry.NameJingle);
         if (jingle == null)

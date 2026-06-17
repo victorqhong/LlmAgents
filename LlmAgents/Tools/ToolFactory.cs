@@ -1,5 +1,4 @@
 using LlmAgents.Configuration;
-using LlmAgents.State;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
 
@@ -95,7 +94,7 @@ public class ToolFactory
         }
     }
 
-    public async Task<Tool[]> Load(ToolsConfig toolsConfig, Session? session = null)
+    public async Task<Tool[]> Load(ToolsConfig toolsConfig)
     {
         if (toolsConfig.Parameters != null)
         {
@@ -200,14 +199,6 @@ public class ToolFactory
             }
 
             tools.Add(tool);
-        }
-
-        if (session != null)
-        {
-            foreach (var tool in tools)
-            {
-                await tool.Load(session);
-            }
         }
 
         return tools.ToArray();

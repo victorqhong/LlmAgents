@@ -12,7 +12,7 @@ public static class Login
 {
     private const string GITHUB_OAUTH_CLIENTID = "Ov23li78gAClm6qtZPFH";
 
-    public static async Task<string?> GetHubLoginToken(IAgentCommunication communication, Uri agentHubUri, ILogger logger, CancellationToken cancellationToken)
+    public static async Task<string?> GetHubLoginToken(SessionCommunication communication, Uri agentHubUri, ILogger logger, CancellationToken cancellationToken)
     {
         var storedToken = HubAuthTokenStore.LoadToken();
         if (storedToken == null)
@@ -77,7 +77,7 @@ public static class Login
         return null;
     }
 
-    public static async Task<string?> PerformOAuthFlow(IAgentCommunication communication, Uri agentHubUri, ILogger logger, CancellationToken cancellationToken)
+    public static async Task<string?> PerformOAuthFlow(SessionCommunication communication, Uri agentHubUri, ILogger logger, CancellationToken cancellationToken)
     {
         try
         {

@@ -1,7 +1,9 @@
 using LlmAgents.Agents;
-using LlmAgents.Agents.Work;
+using LlmAgents.Agents.Capabilities;
 using LlmAgents.Api.Extensions;
 using LlmAgents.Communication;
+using LlmAgents.LlmApi.Content;
+using LlmAgents.LlmApi.OpenAi.ChatCompletion;
 using LlmAgents.State;
 using Microsoft.Extensions.Logging;
 using System.CommandLine;
@@ -64,52 +66,99 @@ internal class DefaultCommand : RootCommand
 
         var toolParameters = Parser.ParseToolParameters(parseResult);
         var sessionParameters = Parser.ParseSessionParameters(parseResult);
-        sessionParameters.OutputMessagesOnLoad = true;
+
+        var promptUser = new SemaphoreSlim(0);
+        var loaded = false;
 
         var consoleCommunication = new ConsoleCommunication();
-
-        var agent = await LlmAgentFactory.CreateAgent(loggerFactory, consoleCommunication, apiParameters, agentParameters, toolParameters, sessionParameters);
-        agent.PreWaitForContent += async () =>
+        consoleCommunication.PreWaitForContent += async () =>
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (!loaded)
+            {
+                return;
+            }
+
             await consoleCommunication.SendMessage("User: ", false);
         };
 
-        agent.PostParseUsage += async (usage) =>
-        {
-            await consoleCommunication.SendMessage(string.Format("PromptTokens: {0}, CompletionTokens: {1}, TotalTokens: {2}, Context Used: {3}", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, ((double)usage.TotalTokens / agent.llmApi.ApiConfig.ContextSize).ToString("P"), true));
-        };
+        var agent = await LlmAgentFactory.CreateAgent(loggerFactory, apiParameters, agentParameters, toolParameters, sessionParameters);
 
-        if (parseResult.GetValue(LlmAgentsOptions.Debug))
+        agent.ConfigureAssistantResponseWork = (agent, work) =>
         {
-            agent.CreateAssistantResponseWork = agent =>
+            work.OutputReasoning = parseResult.GetValue(LlmAgentsOptions.Debug);
+            work.StreamOutput = agentParameters.StreamOutput;
+            work.PostParseUsage += async (_, usage) =>
             {
-                return new GetAssistantResponseWork(loggerFactory, agent)
-                {
-                    OutputReasoning = true,
-                };
+                var message = string.Format("PromptTokens: {0}, CompletionTokens: {1}, TotalTokens: {2}, Context Used: {3}", 
+                    usage.PromptTokens,
+                    usage.CompletionTokens,
+                    usage.TotalTokens,
+                    ((double)usage.TotalTokens / agent.llmApi.ApiConfig.ContextSize).ToString("P")
+                );
+
+                await consoleCommunication.SendMessage(message, true);
             };
-        }
+        };
 
         if (agentParameters.AgentManagerUrl != null)
         {
             await agent.ConfigureAgentHub(agentParameters.AgentManagerUrl, consoleCommunication, logger);
         }
 
-        try
+        var (sessionId, newSession) = await GetSessionId(agent, consoleCommunication, sessionParameters);
+        var sessionMetadata = new SessionCapability.SessionMetadata("Console", "default", sessionId);
+        var handle = await agent.SessionCapability.CreateSession(sessionMetadata, consoleCommunication, cancellationToken);
+        var session = agent.SessionCapability.GetSession(handle);
+
+        await LlmAgentFactory.InitializeSession(session, agent, agentParameters, sessionParameters, newSession, cancellationToken);
+
+        await OutputMessages(session, consoleCommunication);
+
+        agent.PostProcessSession += s =>
         {
-            await agent.Run(cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            if (!string.Equals(session?.SessionId, s.SessionId))
+            {
+                return;
+            }
+
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                promptUser.Release();
+            }
+        };
+
+        _ = Task.Run(async () =>
         {
-        }
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await promptUser.WaitAsync();
+                var content = await consoleCommunication.WaitForContent(cancellationToken);
+                if (content == null)
+                {
+                    continue;
+                }
+
+                await agent.SessionCapability.PostInput(handle, content, cancellationToken);
+            }
+
+        }, cancellationToken);
+
+        loaded = true;
+        promptUser.Release();
+        await agent.Run(cancellationToken);
 
         if (!agentParameters.Persistent)
         {
-            await PromptToSaveSession(agent.SessionCapability.Session, consoleCommunication);
+            await PromptToSaveSession(session, consoleCommunication, cancellationToken);
         }
     }
 
-    private static async Task PromptToSaveSession(Session session, ConsoleCommunication consoleCommunication)
+    private static async Task PromptToSaveSession(Session session, ConsoleCommunication consoleCommunication, CancellationToken cancellationToken)
     {
         if (session.GetMessages().Count == 0)
         {
@@ -119,7 +168,7 @@ internal class DefaultCommand : RootCommand
         await consoleCommunication.SendMessage("\nSave this session to resume later? (y/n): ", false);
 
         var content = await consoleCommunication.WaitForContent(CancellationToken.None);
-        var response = content?.OfType<LlmAgents.LlmApi.Content.MessageContentText>().FirstOrDefault()?.Text;
+        var response = content?.OfType<MessageContentText>().FirstOrDefault()?.Text;
         if (!string.Equals(response, "y", StringComparison.OrdinalIgnoreCase) && !string.Equals(response, "yes", StringComparison.OrdinalIgnoreCase))
         {
             return;
@@ -130,7 +179,88 @@ internal class DefaultCommand : RootCommand
             session.SessionDatabase.CreateSession(session);
         }
 
-        await session.Save();
+        await session.Save(cancellationToken);
         await consoleCommunication.SendMessage($"Saved session: {session.SessionId}", true);
+    }
+
+    private static async Task<(string, bool)> GetSessionId(LlmAgent agent, SessionCommunication sessionCommunication, SessionParameters sessionParameters)
+    {
+        var sessionDatabase = agent.SessionCapability.SessionDatabase;
+
+        var newSession = false;
+        string? sessionId = null;
+        if (!string.IsNullOrEmpty(sessionParameters.Session))
+        {
+            if (string.Equals(sessionParameters.Session, "new"))
+            {
+                sessionId = Guid.NewGuid().ToString();
+                newSession = true;
+            }
+            else if (string.Equals(sessionParameters.Session, "choose"))
+            {
+                var sessions = sessionDatabase.GetSessions();
+                for (int i = 0; i < sessions.Count; i++)
+                {
+                    await sessionCommunication.SendMessage($"{i + 1}) {sessions[i].SessionId} (Last Active: {sessions[i].LastActive.ToLocalTime()})", true);
+                }
+
+                await sessionCommunication.SendMessage("> ", false);
+                var content = await sessionCommunication.WaitForContent(CancellationToken.None);
+                if (content is MessageContentText[] textContent && !string.IsNullOrEmpty(textContent[0].Text) && int.TryParse(textContent[0].Text, out var sessionChoice)) 
+                {
+                    sessionId = sessions[sessionChoice - 1].SessionId;
+                }
+            }
+            else if (string.Equals(sessionParameters.Session, "latest"))
+            {
+                var session = sessionDatabase.GetLatestSession();
+                if (session != null)
+                {
+                    sessionId = session.SessionId;
+                }
+            }
+            else
+            {
+                sessionId = sessionParameters.Session;
+            }
+        }
+
+        if (sessionId == null)
+        {
+            sessionId = Guid.NewGuid().ToString();
+            newSession = true;
+        }
+
+        return (sessionId, newSession);
+    }
+
+    private static async Task OutputMessages(Session session, SessionCommunication sessionCommunication)
+    {
+        foreach (var message in session.GetMessages())
+        {
+            if (message is ChatCompletionMessageParamUser userMessage)
+            {
+                if (userMessage.Content is ChatCompletionMessageParamContentString contentString)
+                {
+                    await sessionCommunication.SendMessage($"User: {contentString.Content}", true);
+                }
+                else if (userMessage.Content is ChatCompletionMessageParamContentParts contentParts)
+                {
+                    foreach (var part in contentParts.Content)
+                    {
+                        if (part is not ChatCompletionContentPartText textPart)
+                        {
+                            continue;
+                        }
+
+                        await sessionCommunication.SendMessage($"User: {textPart.Text}", true);
+                    }
+                }
+            }
+            else if (message is ChatCompletionMessageParamAssistant assistantMessage && assistantMessage.Content is ChatCompletionMessageParamContentString stringContent && !string.IsNullOrEmpty(stringContent.Content))
+            {
+                await sessionCommunication.SendMessage($"Assistant: {stringContent.Content}", true);
+            }
+        }
     }
 }

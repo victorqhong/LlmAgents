@@ -53,7 +53,7 @@ public class SessionNew : Tool
 
         if (agent.SessionCapability.Persistent || save)
         {
-            await session.Save();
+            await session.Save(CancellationToken.None);
         }
 
         var messages = session.GetMessages().ToList();
@@ -85,11 +85,6 @@ public class SessionNew : Tool
             {
                 session.SessionDatabase.CreateSession(newSession);
             }
-
-            var outputMessages = agent.SessionCapability.OutputMessagesOnLoad;
-            agent.SessionCapability.OutputMessagesOnLoad = false;
-            await agent.SessionCapability.Load(newSession, CancellationToken.None);
-            agent.SessionCapability.OutputMessagesOnLoad = outputMessages;
 
             result.Add("id", id);
             result.Add("result", "success");

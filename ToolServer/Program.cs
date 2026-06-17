@@ -62,7 +62,7 @@ async Task RootCommandHandler(ParseResult parseResult, CancellationToken cancell
 
 return await rootCommand.Parse(args).InvokeAsync();
 
-async Task RunServer(string listenAddress, int listenPort, string toolsConfigPath, string? workingDirectory, IAgentCommunication agentCommunication, bool noStdioTransport, bool noHttpTransport, bool debug, CancellationToken cancellationToken = default)
+async Task RunServer(string listenAddress, int listenPort, string toolsConfigPath, string? workingDirectory, SessionCommunication sessionCommunication, bool noStdioTransport, bool noHttpTransport, bool debug, CancellationToken cancellationToken = default)
 {
     if (string.IsNullOrEmpty(workingDirectory))
     {
@@ -81,7 +81,7 @@ async Task RunServer(string listenAddress, int listenPort, string toolsConfigPat
     var sessionDatabase = new SessionDatabase(stateDatabase);
     var toolEventBus = new ToolEventBus();
 
-    toolFactory.Register(agentCommunication);
+    toolFactory.Register(sessionCommunication);
     toolFactory.Register(loggerFactory);
     toolFactory.Register(sessionDatabase);
     toolFactory.Register< IToolEventBus>(toolEventBus);
