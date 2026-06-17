@@ -1,7 +1,9 @@
 namespace LlmAgents.Agents.Work;
 
 using System.Text;
+using LlmAgents.LlmApi.OpenAi;
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.State;
 using Microsoft.Extensions.Logging;
 
 public class GetAssistantResponseWork : LlmAgentWork
@@ -20,6 +22,16 @@ public class GetAssistantResponseWork : LlmAgentWork
 
     public bool OutputNewLine { get; set; } = true;
 
+    public bool OutputResponse { get; set; } = true;
+
+    public bool StreamOutput { get; set; }
+
+    public Action<Session>? PreGetResponse { get; set; }
+
+    public Action<Session>? PostSendMessage { get; set; }
+
+    public Action<Session, ChatCompletionUsage>? PostParseUsage { get; set; }
+
     public GetAssistantResponseWork(ILoggerFactory loggerFactory, LlmAgent agent)
         : base(agent)
     {
@@ -31,25 +43,37 @@ public class GetAssistantResponseWork : LlmAgentWork
         return Task.FromResult<ICollection<ChatCompletionMessageParam>?>(null);
     }
 
-    public async override Task Run(CancellationToken cancellationToken)
+    public async override Task Run(Session session, CancellationToken cancellationToken)
     {
-        Tools ??= agent.ToolCallCapability.GetToolDefinitions();
+        Tools ??= agent.ToolCallCapability.GetToolDefinitions(session);
 
-        var conversation = agent.SessionCapability.RenderConversation();
+        var conversation = session.GetMessages().ToList();
 
-        agent.PreGetResponse?.Invoke();
-        var parser = await agent.llmApi.GetStreamingCompletion(conversation, Tools, ToolChoice, OutputReasoning, cancellationToken);
-        if (parser == null)
+        PreGetResponse?.Invoke(session);
+
+        var completionResult = await agent.llmApi.GetStreamingCompletion(conversation, Tools, ToolChoice, cancellationToken);
+        if (completionResult.Error == LlmApiOpenAi.CompletionHttpResult.CompletionError.Throttled)
         {
+            PruneContext(conversation);
+            completionResult = await agent.llmApi.GetStreamingCompletion(conversation, Tools, ToolChoice, cancellationToken);
+        }
+
+        if (completionResult.CompletionStream == null)
+        {
+            logger.LogError("CompletionStream is null");
             return;
         }
 
-        Parser = parser;
+        Parser = new ChatCompletionStreamParser(completionResult.CompletionStream) { OutputReasoning = OutputReasoning };
+        Parser.Parse(cancellationToken);
 
         if (Parser.StreamingCompletion == null)
         {
+            logger.LogError("StreamingCompletion is null");
             return;
         }
+
+        var sessionCommunication = agent.SessionCapability.GetSessionCommunication(session);
 
         var sb = new StringBuilder();
 
@@ -63,9 +87,9 @@ public class GetAssistantResponseWork : LlmAgentWork
                 {
                     if (!string.IsNullOrEmpty(AssistantMessagePrefix))
                     {
-                        if (agent.StreamOutput)
+                        if (StreamOutput && OutputResponse)
                         {
-                            await agent.agentCommunication.SendMessage(AssistantMessagePrefix, false);
+                            await sessionCommunication.SendMessage(AssistantMessagePrefix, false);
                         }
                         else
                         {
@@ -76,9 +100,9 @@ public class GetAssistantResponseWork : LlmAgentWork
                     sentPrefix = true;
                 }
 
-                if (agent.StreamOutput)
+                if (StreamOutput && OutputResponse)
                 {
-                    await agent.agentCommunication.SendMessage(chunk, false);
+                    await sessionCommunication.SendMessage(chunk, false);
                 }
                 else
                 {
@@ -96,9 +120,9 @@ public class GetAssistantResponseWork : LlmAgentWork
 
         if (sentChunk && OutputNewLine)
         {
-            if (agent.StreamOutput)
+            if (StreamOutput && OutputResponse)
             {
-                await agent.agentCommunication.SendMessage(string.Empty, true);
+                await sessionCommunication.SendMessage(string.Empty, true);
             }
             else
             {
@@ -106,17 +130,35 @@ public class GetAssistantResponseWork : LlmAgentWork
             }
         }
 
-        if (!agent.StreamOutput)
+        if (sentChunk && !StreamOutput && OutputResponse)
         {
-            await agent.agentCommunication.SendMessage(sb.ToString(), false);
+            await sessionCommunication.SendMessage(sb.ToString(), false);
         }
 
         Messages = Parser.Messages;
 
-        agent.PostSendMessage?.Invoke();
+        PostSendMessage?.Invoke(session);
         if (Parser.Usage != null)
         {
-            agent.PostParseUsage?.Invoke(new ChatCompletionUsage { CompletionTokens = Parser.Usage.CompletionTokens, PromptTokens = Parser.Usage.PromptTokens, TotalTokens = Parser.Usage.TotalTokens });
+            PostParseUsage?.Invoke(session, new ChatCompletionUsage { CompletionTokens = Parser.Usage.CompletionTokens, PromptTokens = Parser.Usage.PromptTokens, TotalTokens = Parser.Usage.TotalTokens });
         }
+    }
+
+    private void PruneContext(List<ChatCompletionMessageParam> conversation)
+    {
+        logger.LogInformation("Pruning context");
+        foreach (var message in conversation)
+        {
+            if (message is not ChatCompletionMessageParamTool toolMessage)
+            {
+                continue;
+            }
+
+            if (string.Equals(toolMessage.Name, "file_read"))
+            {
+                toolMessage.Content = new ChatCompletionMessageParamContentString { Content = "<tool content has been pruned>" };
+            }
+        }
+        logger.LogInformation("Finished pruning context");
     }
 }

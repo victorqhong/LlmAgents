@@ -8,9 +8,10 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace AgentManager.Hubs;
 
+public record RegisterAgentDto(string Id, bool Persistent);
 public record RegisterSessionDto(string SessionId, string AgentName, bool Persistent);
-public record RegisterConnection(string SessionId, string ConnectionId, string? IpAddress);
-public record UpdateStatusDto(string SessionId, string Status);
+public record RegisterConnection(string ConnectionId, string? IpAddress);
+public record UpdateStatusDto(string Id, string Status);
 public record LogOperationDto(string SessionId, string Category, string Message, string Level);
 public record AddMessagesDto(string SessionId, ICollection<AgentMessage> Messages);
 public record SaveMessagesDto(string SessionId, ICollection<AgentMessage> Messages);
@@ -18,27 +19,35 @@ public record SaveMessagesDto(string SessionId, ICollection<AgentMessage> Messag
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AgentHub : Hub<IAgentClient>
 {
+    private readonly AgentService agentService;
     private readonly AgentSessionService agentSessionService;
     private readonly AgentLogService agentLogService;
     private readonly AgentMessageService agentMessageService;
     private readonly AgentStateService agentStateService;
 
-    public AgentHub(AgentSessionService agentSessionService, AgentLogService agentLogService, AgentMessageService agentMessageService, AgentStateService agentStateService)
+    public AgentHub(AgentService agentService, AgentSessionService agentSessionService, AgentLogService agentLogService, AgentMessageService agentMessageService, AgentStateService agentStateService)
     {
+        this.agentService = agentService;
         this.agentSessionService = agentSessionService;
         this.agentLogService = agentLogService;
         this.agentMessageService = agentMessageService;
         this.agentStateService = agentStateService;
     }
 
-    public async Task Register(string agentName, string sessionId, bool persistent)
+    public async Task Register(string agentName, bool persistent)
     {
-        var registerSession = new RegisterSessionDto(sessionId, agentName, persistent);
-        var registerConnection = new RegisterConnection(sessionId, Context.ConnectionId, Context.GetHttpContext()?.Connection.RemoteIpAddress?.ToString());
-        await agentSessionService.Register(registerSession, registerConnection);
+        var registerAgent = new RegisterAgentDto(agentName, persistent);
+        var registerConnection = new RegisterConnection(Context.ConnectionId, Context.GetHttpContext()?.Connection.RemoteIpAddress?.ToString());
+        await agentService.Register(registerAgent, registerConnection);
     }
 
-    public async Task UpdateStatus(string sessionId, string status)
+    public async Task UpdateAgentStatus(string id, string status)
+    {
+        var updateStatus = new UpdateStatusDto(id, status);
+        await agentService.UpdateStatusAsync(updateStatus);
+    }
+
+    public async Task UpdateSessionStatus(string sessionId, string status)
     {
         var updateStatus = new UpdateStatusDto(sessionId, status);
         await agentSessionService.UpdateStatusAsync(updateStatus);
@@ -166,7 +175,7 @@ public class AgentHub : Hub<IAgentClient>
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        await agentSessionService.UnregisterByConnectionId(Context.ConnectionId);
+        await agentService.UnregisterByConnectionId(Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
     }
 }

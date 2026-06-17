@@ -32,7 +32,7 @@ static async Task RootCommandHandler(ParseResult parseResult, CancellationToken 
 
     var stateDatabase = new StateDatabase(loggerFactory, ":memory:");
 
-    toolFactory.Register<IAgentCommunication>(new ConsoleCommunication());
+    toolFactory.Register<SessionCommunication>(new ConsoleCommunication());
     toolFactory.Register(loggerFactory);
     toolFactory.Register<ILlmApiMessageProvider>(new MockLlmApiMessageProvider());
     toolFactory.Register<IToolEventBus>(toolEventBus);

@@ -1,6 +1,7 @@
 namespace LlmAgents.Agents;
 
 using LlmAgents.LlmApi.OpenAi.ChatCompletion;
+using LlmAgents.State;
 
 public abstract class LlmAgentWork
 {
@@ -15,5 +16,5 @@ public abstract class LlmAgentWork
         this.agent = agent;
     }
 
-    public abstract Task Run(CancellationToken cancellationToken);
+    public abstract Task Run(Session session, CancellationToken cancellationToken);
 }

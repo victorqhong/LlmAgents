@@ -11,12 +11,12 @@ namespace LlmAgents.Api.Extensions;
 
 public static class AgentExtensions
 {
-    public static async Task<HubConnection?> ConfigureAgentHub(this LlmAgent agent, Uri agentManagerUrl, IAgentCommunication agentCommunication, ILogger logger)
+    public static async Task<HubConnection?> ConfigureAgentHub(this LlmAgent agent, Uri agentManagerUrl, SessionCommunication sessionCommunication, ILogger logger)
     {
-        var token = await Login.GetHubLoginToken(agentCommunication, agentManagerUrl, logger, CancellationToken.None);
+        var token = await Login.GetHubLoginToken(sessionCommunication, agentManagerUrl, logger, CancellationToken.None);
         if (string.IsNullOrEmpty(token))
         {
-            await agentCommunication.SendMessage("Could not login to AgentManager", true);
+            await sessionCommunication.SendMessage("Could not login to AgentManager", true);
             return null;
         }
 
@@ -28,7 +28,7 @@ public static class AgentExtensions
                 {
                     return Task.Run(async () =>
                     {
-                        return await Login.GetHubLoginToken(agentCommunication, agentManagerUrl, logger, CancellationToken.None);
+                        return await Login.GetHubLoginToken(sessionCommunication, agentManagerUrl, logger, CancellationToken.None);
                     });
                 };
             })
@@ -39,7 +39,7 @@ public static class AgentExtensions
         hub.Reconnected += async connectionId =>
         {
             logger.LogInformation("Reconnected to hub");
-            await hub.InvokeAsync("UpdateStatus", agent.SessionCapability.Session.SessionId, "RECONNECTED", CancellationToken.None);
+            await hub.InvokeAsync("UpdateAgentStatus", agent.Id, "RECONNECTED", CancellationToken.None);
         };
 
         hub.Closed += e =>
@@ -53,26 +53,21 @@ public static class AgentExtensions
             logger.LogInformation("Reconnecting to hub: {message}", e?.Message ?? "no exception");
             return Task.CompletedTask;
         };
-
+        
         var retry = false;
-        try
-        {
-            await hub.StartAsync(CancellationToken.None);
-        }
-        catch (HttpRequestException e)
-        {
-            if (e.StatusCode == HttpStatusCode.Unauthorized)
-            {
-                HubAuthTokenStore.ClearToken();
-                retry = true;
-            }
-        }
-
-        if (retry)
+        while (retry)
         {
             try
             {
                 await hub.StartAsync(CancellationToken.None);
+            }
+            catch (HttpRequestException e)
+            {
+                if (e.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    HubAuthTokenStore.ClearToken();
+                    retry = true;
+                }
             }
             catch (Exception e)
             {
@@ -81,27 +76,33 @@ public static class AgentExtensions
             }
         }
 
-        agent.PreWaitForContent += async () =>
+        agent.ConfigureAssistantResponseWork += (agent, work) =>
         {
-            await hub.InvokeAsync("UpdateStatus", agent.SessionCapability.Session.SessionId, "WAITING", CancellationToken.None);
-        };
-        agent.PostParseUsage += async (usage) =>
-        {
-            await hub.InvokeAsync("Log", agent.SessionCapability.Session.SessionId, "Usage", $"{{ \"PromptTokens\": {usage.PromptTokens}, \"CompletionTokens\": {usage.CompletionTokens}, \"TotalTokens\": {usage.TotalTokens} }}", "INFO", CancellationToken.None);
-        };
-
-        agent.ToolCallCapability.ToolCalled += async (tool, arguments, result) =>
-        {
-            await hub.InvokeAsync("Log", agent.SessionCapability.Session.SessionId, "Tool", $"{{ \"Name\": \"{tool}\", \"Arguments\": {JsonSerializer.Serialize(arguments)}, \"Result\": {JsonSerializer.Serialize(result)} }}", "INFO", CancellationToken.None);
-        };
-        agent.PostReceiveContent += async () =>
-        {
-            await hub.InvokeAsync("UpdateStatus", agent.SessionCapability.Session.SessionId, "WORKING", CancellationToken.None);
+            work.PostParseUsage += async (session, usage) =>
+            {
+                await hub.InvokeAsync("Log", session.SessionId, "Usage", $"{{ \"PromptTokens\": {usage.PromptTokens}, \"CompletionTokens\": {usage.CompletionTokens}, \"TotalTokens\": {usage.TotalTokens} }}", "INFO", CancellationToken.None);
+            };
         };
 
-        var remoteSession = new RemoteSession(hub, agent, agent.SessionCapability.Session.SessionId, agent.SessionCapability.Session.SessionDatabase);
-        await remoteSession.Load();
-        await agent.SessionCapability.Load(remoteSession, CancellationToken.None);
+        agent.ToolCallCapability.ToolCalled += async (session, tool, arguments, result) =>
+        {
+            await hub.InvokeAsync("Log", session.SessionId, "Tool", $"{{ \"Name\": \"{tool}\", \"Arguments\": {JsonSerializer.Serialize(arguments)}, \"Result\": {JsonSerializer.Serialize(result)} }}", "INFO", CancellationToken.None);
+        };
+
+        agent.PreProcessSession += async session =>
+        {
+            await hub.InvokeAsync("UpdateSessionStatus", session.SessionId, "WORKING", CancellationToken.None);
+        };
+
+        agent.PostProcessSession += async session =>
+        {
+            await hub.InvokeAsync("UpdateSessionStatus", session.SessionId, "WAITING", CancellationToken.None);
+        };
+
+        agent.SessionCapability.SessionFactory = async (sessionId, sessionDatabase, cancellationToken) =>
+        {
+            return new RemoteSession(hub, agent, sessionId, sessionDatabase);
+        };
 
         _ = Task.Run(async () =>
         {

@@ -13,17 +13,28 @@ public class LlmApiOpenAi
 
     public readonly LlmApiConfig ApiConfig;
 
+    public HttpClient HttpClient { get; set; }
+
     public LlmApiOpenAi(ILoggerFactory loggerFactory, LlmApiConfig llmApiConfig)
+        : this(loggerFactory, llmApiConfig, new HttpClient())
+    {
+        HttpClient.Timeout = HttpTimeout;
+        HttpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {ApiConfig.ApiKey}");
+        HttpClient.DefaultRequestHeaders.Add("Accept", "text/event-stream");
+    }
+
+    public LlmApiOpenAi(ILoggerFactory loggerFactory, LlmApiConfig llmApiConfig, HttpClient httpClient)
     {
         Log = loggerFactory.CreateLogger(nameof(LlmApiOpenAi));
         ApiConfig = llmApiConfig;
+        HttpClient = httpClient;
     }
 
     public int MaxRetryOnThrottledAttempts { get; set; } = 3;
 
     public TimeSpan HttpTimeout { get; set; } = Timeout.InfiniteTimeSpan;
 
-    public async Task<ChatCompletionStreamParser?> GetStreamingCompletion(List<ChatCompletionMessageParam> messages, List<ChatCompletionFunctionTool>? tools = null, string toolChoice = "auto", bool outputReasoning = true, CancellationToken cancellationToken = default)
+    public async Task<CompletionHttpResult> GetStreamingCompletion(List<ChatCompletionMessageParam> messages, List<ChatCompletionFunctionTool>? tools = null, string toolChoice = "auto", CancellationToken cancellationToken = default)
     {
         if (messages == null || messages.Count < 1)
         {
@@ -31,33 +42,16 @@ public class LlmApiOpenAi
         }
 
         var payload = CreateChatCompletionRequest(messages, ApiConfig.Temperature, ApiConfig.MaxCompletionTokens, tools, toolChoice);
-        return await GetStreamingCompletion(payload, outputReasoning, cancellationToken);
+        return await GetStreamingCompletion(payload, cancellationToken);
     }
 
-    public async Task<ChatCompletionStreamParser?> GetStreamingCompletion(ChatCompletionRequest request, bool outputReasoning, CancellationToken cancellationToken)
+    public async Task<CompletionHttpResult> GetStreamingCompletion(ChatCompletionRequest request, CancellationToken cancellationToken)
     {
-        var stream = await GetCompletionStream(request, retryAttempt: 0, cancellationToken);
-        if (stream == null)
-        {
-            return null;
-        }
-
-        var streamParser = new ChatCompletionStreamParser(stream) { OutputReasoning = outputReasoning };
-        streamParser.Parse(cancellationToken);
-
-        return streamParser;
+        return await GetCompletionStream(request, retryAttempt: 0, cancellationToken);
     }
 
-    protected async Task<Stream?> GetCompletionStream(ChatCompletionRequest completionRequest, int retryAttempt = 0, CancellationToken cancellationToken = default)
+    protected async Task<CompletionHttpResult> GetCompletionStream(ChatCompletionRequest completionRequest, int retryAttempt = 0, CancellationToken cancellationToken = default)
     {
-        var client = new HttpClient()
-        {
-            Timeout = HttpTimeout
-        };
-
-        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {ApiConfig.ApiKey}");
-        client.DefaultRequestHeaders.Add("Accept", "text/event-stream");
-
         var request = new HttpRequestMessage(HttpMethod.Post, ApiConfig.ApiEndpoint)
         {
             Content = JsonContent.Create(completionRequest)
@@ -66,19 +60,20 @@ public class LlmApiOpenAi
         HttpResponseMessage? response;
         try
         {
-            response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         }
         catch (Exception e)
         {
             Log.LogError(e, "Exception while sending request");
-            return null;
+            return CompletionHttpResult.ConnectionError();
         }
 
         try
         {
             if (response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadAsStreamAsync(cancellationToken);
+                var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                return CompletionHttpResult.Success(stream);
             }
 
             var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -96,32 +91,39 @@ public class LlmApiOpenAi
             if (errorResponse == null)
             {
                 Log.LogError("Error response: {responseContent}", responseContent);
-                return null;
+                return CompletionHttpResult.OtherError();
             }
 
-            if (string.Equals("429", errorResponse.Error.Code) && retryAttempt < MaxRetryOnThrottledAttempts)
+            if (string.Equals("429", errorResponse.Error.Code) || string.Equals("too_many_requests", errorResponse.Error.Code))
             {
-                // default wait 30 seconds
-                var seconds = 30 * (retryAttempt + 1);
-
-                if (!string.IsNullOrEmpty(errorResponse.Error.Message))
+                if (retryAttempt < MaxRetryOnThrottledAttempts)
                 {
-                    var pattern = @"retry\s+after\s+(\d+)\s+seconds";
-                    var regex = new Regex(pattern, RegexOptions.IgnoreCase);
-                    var match = regex.Match(errorResponse.Error.Message);
-                    if (match.Success)
-                    {
-                        seconds = int.Parse(match.Groups[1].Value) + 5;
-                    }
-                }
+                    var seconds = 10 * (retryAttempt + 1);
 
-                Log.LogInformation("Request throttled... waiting {seconds} seconds and retrying.", seconds);
-                await Task.Delay(seconds * 1000, cancellationToken);
-                return await GetCompletionStream(completionRequest, retryAttempt + 1, cancellationToken);
+                    if (!string.IsNullOrEmpty(errorResponse.Error.Message))
+                    {
+                        var pattern = @"retry\s+after\s+(\d+)\s+seconds";
+                        var regex = new Regex(pattern, RegexOptions.IgnoreCase);
+                        var match = regex.Match(errorResponse.Error.Message);
+                        if (match.Success)
+                        {
+                            seconds = int.Parse(match.Groups[1].Value) + 5;
+                        }
+                    }
+
+                    Log.LogInformation("Request throttled... waiting {seconds} seconds and retrying.", seconds);
+                    await Task.Delay(seconds * 1000, cancellationToken);
+                    return await GetCompletionStream(completionRequest, retryAttempt + 1, cancellationToken);
+                }
+                else
+                {
+                    return CompletionHttpResult.ThrottledError();
+                }
             }
             else
             {
                 Log.LogError("Error while getting chat completion: {message}", errorResponse.Error.Message);
+                return CompletionHttpResult.OtherError();
             }
         }
         catch (Exception e)
@@ -129,7 +131,7 @@ public class LlmApiOpenAi
             Log.LogError(e, "Exception while getting completion stream");
         }
 
-        return null;
+        return CompletionHttpResult.OtherError();
     }
 
     protected virtual ChatCompletionRequest CreateChatCompletionRequest(List<ChatCompletionMessageParam> messages, double? temperature, int? maxCompletionTokens, List<ChatCompletionFunctionTool>? tools, string? toolChoice)
@@ -143,5 +145,44 @@ public class LlmApiOpenAi
             Tools = tools,
             ToolChoice = toolChoice,
         };
+    }
+
+    public class CompletionHttpResult
+    {
+        public readonly Stream? CompletionStream;
+        public readonly CompletionError? Error;
+
+        public CompletionHttpResult(Stream? completionStream, CompletionError? error)
+        {
+            CompletionStream = completionStream;
+            Error = error;
+        }
+
+        public static CompletionHttpResult Success(Stream completionStream)
+        {
+            return new CompletionHttpResult(completionStream, null);
+        }
+
+        public static CompletionHttpResult ThrottledError()
+        {
+            return new CompletionHttpResult(null, CompletionError.Throttled);
+        }
+
+        public static CompletionHttpResult ConnectionError()
+        {
+            return new CompletionHttpResult(null, CompletionError.ConnectionError);
+        }
+
+        public static CompletionHttpResult OtherError()
+        {
+            return new CompletionHttpResult(null, CompletionError.Other);
+        }
+
+        public enum CompletionError
+        {
+            Throttled,
+            ConnectionError,
+            Other
+        }
     }
 }

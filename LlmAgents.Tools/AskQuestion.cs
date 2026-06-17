@@ -10,12 +10,9 @@ using System.Text.Json;
 using LlmAgents.Extensions;
 public class AskQuestion : Tool
 {
-    private readonly IAgentCommunication agentCommunication;
-
     public AskQuestion(ToolFactory toolFactory)
         : base(toolFactory)
     {
-        agentCommunication = toolFactory.Resolve<IAgentCommunication>();
     }
 
     public override ChatCompletionFunctionTool Schema { get; protected set; } = new()
@@ -45,14 +42,25 @@ public class AskQuestion : Tool
             return result;
         }
 
+        SessionCommunication sessionCommunication;
+        try
+        {
+            sessionCommunication = toolFactory.Resolve<SessionCommunication>();
+        }
+        catch
+        {
+            result.Add("error", "tool not initialized properly");
+            return result;
+        }
+
         try
         {
             var answer = string.Empty;
 
-            await agentCommunication.SendMessage(question, true);
+            await sessionCommunication.SendMessage(question, true);
             while (string.IsNullOrEmpty(answer))
             {
-                var content = await agentCommunication.WaitForContent();
+                var content = await sessionCommunication.WaitForContent(CancellationToken.None);
                 if (content == null)
                 {
                     break;
@@ -61,7 +69,9 @@ public class AskQuestion : Tool
                 foreach (var message in content)
                 {
                     if (message is MessageContentText textContent)
-                    { answer = textContent.Text; break;
+                    {
+                        answer = textContent.Text;
+                        break;
                     }
                 }
 
@@ -78,5 +88,4 @@ public class AskQuestion : Tool
         return result;
     }
 }
-
 

@@ -44,13 +44,13 @@ public class RemoteSession : Session
         }
     }
 
-    public async override Task Load()
+    public async override Task Load(CancellationToken cancellationToken)
     {
         await HubConnection.InvokeAsync("Register", LlmAgent.Id, SessionId, LlmAgent.SessionCapability.Persistent, CancellationToken.None);
-        await base.Load();
+        await base.Load(cancellationToken);
     }
 
-    protected override async Task LoadMessages()
+    protected override async Task LoadMessages(CancellationToken cancellationToken)
     {
         List<ChatCompletionMessageParam>? remoteMessages = null;
         DateTime? remoteLastUpdated = null;
@@ -81,11 +81,11 @@ public class RemoteSession : Session
         }
         else
         {
-            await SaveMessages();
+            await SaveMessages(cancellationToken);
         }
     }
 
-    protected async override Task SaveMessages()
+    protected async override Task SaveMessages(CancellationToken cancellationToken)
     {
         // TODO: right now just add the last message, there better logic to detect
         // specific changes and only replicate that

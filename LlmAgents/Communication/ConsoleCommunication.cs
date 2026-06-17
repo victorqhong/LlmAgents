@@ -3,9 +3,9 @@ using System.Text;
 
 namespace LlmAgents.Communication;
 
-public class ConsoleCommunication : IAgentCommunication
+public class ConsoleCommunication : SessionCommunication
 {
-    public async Task<IEnumerable<IMessageContent>?> WaitForContent(CancellationToken cancellationToken = default)
+    protected override async Task<IEnumerable<IMessageContent>?> WaitForContentImpl(CancellationToken cancellationToken = default)
     {
         var line = await ReadConsoleLineAsync(cancellationToken);
         if (line == null)
@@ -16,7 +16,7 @@ public class ConsoleCommunication : IAgentCommunication
         return new [] { new MessageContentText { Text = line } };
     }
 
-    public Task SendMessage(string message, bool newLine = true)
+    protected override Task SendMessageImpl(string message, bool newLine = true)
     {
         if (newLine)
         {
