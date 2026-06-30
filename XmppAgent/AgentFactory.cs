@@ -60,13 +60,12 @@ internal static class AgentFactory
             };
 
             var handles = new ConcurrentDictionary<XmppMessageMetadata, SessionCapability.SessionHandle>();
-            xmppTransport.OnMessageContent += async (metadata, messageContent) =>
+            async Task<SessionCapability.SessionHandle> GetHandle(XmppMessageMetadata metadata)
             {
-                XmppCommunication xmppCommunication;
                 if (!handles.TryGetValue(metadata, out SessionCapability.SessionHandle handle))
                 {
-                    var sessionMetadata = new SessionCapability.SessionMetadata("Xmpp", metadata.BareJid, $"{agentParameters.AgentId}--{metadata.BareJid}");
-                    xmppCommunication = new XmppCommunication(metadata.BareJid, xmppTransport);
+                    var sessionMetadata = new SessionCapability.SessionMetadata("Xmpp", metadata.BareJid, $"{agent.Id}--{metadata.BareJid}");
+                    var xmppCommunication = new XmppCommunication(metadata.BareJid, xmppTransport);
                     handle = await agent.SessionCapability.CreateSession(sessionMetadata, xmppCommunication, cancellationToken);
                     if (!handles.TryAdd(metadata, handle))
                     {
@@ -77,12 +76,15 @@ internal static class AgentFactory
                     var newSession = agent.SessionCapability.SessionDatabase.GetSession(session.SessionId) == null;
                     await LlmAgentFactory.InitializeSession(session, agent, agentParameters, sessionParameters, newSession, cancellationToken);
                 }
-                else
-                {
-                    var session = agent.SessionCapability.GetSession(handle);
-                    xmppCommunication = (XmppCommunication)agent.SessionCapability.GetSessionCommunication(session);
-                }
 
+                return handle;
+            }
+
+            xmppTransport.OnMessageContent += async (metadata, messageContent) =>
+            {
+                var handle = await GetHandle(metadata);
+
+                var xmppCommunication = (XmppCommunication)agent.SessionCapability.GetSessionCommunication(handle);
                 if (!xmppCommunication.TryAcceptIncomingMessage(metadata, messageContent))
                 {
                     await agent.PostInput(handle, [messageContent], cancellationToken);
@@ -91,8 +93,10 @@ internal static class AgentFactory
 
             if (agentParameters.AgentManagerUrl != null)
             {
-                var xmppCommunication = new XmppCommunication(xmppParameters.XmppTargetJid, xmppTransport);
-                await agent.ConfigureAgentHub(agentParameters.AgentManagerUrl, xmppCommunication, logger);
+                var handle = await GetHandle(new XmppMessageMetadata(xmppParameters.XmppTargetJid));
+                var communication = agent.SessionCapability.GetSessionCommunication(handle);
+
+                await agent.ConfigureAgentHub(agentParameters.AgentManagerUrl, communication, logger);
             }
 
             await agent.Run(cancellationToken);
