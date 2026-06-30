@@ -137,6 +137,16 @@ public class XmppTransport
             return;
         }
 
+        // some apis have message conent with only whitespace characters
+        // since XmppTransport never uses message streaming, the end of
+        // the message can be trimmed to avoid sending messages with only
+        // whitespace characters
+        message = message.TrimEnd();
+        if (message.Length < 1)
+        {
+            return;
+        }
+
         if (MessageBatchSize < 0)
         {
             await XmppClient.SendChatMessageAsync(new Jid(targetJid), message);
