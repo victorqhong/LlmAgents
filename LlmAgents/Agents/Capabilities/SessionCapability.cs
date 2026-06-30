@@ -111,6 +111,11 @@ public class SessionCapability : AgentCapability
         return context.SessionCommunication;
     }
 
+    public SessionCommunication GetSessionCommunication(SessionHandle handle)
+    {
+        return GetSessionCommunication(GetSession(handle));
+    }
+
     public async Task PostInput(SessionHandle handle, IEnumerable<IMessageContent> input, CancellationToken cancellationToken)
     {
         var sessionContext = MapSession(handle);
@@ -186,6 +191,20 @@ public class SessionCapability : AgentCapability
         }
 
         return context.Session;
+    }
+
+    public bool IsSessionPending(SessionHandle handle)
+    {
+        var context = MapSession(handle);
+        if (context == null)
+        {
+            throw new KeyNotFoundException();
+        }
+
+        lock (context.SyncObject)
+        {
+            return context.IsPending;
+        }
     }
 
     private SessionContext? MapSession(SessionHandle handle)

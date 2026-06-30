@@ -54,7 +54,7 @@ public class ChatCompletionStreamParser
             }
             else if (!line.StartsWith("data:"))
             {
-                break;
+                continue;
             }
 
             var data = line[6..];
