@@ -97,6 +97,7 @@ public class LlmAgent
         while (assistantWork.Parser?.FinishReason == ChatCompletionChoiceFinishReason.ToolCalls)
         {
             await RunWork(session, CreateToolCallsWork(), cancellationToken);
+            SessionCapability.DrainPendingMessages(session);
             assistantWork = await RunWork(session, CreateAssistantResponseWork(), cancellationToken);
         }
 

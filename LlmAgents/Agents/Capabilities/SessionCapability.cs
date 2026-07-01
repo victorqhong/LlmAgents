@@ -184,13 +184,31 @@ public class SessionCapability : AgentCapability
             {
                 return null;
             }
+        }
+
+        DrainPendingMessages(context.Session);
+
+        return context.Session;
+    }
+
+    public void DrainPendingMessages(Session session)
+    {
+        if (!contextTable.TryGetValue(session, out SessionContext? context))
+        {
+            return;
+        }
+
+        lock (context.SyncObject)
+        {
+            if (context.PendingMessages.Count < 1)
+            {
+                return;
+            }
 
             var content = context.PendingMessages.ToArray();
             context.PendingMessages.Clear();
             context.Session.AddMessages([GetMessage(content)]);
         }
-
-        return context.Session;
     }
 
     public bool IsSessionPending(SessionHandle handle)
