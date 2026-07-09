@@ -94,7 +94,8 @@ public class LlmApiOpenAi
                 return CompletionHttpResult.OtherError();
             }
 
-            if (string.Equals("429", errorResponse.Error.Code) || string.Equals("too_many_requests", errorResponse.Error.Code))
+            if (string.Equals("429", errorResponse.Error.Code) || string.Equals("too_many_requests", errorResponse.Error.Code) || (string.Equals("too_many_requests", errorResponse.Error.Type) && string.Equals("rate_limit_exceeded", errorResponse.Error.Code))
+            )
             {
                 if (retryAttempt < MaxRetryOnThrottledAttempts)
                 {
@@ -122,7 +123,7 @@ public class LlmApiOpenAi
             }
             else
             {
-                Log.LogError("Error while getting chat completion: {message}", errorResponse.Error.Message);
+                Log.LogError("Error while getting chat completion: {message}, code: {code}, type: {type}", errorResponse.Error.Message, errorResponse.Error.Code, errorResponse.Error.Type);
                 return CompletionHttpResult.OtherError();
             }
         }
