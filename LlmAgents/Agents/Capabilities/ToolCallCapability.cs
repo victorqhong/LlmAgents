@@ -141,8 +141,8 @@ public class ToolCallCapability : AgentCapability
                     // httpClient.DefaultRequestHeaders.Add("X-Session-Id", session.SessionId);
                     // httpClient.DefaultRequestHeaders.Add("X-Agent-Id", agent.Id);
 
-                    var clientTransport = new SseClientTransport(
-                        new SseClientTransportOptions { Endpoint = toolServerUri },
+                    var clientTransport = new HttpClientTransport(
+                        new HttpClientTransportOptions { Endpoint = toolServerUri },
                         httpClient
                     );
 
@@ -178,7 +178,7 @@ public class ToolCallCapability : AgentCapability
     {
         try
         {
-            var client = await McpClientFactory.CreateAsync(clientTransport);
+            var client = await McpClient.CreateAsync(clientTransport);
             var tools = await client.ListToolsAsync();
             return tools.Select(tool => new McpTool(tool, client, toolFactory));
         }
