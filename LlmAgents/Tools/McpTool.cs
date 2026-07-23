@@ -12,9 +12,9 @@ public class McpTool : Tool
 {
     private readonly McpClientTool mcpClientTool;
 
-    private readonly IMcpClient mcpClient;
+    private readonly McpClient mcpClient;
 
-    public McpTool(McpClientTool mcpClientTool, IMcpClient mcpClient, ToolFactory toolFactory)
+    public McpTool(McpClientTool mcpClientTool, McpClient mcpClient, ToolFactory toolFactory)
         : base(toolFactory)
     {
         this.mcpClientTool = mcpClientTool;
@@ -71,9 +71,16 @@ public class McpTool : Tool
 
             return jsonObject;
         }
-        else if (toolCallResult.StructuredContent != null)
+        else if (toolCallResult.StructuredContent != null && toolCallResult.StructuredContent.HasValue)
         {
-            return toolCallResult.StructuredContent;
+            var json = toolCallResult.StructuredContent.Value.GetRawText();
+            var node = JsonNode.Parse(json);
+            if (node == null)
+            {
+                throw new JsonException("Could not parse json: " + json);
+            }
+
+            return node;
         }
         else if (toolCallResult.Content.Count > 0)
         {

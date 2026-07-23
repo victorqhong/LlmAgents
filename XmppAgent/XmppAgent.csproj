@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackAsTool>true</PackAsTool>
@@ -22,11 +22,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
-    <PackageReference Include="XmppDotNet" Version="3.2.5" />
-    <PackageReference Include="XmppDotNet.Extensions" Version="3.2.5" />
-    <PackageReference Include="XmppDotNet.Srv" Version="3.2.5" />
-    <PackageReference Include="XmppDotNet.Transport.Socket" Version="3.2.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.10" />
+    <PackageReference Include="XmppDotNet" Version="3.3.0" />
+    <PackageReference Include="XmppDotNet.Extensions" Version="3.3.0" />
+    <PackageReference Include="XmppDotNet.Srv" Version="3.3.0" />
+    <PackageReference Include="XmppDotNet.Transport.Socket" Version="3.3.0" />
   </ItemGroup>
 
 </Project>

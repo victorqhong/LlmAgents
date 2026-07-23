@@ -28,6 +28,8 @@ public class McpToolAdapter : McpServerTool
 
     public override Tool ProtocolTool => protocolTool;
 
+    public override IReadOnlyList<object> Metadata => [];
+
     public async override ValueTask<CallToolResult> InvokeAsync(RequestContext<CallToolRequestParams> request, CancellationToken cancellationToken = default)
     {
         var result = new CallToolResult();
@@ -72,7 +74,9 @@ public class McpToolAdapter : McpServerTool
         try
         {
             var arguments = JsonDocument.Parse(JsonSerializer.Serialize(request.Params.Arguments));
-            result.StructuredContent = await tool.Function(session, arguments);
+            var toolResult = await tool.Function(session, arguments);
+            var document = JsonDocument.Parse(toolResult.ToJsonString());
+            result.StructuredContent = document.RootElement;
         }
         catch (Exception e)
         {
