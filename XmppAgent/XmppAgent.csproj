@@ -22,11 +22,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.10" />
-    <PackageReference Include="XmppDotNet" Version="3.3.0" />
-    <PackageReference Include="XmppDotNet.Extensions" Version="3.3.0" />
-    <PackageReference Include="XmppDotNet.Srv" Version="3.3.0" />
-    <PackageReference Include="XmppDotNet.Transport.Socket" Version="3.3.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+    <PackageReference Include="XmppDotNet" />
+    <PackageReference Include="XmppDotNet.Extensions" />
+    <PackageReference Include="XmppDotNet.Srv" />
+    <PackageReference Include="XmppDotNet.Transport.Socket" />
   </ItemGroup>
 
 </Project>
