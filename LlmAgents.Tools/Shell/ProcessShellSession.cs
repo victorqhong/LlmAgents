@@ -1,10 +1,5 @@
-using System;
 using System.Diagnostics;
-using System.IO;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace LlmAgents.Tools.Shell;
@@ -31,7 +26,7 @@ public sealed class ProcessShellSession : IShellSession
     public ProcessShellSession(string sessionId, ILogger logger)
     {
         this.sessionId = sessionId;
-        this.log = logger;
+        log = logger;
     }
 
     public async Task StartAsync(string workingDirectory)
@@ -102,12 +97,14 @@ public sealed class ProcessShellSession : IShellSession
     private async Task ReadStreamAsync(StreamReader reader, string streamName, CancellationToken token)
     {
         char[] buffer = new char[4096];
-        while (!token.IsCancellationRequested && !reader.EndOfStream)
+        // while (!token.IsCancellationRequested && !reader.EndOfStream)
+
+        int read;
+        while ((read = await reader.ReadAsync(buffer.AsMemory(), token)) > 0)
         {
-            int read = await reader.ReadAsync(buffer.AsMemory(), token);
             if (read > 0)
             {
-                string text = new string(buffer, 0, read);
+                var text = new string(buffer, 0, read);
                 OutputReceived?.Invoke(text);
             }
         }

@@ -41,9 +41,10 @@ public class ChatCompletionStreamParser
         var seenContent = false;
 
         using var reader = new StreamReader(stream);
-        while (!reader.EndOfStream)
+
+        string? line;
+        while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
         {
-            var line = await reader.ReadLineAsync(cancellationToken);
             if (string.IsNullOrEmpty(line))
             {
                 continue;

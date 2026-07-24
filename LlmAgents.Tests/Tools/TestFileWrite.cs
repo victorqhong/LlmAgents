@@ -12,7 +12,7 @@ namespace LlmAgents.Tests.Tools;
 [TestClass]
 public class TestFileWrite
 {
-    [DataTestMethod]
+    [TestMethod]
     [DataRow("response1.json", "out1.txt")]
     [DataRow("response2.json", "out2.txt")]
     [DataRow("response3.json", "out3.txt")]

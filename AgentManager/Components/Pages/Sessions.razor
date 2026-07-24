@@ -26,8 +26,7 @@
     }
     else
     {
-        <MudDataGrid Items="@sessions" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@loading"
-                     Sortable="true" Filterable="true">
+        <MudDataGrid Items="@sessions" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@loading" Filterable="true">
             <Columns>
                 <PropertyColumn Property="x => x.Id" Title="Id" />
                 <PropertyColumn Property="x => x.AgentName" Title="Agent" />
