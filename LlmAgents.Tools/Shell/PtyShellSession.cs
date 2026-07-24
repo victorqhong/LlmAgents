@@ -12,12 +12,13 @@ public sealed class PtyShellSession : IShellSession
     private int? _ptyMasterFd;
     private int? _childPid;
     private int? _exitCode;
+    private readonly string? _startError = null;
     private bool _exited;
     private DateTime _startedUtc;
 
     public int? Pid => _childPid;
     public int? ExitCode => _exitCode;
-    public string? StartError => throw new NotImplementedException();
+    public string? StartError => _startError;
     public bool Exited => _exited;
     public DateTime StartedUtc => _startedUtc;
 
