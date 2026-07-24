@@ -1,0 +1,27 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="AspNet.Security.OAuth.GitHub" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageVersion Include="ModelContextProtocol" Version="1.4.1" />
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="1.4.1" />
+    <PackageVersion Include="MSTest" Version="4.3.2" />
+    <PackageVersion Include="MudBlazor" Version="9.7.0" />
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
+    <PackageVersion Include="System.CommandLine" Version="2.0.10" />
+    <PackageVersion Include="XmppDotNet" Version="3.3.0" />
+    <PackageVersion Include="XmppDotNet.Extensions" Version="3.3.0" />
+    <PackageVersion Include="XmppDotNet.Srv" Version="3.3.0" />
+    <PackageVersion Include="XmppDotNet.Transport.Socket" Version="3.3.0" />
+  </ItemGroup>
+</Project>
