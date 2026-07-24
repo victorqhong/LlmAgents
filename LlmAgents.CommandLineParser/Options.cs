@@ -43,7 +43,7 @@ public static class Options
         DefaultValueFactory = result => false
     };
 
-    public readonly static Option<string> SystemPromptFile = new("--systemPromptFile")
+    public readonly static Option<string?> SystemPromptFile = new("--systemPromptFile")
     {
         Description = "The path to a file containing the system prompt text. Option has no effect if messages are loaded from a previous persistent session.",
         DefaultValueFactory = result => Config.GetConfigFile("system_prompt.md", "LLMAGENTS_SYSTEM_PROMPT_FILE")
