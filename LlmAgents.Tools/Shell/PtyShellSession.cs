@@ -238,16 +238,14 @@ public sealed class PtyShellSession : IShellSession
             // 2. Flat next to the managed assembly.
             yield return Path.Combine(assemblyDir, libName);
 
-            // 3. Walk up from the assembly to locate the NuGet package root, then
-            //    probe its runtimes/<rid>/native. This handles loading the managed
-            //    dll from a package layout (e.g. .../lib/net10.0/LlmAgents.Tools.dll)
-            //    where the native lib sits at the package root under
-            //    runtimes/<rid>/native (a sibling of lib/). This is how tools such
-            //    as XmppAgent load LlmAgents.Tools by an explicit assembly path.
-            foreach (var dir in EnumerateAncestors(assemblyDir))
-            {
-                yield return Path.Combine(dir, "runtimes", rid, "native", libName);
-            }
+            // 3. NuGet package layout when the managed assembly is loaded by an
+            //    explicit path (e.g. XmppAgent loads
+            //    .../llmagents.tools/<ver>/lib/net10.0/LlmAgents.Tools.dll). In a
+            //    NuGet package the managed dll lives at <pkgRoot>/lib/<tfm>/, so the
+            //    package root is exactly two levels above the assembly directory,
+            //    and the native library is at <pkgRoot>/runtimes/<rid>/native/.
+            var packageRoot = Path.GetFullPath(Path.Combine(assemblyDir, "..", ".."));
+            yield return Path.Combine(packageRoot, "runtimes", rid, "native", libName);
 
             // 4. NuGet global packages cache for llmagents.tools.
             foreach (var pkgDir in GetNuGetPackageRoots())
@@ -258,16 +256,6 @@ public sealed class PtyShellSession : IShellSession
 
             // 5. Current working directory.
             yield return Path.Combine(Environment.CurrentDirectory, libName);
-        }
-
-        private static IEnumerable<string> EnumerateAncestors(string startDir)
-        {
-            var dir = new DirectoryInfo(startDir);
-            for (int i = 0; i < 8 && dir != null; i++)
-            {
-                yield return dir.FullName;
-                dir = dir.Parent;
-            }
         }
 
         private static IEnumerable<string> GetNuGetPackageRoots()
