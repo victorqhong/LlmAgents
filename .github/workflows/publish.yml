@@ -12,8 +12,20 @@ on:
     types: [published]
 
 jobs:
-  build-and-publish:
-    runs-on: ubuntu-latest
+  build-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact_name: native-linux-x64
+            native_path: LlmAgents.Tools/runtimes/linux-x64/native/libptyhelper.so
+          - os: macos-latest
+            rid: osx-arm64
+            artifact_name: native-osx-arm64
+            native_path: LlmAgents.Tools/runtimes/osx-arm64/native/libptyhelper.dylib
+    runs-on: ${{ matrix.os }}
 
     steps:
     - name: Checkout code
@@ -28,6 +40,44 @@ jobs:
       run: dotnet restore
 
     - name: Build
+      run: dotnet build --no-restore --configuration Release
+
+    - name: Upload native artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: ${{ matrix.native_path }}
+        if-no-files-found: error
+
+  build-and-publish:
+    needs: build-native
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Download linux-x64 native artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: native-linux-x64
+        path: LlmAgents.Tools/runtimes/linux-x64/native
+
+    - name: Download osx-arm64 native artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: native-osx-arm64
+        path: LlmAgents.Tools/runtimes/osx-arm64/native
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build managed code
       run: dotnet build --no-restore --configuration Release
 
     - name: Test

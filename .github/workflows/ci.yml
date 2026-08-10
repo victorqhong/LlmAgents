@@ -5,8 +5,13 @@ on:
     branches: [ master ]
 
 jobs:
-  build-and-test:
-    runs-on: ubuntu-latest
+  matrix:
+    name: build-and-test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
     - name: Checkout code
@@ -26,3 +31,21 @@ jobs:
     - name: Test
       run: dotnet test --no-restore --configuration Release --verbosity normal --filter "TestCategory!=Integration"
 
+  # Single gate job with a stable check name. Because the matrix job above
+  # produces one check per OS (e.g. "build-and-test (ubuntu-latest)"), a
+  # required status check named "build-and-test" would never be reported.
+  # This job provides that single check and only succeeds if every matrix
+  # leg passed.
+  build-and-test:
+    name: build-and-test
+    needs: matrix
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Verify all matrix legs passed
+        if: needs.matrix.result != 'success'
+        run: |
+          echo "One or more matrix jobs failed (result: ${{ needs.matrix.result }})"
+          exit 1
+      - name: All matrix legs passed
+        run: echo "All build-and-test matrix legs passed"
