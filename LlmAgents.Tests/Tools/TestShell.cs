@@ -128,9 +128,15 @@ public class TestShell
         var read = new ShellRead(toolFactory);
         var session = Session.Ephemeral(loggerFactory);
 
+
+        Console.WriteLine("calling exec stuck command");
         _ = await exec.Function(session, CreateExecParameters(GetStuckCommand(), waitForExit: false));
+
+        Console.WriteLine("calling interrupt");
         var interruptResult = (JsonObject)await interrupt.Function(session, JsonDocument.Parse("""{ "timeout_ms": 3000 }"""));
         Assert.AreEqual("interrupted", interruptResult["status"]?.GetValue<string>());
+
+        Console.WriteLine("calling exec recovery command");
 
         _ = await exec.Function(session, CreateExecParameters(GetRecoveryCommand(), waitForExit: true));
         var output = await ReadAllOutput(read, session);
