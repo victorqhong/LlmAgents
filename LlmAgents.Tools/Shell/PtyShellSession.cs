@@ -32,9 +32,10 @@ public sealed class PtyShellSession : IShellSession
 
     public async Task StartAsync(string workingDirectory)
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) &&
+            !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            throw new PlatformNotSupportedException("PTY-based shell tools are only supported on Linux.");
+            throw new PlatformNotSupportedException("PTY-based shell tools are only supported on Linux and macOS.");
         }
 
         // Use sh -c "exec bash -i" for better compatibility
@@ -177,36 +178,18 @@ public sealed class PtyShellSession : IShellSession
 
     private static unsafe class NativeMethods
     {
-        public const string PATH_LIBPTYHELPER = "ForkPTY/libptyhelper.so";
+        public const string LIBPTYHELPER = "ptyhelper";
 
-        static NativeMethods()
-        {
-            try
-            {
-                var assemblyDir = Path.GetDirectoryName(typeof(NativeMethods).Assembly.Location);
-                var libPath = Path.Combine(assemblyDir ?? ".", "libptyhelper.so");
-                if (!File.Exists(libPath))
-                {
-                    libPath = PATH_LIBPTYHELPER;
-                }
-                NativeLibrary.Load(libPath);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Failed to load libptyhelper.so: {ex.Message}");
-            }
-        }
-
-        [DllImport(PATH_LIBPTYHELPER, EntryPoint = "forkpty_sh", SetLastError = true)]
+        [DllImport(LIBPTYHELPER, EntryPoint = "forkpty_sh", SetLastError = true)]
         public static extern forkpty_result forkpty_sh(byte* shell_command);
 
-        [DllImport(PATH_LIBPTYHELPER, EntryPoint = "pty_close_master", SetLastError = true)]
+        [DllImport(LIBPTYHELPER, EntryPoint = "pty_close_master", SetLastError = true)]
         public static extern int pty_close_master(int master_fd);
 
-        [DllImport(PATH_LIBPTYHELPER, EntryPoint = "pty_write", SetLastError = true)]
+        [DllImport(LIBPTYHELPER, EntryPoint = "pty_write", SetLastError = true)]
         public static extern int pty_write(int master_fd, byte* buf, int count);
 
-        [DllImport(PATH_LIBPTYHELPER, EntryPoint = "pty_read", SetLastError = true)]
+        [DllImport(LIBPTYHELPER, EntryPoint = "pty_read", SetLastError = true)]
         public static extern int pty_read(int master_fd, byte* buf, int count);
 
         [DllImport("libc", SetLastError = true)]

@@ -12,3 +12,6 @@ nupkg/
 
 AgentManager/agents.db*
 AgentManager/appsettings.Development.json
+
+# Build artifacts for native PTY helper (generated during dotnet build)
+LlmAgents.Tools/runtimes/

@@ -12,6 +12,19 @@
     <Description></Description>
     <RepositoryUrl>https://github.com/victorqhong/LlmAgents</RepositoryUrl>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <ForkPtySourceFile>$(MSBuildProjectDirectory)/ForkPTY/ptyhelper.c</ForkPtySourceFile>
+    <ForkPtyBuildScript>$(MSBuildProjectDirectory)/ForkPTY/build-native.sh</ForkPtyBuildScript>
+    <ForkPtyRuntimeDir>$(MSBuildProjectDirectory)/runtimes</ForkPtyRuntimeDir>
+    <ForkPtyCurrentRid></ForkPtyCurrentRid>
+    <ForkPtyOutputExtension></ForkPtyOutputExtension>
+    <ForkPtyOutputFile></ForkPtyOutputFile>
+    <ForkPtyCurrentRid Condition="'$(OS)' == 'Unix' and '$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true' and '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'X64'">linux-x64</ForkPtyCurrentRid>
+    <ForkPtyCurrentRid Condition="'$(OS)' == 'Unix' and '$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true' and '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">linux-arm64</ForkPtyCurrentRid>
+    <ForkPtyCurrentRid Condition="'$(OS)' == 'Unix' and '$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))' == 'true' and '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">osx-arm64</ForkPtyCurrentRid>
+    <ForkPtyOutputExtension Condition="'$(ForkPtyCurrentRid)' == 'linux-x64'">so</ForkPtyOutputExtension>
+    <ForkPtyOutputExtension Condition="'$(ForkPtyCurrentRid)' == 'linux-arm64'">so</ForkPtyOutputExtension>
+    <ForkPtyOutputExtension Condition="'$(ForkPtyCurrentRid)' == 'osx-arm64'">dylib</ForkPtyOutputExtension>
+    <ForkPtyOutputFile Condition="'$(ForkPtyCurrentRid)' != ''">$(ForkPtyRuntimeDir)/$(ForkPtyCurrentRid)/native/libptyhelper.$(ForkPtyOutputExtension)</ForkPtyOutputFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,10 +32,36 @@
     <ProjectReference Include="..\LlmAgents.Api\LlmAgents.Api.csproj" />
   </ItemGroup>
 
+  <Target Name="BuildForkPtyNativeLibrary"
+          BeforeTargets="BeforeBuild"
+          Condition="'$(ForkPtyCurrentRid)' != '' and Exists('$(ForkPtySourceFile)')">
+    <Message Importance="high" Text="Building PTY helper native library for $(ForkPtyCurrentRid)" />
+    <MakeDir Directories="$(ForkPtyRuntimeDir)/$(ForkPtyCurrentRid)/native" />
+    <Exec Command="&quot;$(ForkPtyBuildScript)&quot; &quot;$(ForkPtyRuntimeDir)/$(ForkPtyCurrentRid)/native&quot;" />
+  </Target>
+
   <ItemGroup>
-    <None Include="ForkPTY/libptyhelper.so">
+    <Content Include="runtimes/linux-x64/native/libptyhelper.so"
+             Condition="Exists('$(MSBuildProjectDirectory)/runtimes/linux-x64/native/libptyhelper.so')">
+      <Pack>true</Pack>
+      <PackagePath>runtimes/linux-x64/native/</PackagePath>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+      <Link>libptyhelper.so</Link>
+    </Content>
+    <Content Include="runtimes/linux-arm64/native/libptyhelper.so"
+             Condition="Exists('$(MSBuildProjectDirectory)/runtimes/linux-arm64/native/libptyhelper.so')">
+      <Pack>true</Pack>
+      <PackagePath>runtimes/linux-arm64/native/</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>libptyhelper.so</Link>
+    </Content>
+    <Content Include="runtimes/osx-arm64/native/libptyhelper.dylib"
+             Condition="Exists('$(MSBuildProjectDirectory)/runtimes/osx-arm64/native/libptyhelper.dylib')">
+      <Pack>true</Pack>
+      <PackagePath>runtimes/osx-arm64/native/</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>libptyhelper.dylib</Link>
+    </Content>
   </ItemGroup>
 
 </Project>

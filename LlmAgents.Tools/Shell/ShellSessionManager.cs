@@ -324,7 +324,7 @@ public sealed class ShellSessionManager
 
     private IShellSession CreateSession(ShellSessionState state)
     {
-        IShellSession session = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) 
+        IShellSession session = (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             ? new PtyShellSession(state.SessionId, log) 
             : new ProcessShellSession(state.SessionId, log);
         

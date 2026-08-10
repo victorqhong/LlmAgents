@@ -6,7 +6,15 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            native-rid: linux-x64
+          - os: macos-latest
+            native-rid: osx-arm64
+    runs-on: ${{ matrix.os }}
 
     steps:
     - name: Checkout code
@@ -25,4 +33,3 @@ jobs:
 
     - name: Test
       run: dotnet test --no-restore --configuration Release --verbosity normal --filter "TestCategory!=Integration"
-
