@@ -238,15 +238,36 @@ public sealed class PtyShellSession : IShellSession
             // 2. Flat next to the managed assembly.
             yield return Path.Combine(assemblyDir, libName);
 
-            // 3. NuGet global packages cache for llmagents.tools.
+            // 3. Walk up from the assembly to locate the NuGet package root, then
+            //    probe its runtimes/<rid>/native. This handles loading the managed
+            //    dll from a package layout (e.g. .../lib/net10.0/LlmAgents.Tools.dll)
+            //    where the native lib sits at the package root under
+            //    runtimes/<rid>/native (a sibling of lib/). This is how tools such
+            //    as XmppAgent load LlmAgents.Tools by an explicit assembly path.
+            foreach (var dir in EnumerateAncestors(assemblyDir))
+            {
+                yield return Path.Combine(dir, "runtimes", rid, "native", libName);
+            }
+
+            // 4. NuGet global packages cache for llmagents.tools.
             foreach (var pkgDir in GetNuGetPackageRoots())
             {
                 yield return Path.Combine(pkgDir, "runtimes", rid, "native", libName);
                 yield return Path.Combine(pkgDir, "lib", "net10.0", libName);
             }
 
-            // 4. Current working directory.
+            // 5. Current working directory.
             yield return Path.Combine(Environment.CurrentDirectory, libName);
+        }
+
+        private static IEnumerable<string> EnumerateAncestors(string startDir)
+        {
+            var dir = new DirectoryInfo(startDir);
+            for (int i = 0; i < 8 && dir != null; i++)
+            {
+                yield return dir.FullName;
+                dir = dir.Parent;
+            }
         }
 
         private static IEnumerable<string> GetNuGetPackageRoots()
