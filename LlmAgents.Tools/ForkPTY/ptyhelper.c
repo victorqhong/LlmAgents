@@ -1,5 +1,11 @@
+#if !defined(__APPLE__)
 #define _XOPEN_SOURCE 600
+#endif
+#if defined(__APPLE__)
+#include <util.h>
+#else
 #include <pty.h>
+#endif
 #include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>
