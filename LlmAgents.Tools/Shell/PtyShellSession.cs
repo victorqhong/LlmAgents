@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -197,6 +198,120 @@ public sealed class PtyShellSession : IShellSession
     private static unsafe class NativeMethods
     {
         public const string LIBPTYHELPER = "ptyhelper";
+
+        static NativeMethods()
+        {
+            // Register an explicit resolver so the native library can be found even
+            // when the host's default probing fails (e.g. native assets consumed by a
+            // global tool, where runtimes/<rid>/native is not probed by default).
+            NativeLibrary.SetDllImportResolver(typeof(NativeMethods).Assembly, ResolveLibrary);
+        }
+
+        private static IntPtr ResolveLibrary(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
+        {
+            if (!string.Equals(libraryName, LIBPTYHELPER, StringComparison.OrdinalIgnoreCase))
+            {
+                return IntPtr.Zero; // not ours - fall back to default resolution
+            }
+
+            foreach (var candidate in GetCandidatePaths())
+            {
+                if (File.Exists(candidate))
+                {
+                    return NativeLibrary.Load(candidate);
+                }
+            }
+
+            return IntPtr.Zero; // fall back to default resolution (may throw DllNotFoundException)
+        }
+
+        private static IEnumerable<string> GetCandidatePaths()
+        {
+            var (rid, ext) = GetRuntimeInfo();
+            var libName = $"libptyhelper.{ext}";
+            var assemblyDir = Path.GetDirectoryName(typeof(NativeMethods).Assembly.Location) ?? ".";
+
+            // 1. Standard RID-based runtime layout relative to the assembly
+            //    (normal app publish/output, and tool store if deployed).
+            yield return Path.Combine(assemblyDir, "runtimes", rid, "native", libName);
+
+            // 2. Flat next to the managed assembly.
+            yield return Path.Combine(assemblyDir, libName);
+
+            // 3. NuGet package layout when the managed assembly is loaded by an
+            //    explicit path (e.g. XmppAgent loads
+            //    .../llmagents.tools/<ver>/lib/net10.0/LlmAgents.Tools.dll). In a
+            //    NuGet package the managed dll lives at <pkgRoot>/lib/<tfm>/, so the
+            //    package root is exactly two levels above the assembly directory,
+            //    and the native library is at <pkgRoot>/runtimes/<rid>/native/.
+            var packageRoot = Path.GetFullPath(Path.Combine(assemblyDir, "..", ".."));
+            yield return Path.Combine(packageRoot, "runtimes", rid, "native", libName);
+
+            // 4. NuGet global packages cache for llmagents.tools.
+            foreach (var pkgDir in GetNuGetPackageRoots())
+            {
+                yield return Path.Combine(pkgDir, "runtimes", rid, "native", libName);
+                yield return Path.Combine(pkgDir, "lib", "net10.0", libName);
+            }
+
+            // 5. Current working directory.
+            yield return Path.Combine(Environment.CurrentDirectory, libName);
+        }
+
+        private static IEnumerable<string> GetNuGetPackageRoots()
+        {
+            // ~/.nuget/packages/llmagents.tools/<version>
+            var home = Environment.GetEnvironmentVariable("HOME");
+            if (!string.IsNullOrEmpty(home))
+            {
+                var root = Path.Combine(home, ".nuget", "packages", "llmagents.tools");
+                if (Directory.Exists(root))
+                {
+                    foreach (var versionDir in Directory.EnumerateDirectories(root).OrderByDescending(d => d))
+                    {
+                        yield return versionDir;
+                    }
+                }
+            }
+
+            // Also probe a common dotnet-tool store path used by the host.
+            var dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT") ?? "/usr/share/dotnet";
+            var toolStore = Path.Combine(dotnetRoot, "tools", ".store", "llmagents.tools");
+            if (Directory.Exists(toolStore))
+            {
+                foreach (var versionDir in Directory.EnumerateDirectories(toolStore).OrderByDescending(d => d))
+                {
+                    yield return versionDir;
+                }
+            }
+        }
+
+        private static (string rid, string ext) GetRuntimeInfo()
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                var rid = RuntimeInformation.OSArchitecture switch
+                {
+                    Architecture.X64 => "linux-x64",
+                    Architecture.Arm64 => "linux-arm64",
+                    _ => throw new PlatformNotSupportedException($"Unsupported Linux architecture: {RuntimeInformation.OSArchitecture}")
+                };
+                return (rid, "so");
+            }
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                var rid = RuntimeInformation.OSArchitecture switch
+                {
+                    Architecture.X64 => "osx-x64",
+                    Architecture.Arm64 => "osx-arm64",
+                    _ => throw new PlatformNotSupportedException($"Unsupported macOS architecture: {RuntimeInformation.OSArchitecture}")
+                };
+                return (rid, "dylib");
+            }
+
+            throw new PlatformNotSupportedException($"PTY helper is not supported on {RuntimeInformation.OSDescription}");
+        }
 
         [DllImport(LIBPTYHELPER, EntryPoint = "forkpty_sh", SetLastError = true)]
         public static extern forkpty_result forkpty_sh(byte* shell_command);

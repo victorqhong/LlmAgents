@@ -128,10 +128,16 @@ public class TestShell
         var read = new ShellRead(toolFactory);
         var session = Session.Ephemeral(loggerFactory);
 
+        // TODO: remove calls to Console.WriteLine in this test
+        // the calls fix a CI issue in GitHub actions when running on macos-arm64 that are not reproducable locally
+        Console.WriteLine("calling exec stuck command");
         _ = await exec.Function(session, CreateExecParameters(GetStuckCommand(), waitForExit: false));
+
+        Console.WriteLine("calling interrupt");
         var interruptResult = (JsonObject)await interrupt.Function(session, JsonDocument.Parse("""{ "timeout_ms": 3000 }"""));
         Assert.AreEqual("interrupted", interruptResult["status"]?.GetValue<string>());
 
+        Console.WriteLine("calling exec recovery command");
         _ = await exec.Function(session, CreateExecParameters(GetRecoveryCommand(), waitForExit: true));
         var output = await ReadAllOutput(read, session);
         Assert.IsTrue(output.Contains("ok", StringComparison.OrdinalIgnoreCase));
