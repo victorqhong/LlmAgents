@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace LlmAgents.LlmApi.OpenAi.ChatCompletion;
@@ -8,7 +9,7 @@ public class ChatCompletionResponseError
     public required string Message { get; set; }
 
     [JsonPropertyName("code")]
-    public required string Code { get; set; }
+    public required JsonValue Code { get; set; }
 
     [JsonPropertyName("type")]
     public required string Type { get; set; }

@@ -94,14 +94,13 @@ public class LlmApiOpenAi
                 return CompletionHttpResult.OtherError();
             }
 
-            if (string.Equals("429", errorResponse.Error.Code) || string.Equals("too_many_requests", errorResponse.Error.Code) || (string.Equals("too_many_requests", errorResponse.Error.Type) && string.Equals("rate_limit_exceeded", errorResponse.Error.Code))
-            )
+            if (ShouldRetry(errorResponse))
             {
                 if (retryAttempt < MaxRetryOnThrottledAttempts)
                 {
                     var seconds = 10 * (retryAttempt + 1);
 
-                    if (!string.IsNullOrEmpty(errorResponse.Error.Message))
+                    if (!string.IsNullOrEmpty(errorResponse.Error?.Message))
                     {
                         var pattern = @"retry\s+after\s+(\d+)\s+seconds";
                         var regex = new Regex(pattern, RegexOptions.IgnoreCase);
@@ -121,9 +120,18 @@ public class LlmApiOpenAi
                     return CompletionHttpResult.ThrottledError();
                 }
             }
-            else
+            else if (errorResponse.Error != null)
             {
                 Log.LogError("Error while getting chat completion: {message}, code: {code}, type: {type}", errorResponse.Error.Message, errorResponse.Error.Code, errorResponse.Error.Type);
+                return CompletionHttpResult.OtherError();
+            }
+            else if (errorResponse.Detail != null)
+            {
+                Log.LogError("Error while getting chat completion: '{detail}'", errorResponse.Detail);
+                return CompletionHttpResult.OtherError();
+            }
+            else
+            {
                 return CompletionHttpResult.OtherError();
             }
         }
@@ -146,6 +154,22 @@ public class LlmApiOpenAi
             Tools = tools,
             ToolChoice = toolChoice,
         };
+    }
+
+    private static bool ShouldRetry(ChatCompletionErrorResponse errorResponse)
+    {
+        if (errorResponse.Error != null)
+        {
+            var stringCond = errorResponse.Error.Code.TryGetValue<string>(out var stringValue) && (string.Equals("429", stringValue) || string.Equals("too_many_requests", stringValue) || (string.Equals("too_many_requests", errorResponse.Error.Type) && string.Equals("rate_limit_exceeded", stringValue)));
+            var intCond = errorResponse.Error.Code.TryGetValue<int>(out var intValue) && intValue == 429;
+            return stringCond || intCond;
+        }
+        else if (errorResponse.Detail != null)
+        {
+            return errorResponse.Detail.Contains("have exceeded rate limit");
+        }
+
+        return false;
     }
 
     public class CompletionHttpResult

@@ -5,5 +5,8 @@ namespace LlmAgents.LlmApi.OpenAi.ChatCompletion;
 public class ChatCompletionErrorResponse
 {
     [JsonPropertyName("error")]
-    public required ChatCompletionResponseError Error { get; set; }
+    public ChatCompletionResponseError? Error { get; set; }
+
+    [JsonPropertyName("detail")]
+    public string? Detail { get; set; }
 }
