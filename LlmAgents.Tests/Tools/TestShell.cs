@@ -17,6 +17,7 @@ namespace LlmAgents.Tests.Tools;
 public class TestShell
 {
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Integration)]
     public async Task ExecTimeout_RestartsShell_AndNextCommandSucceeds()
     {
         var loggerFactory = LoggerFactory.Create(builder => { });
@@ -39,6 +40,7 @@ public class TestShell
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Integration)]
     public async Task Restart_PreservesCurrentDirectory()
     {
         var loggerFactory = LoggerFactory.Create(builder => { });
@@ -68,6 +70,7 @@ public class TestShell
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Integration)]
     public async Task Read_UsesCursorForChunkedOutput()
     {
         var loggerFactory = LoggerFactory.Create(builder => { });
@@ -95,6 +98,7 @@ public class TestShell
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Integration)]
     public async Task Write_SendsInputToInteractiveCommand()
     {
         var loggerFactory = LoggerFactory.Create(builder => { });
@@ -116,6 +120,7 @@ public class TestShell
     }
 
     [TestMethod]
+    [TestCategory(Constants.TestCategory_Integration)]
     public async Task Interrupt_AllowsSubsequentCommands()
     {
         var loggerFactory = LoggerFactory.Create(builder => { });
